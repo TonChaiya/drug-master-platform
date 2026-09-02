@@ -12,27 +12,41 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
-$version = (& $Python -c "import runpy;print(runpy.run_path('version.py')['VERSION'])").Trim()
+# Windows PowerShell 5.1 turns anything a native exe writes to stderr into an
+# ErrorRecord, and PyInstaller logs its INFO lines there. With
+# ErrorActionPreference=Stop that aborts a build that actually succeeded, so
+# native calls run with the preference relaxed and are judged on $LASTEXITCODE.
+function Invoke-Native {
+  param([Parameter(Mandatory)][string]$FilePath, [string[]]$Arguments = @(), [string]$What)
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try { & $FilePath @Arguments } finally { $ErrorActionPreference = $previous }
+  if ($LASTEXITCODE -ne 0) { throw "$What failed with exit code $LASTEXITCODE" }
+}
+
+$version = (& $Python -c "import runpy;print(runpy.run_path('version.py')['VERSION'])" 2>$null).Trim()
 if (-not ($version -match '^\d+\.\d+\.\d+$')) { throw "version.py is malformed: $version" }
 Write-Host "Building TMT Drug Master Agent $version"
 
-if (-not (Test-Path .venv)) { & $Python -m venv .venv }
-& .\.venv\Scripts\python.exe -m pip install --upgrade pip
-& .\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+if (-not (Test-Path .venv)) { Invoke-Native $Python @("-m", "venv", ".venv") "venv creation" }
+$venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+Invoke-Native $venvPython @("-m", "pip", "install", "--upgrade", "pip") "pip upgrade"
+Invoke-Native $venvPython @("-m", "pip", "install", "-r", "requirements-build.txt") "dependency install"
 
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 
-& .\.venv\Scripts\python.exe -m PyInstaller `
-  --noconfirm --clean --windowed --onefile `
-  --name "TMTDrugMasterAgent" `
-  --paths . `
-  --add-data "version.py;." `
-  app.py
+Invoke-Native $venvPython @(
+  "-m", "PyInstaller",
+  "--noconfirm", "--clean", "--windowed", "--onefile",
+  "--name", "TMTDrugMasterAgent",
+  "--paths", ".",
+  "--add-data", "version.py;.",
+  "app.py") "PyInstaller"
 
 $exe = Join-Path $PSScriptRoot "dist\TMTDrugMasterAgent.exe"
 if (-not (Test-Path $exe)) { throw "Build produced no executable" }
 
-$reported = (& $exe --version).Trim()
+$reported = (& $exe --version 2>$null | Out-String).Trim()
 if ($reported -ne $version) { throw "Executable reports $reported but version.py says $version" }
 
 Write-Host "OK: dist\TMTDrugMasterAgent.exe ($version)"
@@ -43,7 +57,9 @@ $iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
 if (-not $iscc) {
   foreach ($candidate in @(
       "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-      "$env:ProgramFiles\Inno Setup 6\ISCC.exe")) {
+      "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+      # winget installs Inno Setup per user by default.
+      "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) {
     if (Test-Path $candidate) { $iscc = $candidate; break }
   }
 } else {
@@ -51,8 +67,7 @@ if (-not $iscc) {
 }
 
 if ($iscc) {
-  & $iscc "/DAppVersion=$version" "installer\TMTDrugMasterAgent.iss"
-  if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
+  Invoke-Native $iscc @("/DAppVersion=$version", "installer\TMTDrugMasterAgent.iss") "Inno Setup"
   $setup = Join-Path $PSScriptRoot "dist\TMTDrugMasterAgent-Setup-$version.exe"
   if (-not (Test-Path $setup)) { throw "Inno Setup produced no installer" }
   Write-Host "OK: dist\TMTDrugMasterAgent-Setup-$version.exe"
