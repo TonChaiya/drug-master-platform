@@ -46,11 +46,34 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center px-3 py-8">
-      <section className="card w-full max-w-md p-5">
-        <div className="grid size-9 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">Rx</div>
-        <h1 className="mt-3 text-lg font-semibold">{mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}</h1>
-        <p className="text-xxs text-slate-500">TMT Drug Master Platform</p>
+    <main className="grid min-h-dvh lg:grid-cols-[1.1fr_.9fr]">
+      {/* The PHP system's split sign-in: editorial panel left, form right. */}
+      <section aria-hidden className="relative hidden overflow-hidden bg-slate-900 px-[8vw] py-16 text-white lg:flex lg:flex-col lg:justify-center">
+        <span className="absolute left-12 top-10 grid size-13 place-items-center rounded-md bg-brand-600 font-display text-sm font-extrabold">TM</span>
+        <span className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-brand-600/90" />
+        <span className="pointer-events-none absolute -bottom-32 left-24 size-80 rounded-full bg-white/5" />
+        <p className="eyebrow relative z-10 text-white/60">Thai Medicines Terminology</p>
+        <h1 className="relative z-10 mt-4 font-display text-6xl font-extrabold leading-[0.92] tracking-[-0.06em] xl:text-7xl">
+          จับคู่ข้อมูลยา
+          <br />
+          <span className="text-brand-600">อย่างมีมาตรฐาน.</span>
+        </h1>
+        <p className="relative z-10 mt-7 max-w-lg text-sm text-white/70">
+          ดึงยาที่ใช้งานจาก JHCIS ตรวจเทียบ Drug Catalog ค้นหา TMT/TTMT และส่งออกในฟอร์มเดิม พร้อมร่องรอยตรวจสอบทุกขั้นตอน
+        </p>
+        <p className="relative z-10 mt-10 border-t border-white/15 pt-4">
+          <strong className="block font-display text-2xl font-extrabold">01 / 10</strong>
+          <span className="text-xxs text-white/50">Drug types in scope</span>
+        </p>
+      </section>
+
+      <section className="grid place-items-center px-3 py-10">
+        <div className="card w-full max-w-md p-6">
+        <p className="eyebrow text-brand-600">Secure workspace</p>
+        <h1 className="page-title mt-1.5">{mode === "login" ? "ยินดีต้อนรับ" : "สมัครสมาชิก"}</h1>
+        <p className="mt-1 text-xxs text-slate-500">
+          {mode === "login" ? "เข้าสู่ระบบเพื่อเริ่มจัดการข้อมูล TMT" : "สมัครเพื่อขอสิทธิ์ใช้งานของสถานบริการ"}
+        </p>
 
         <form onSubmit={submit} className="mt-4 space-y-2.5">
           {mode === "signup" ? (
@@ -81,14 +104,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
             <input className="field" id="username" name="username" required minLength={4} maxLength={80} autoComplete="username" />
           </div>
           <div>
-            <label className="label" htmlFor="password">รหัสผ่าน (อย่างน้อย 12 ตัวอักษร)</label>
+            <label className="label" htmlFor="password">{mode === "signup" ? "รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" : "รหัสผ่าน"}</label>
             <input
               className="field"
               id="password"
               name="password"
               type="password"
               required
-              minLength={12}
+              minLength={mode === "signup" ? 6 : undefined}
               maxLength={128}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
@@ -116,6 +139,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </>
           )}
         </p>
+        </div>
       </section>
     </main>
   );

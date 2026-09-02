@@ -38,10 +38,29 @@ function createPool(): Pool {
   });
 }
 
-export const dbPool = globalThis.appDbPool ?? createPool();
-export const db = globalThis.appDb ?? drizzle(dbPool, { schema, mode: "default" });
+/**
+ * Lazy: the pool is built on first use, not on import.
+ *
+ * `next build` imports every route module to collect page data. Connecting (or
+ * even validating DB_* env) at import time therefore made the build fail on any
+ * host where those variables are not present at build time — which is the
+ * normal case, since they are runtime secrets.
+ */
+function pool(): Pool {
+  globalThis.appDbPool ??= createPool();
+  return globalThis.appDbPool;
+}
 
-if (process.env.NODE_ENV !== "production") {
-  globalThis.appDbPool = dbPool;
-  globalThis.appDb = db;
+function database(): MySql2Database<typeof schema> {
+  globalThis.appDb ??= drizzle(pool(), { schema, mode: "default" });
+  return globalThis.appDb;
+}
+
+export const db = new Proxy({} as MySql2Database<typeof schema>, {
+  get: (_target, property, receiver) => Reflect.get(database(), property, receiver),
+  has: (_target, property) => Reflect.has(database(), property),
+});
+
+export function dbPool(): Pool {
+  return pool();
 }

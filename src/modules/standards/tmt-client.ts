@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 /**
  * TMT API adapter.
  *
- * Credentials are server-only and never appear in any returned value or error
- * message. Token responses are cached in memory for the life of the process —
+ * Credentials come from the admin screen (encrypted in app_settings) and fall
+ * back to TMT_API_* environment variables. They are server-only and never
+ * appear in any returned value or error message. Token responses are cached in memory for the life of the process —
  * docs/SPEC.md forbids writing them to the function filesystem.
  */
 
@@ -14,6 +16,8 @@ export interface TmtVersionResult {
   errorCode: string | null;
   message: string;
 }
+
+import { resolveTmtCredentials, type TmtCredentials } from "./tmt-credentials";
 
 type FetchLike = typeof fetch;
 
@@ -82,30 +86,39 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function apiBase(): string {
-  return process.env.TMT_API_BASE?.trim().replace(/\/$/, "") || "https://tmt.this.or.th/tmtapi";
-}
-
 interface CachedToken {
   token: string;
   expiresAt: number;
+  /** Identifies the credential the token was issued for, so an admin changing
+   * the username, password or base URL cannot keep using the old token. */
+  fingerprint: string;
 }
 
 let cachedToken: CachedToken | null = null;
+
+function fingerprint(credentials: TmtCredentials): string {
+  return createHash("sha256").update(`${credentials.baseUrl}
+${credentials.username}
+${credentials.password}`).digest("hex");
+}
+
+async function requireCredentials(): Promise<TmtCredentials> {
+  const credentials = await resolveTmtCredentials();
+  if (!credentials) throw new TmtApiError("TMT_CONFIG_MISSING", "ยังไม่ได้ตั้งค่า TMT credential ฝั่ง server");
+  return credentials;
+}
 
 /** Clears the in-memory token cache. Exposed for tests. */
 export function resetTmtTokenCache(): void {
   cachedToken = null;
 }
 
-async function fetchToken(fetcher: FetchLike): Promise<string> {
-  const username = process.env.TMT_API_USER?.trim();
-  const password = process.env.TMT_API_PASSWORD;
-  if (!username || !password) throw new TmtApiError("TMT_CONFIG_MISSING", "ยังไม่ได้ตั้งค่า TMT credential ฝั่ง server");
+async function fetchToken(fetcher: FetchLike, credentials: TmtCredentials): Promise<string> {
+  const { baseUrl, username, password } = credentials;
+  const identity = fingerprint(credentials);
+  if (cachedToken && cachedToken.fingerprint === identity && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.token;
 
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.token;
-
-  const response = await fetcher(`${apiBase()}/token`, {
+  const response = await fetcher(`${baseUrl}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ username, password }),
@@ -121,13 +134,15 @@ async function fetchToken(fetcher: FetchLike): Promise<string> {
   cachedToken = {
     token,
     expiresAt: Number.isFinite(expiry) ? expiry : Date.now() + 30 * 60_000,
+    fingerprint: identity,
   };
   return token;
 }
 
 async function callEndpoint(path: string, payload: Record<string, unknown>, fetcher: FetchLike): Promise<Record<string, unknown>> {
-  const token = await fetchToken(fetcher);
-  const response = await fetcher(`${apiBase()}${path}`, {
+  const credentials = await requireCredentials();
+  const token = await fetchToken(fetcher, credentials);
+  const response = await fetcher(`${credentials.baseUrl}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

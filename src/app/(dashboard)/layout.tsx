@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { AppNav, type NavItem } from "@/components/app-nav";
+import { AppShell, type NavItem } from "@/components/app-nav";
 import { FacilitySwitcher } from "@/components/facility-switcher";
 import { ToastProvider } from "@/components/toast";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
@@ -27,11 +27,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <ToastProvider>
-      <div className="min-h-dvh">
-        <AppNav items={user.role === "admin" ? [...NAV, ...ADMIN_NAV] : NAV} />
-
-        <div className="border-b border-slate-200 bg-white/60">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-1.5">
+      <AppShell
+        items={user.role === "admin" ? [...NAV, ...ADMIN_NAV] : NAV}
+        topbar={
+          <>
             {user.role === "admin" ? (
               <FacilitySwitcher options={facilities} selectedId={facility?.id ?? null} />
             ) : (
@@ -45,18 +44,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </span>
               <LogoutButton />
             </div>
-          </div>
-        </div>
-
-        <main className="mx-auto max-w-7xl px-3 py-4">
-          {user.role === "admin" && !facility ? (
-            <p className="card card-pad mb-3 border-warn/30 bg-warn-soft text-xxs text-warn">
-              เลือกสถานบริการที่ต้องการปฏิบัติงานก่อน จึงจะเห็นข้อมูลของสถานบริการนั้น
-            </p>
-          ) : null}
-          {children}
-        </main>
-      </div>
+          </>
+        }
+      >
+        {user.role === "admin" && !facility ? (
+          <p className="card card-pad mb-3 border-warn/30 bg-warn-soft text-xxs text-warn">
+            เลือกสถานบริการที่ต้องการปฏิบัติงานก่อน จึงจะเห็นข้อมูลของสถานบริการนั้น
+          </p>
+        ) : null}
+        {children}
+      </AppShell>
     </ToastProvider>
   );
 }

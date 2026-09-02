@@ -4,3 +4,4 @@ export * from "./source";
 export * from "./catalog";
 export * from "./mappings";
 export * from "./agent";
+export * from "./settings";

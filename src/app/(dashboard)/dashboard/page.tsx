@@ -28,7 +28,7 @@ export default async function DashboardPage() {
   if (!facility) {
     return (
       <section className="card card-pad">
-        <h1 className="text-base font-semibold">ภาพรวมระบบ</h1>
+        <h1 className="page-title">ภาพรวมระบบ</h1>
         <p className="mt-1 text-xxs text-slate-500">
           {user.role === "admin"
             ? "เลือกสถานบริการจากแถบด้านบนเพื่อดูภาพรวม"
@@ -46,7 +46,7 @@ export default async function DashboardPage() {
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-xxs uppercase tracking-wide text-slate-500">TMT Drug Master</p>
-          <h1 className="text-base font-semibold">
+          <h1 className="page-title">
             {facility.code} · {facility.name}
           </h1>
         </div>

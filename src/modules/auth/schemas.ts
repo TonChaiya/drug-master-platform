@@ -4,7 +4,7 @@ import { isValidOfficeId } from "@/lib/validation/facility";
 const username = z.string().trim().min(4).max(80).regex(/^[A-Za-z0-9._-]+$/);
 
 /** Policy for a password being SET. Enforced on signup and password change. */
-const newPassword = z.string().min(12).max(128);
+const newPassword = z.string().min(6).max(128);
 
 /**
  * Login only compares a credential, so it must not re-apply the policy: an

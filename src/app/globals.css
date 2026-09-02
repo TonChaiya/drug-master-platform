@@ -8,21 +8,53 @@
  * `@apply` and still respect Tailwind v4's cascade layers.
  */
 @theme {
-  --font-sans: "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
-  --color-brand-50: oklch(0.97 0.02 250);
-  --color-brand-100: oklch(0.93 0.04 250);
-  --color-brand-500: oklch(0.58 0.16 250);
-  --color-brand-600: oklch(0.51 0.16 252);
-  --color-brand-700: oklch(0.44 0.14 254);
-  --color-ok: oklch(0.52 0.13 155);
-  --color-ok-soft: oklch(0.95 0.04 155);
-  --color-warn: oklch(0.55 0.12 75);
-  --color-warn-soft: oklch(0.96 0.05 85);
-  --color-danger: oklch(0.52 0.19 25);
-  --color-danger-soft: oklch(0.96 0.04 25);
+  /*
+   * Palette lifted from the PHP system this replaces (15.Drug_Master_Platform,
+   * assets/app.css): navy ink on cool paper with a single orange accent. The
+   * neutral ramp deliberately overrides Tailwind's `slate` rather than adding a
+   * parallel scale, so every existing slate-* class adopts the house colours
+   * without touching the components that use them.
+   */
+  --font-sans: var(--font-body), "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-display-face), Manrope, "IBM Plex Sans Thai", system-ui, sans-serif;
+
+  --color-paper: #eef2f4;
+
+  --color-slate-50: #f4f6f7;
+  --color-slate-100: #e7ecef;
+  --color-slate-200: #dce3e7;
+  --color-slate-300: #c6d0d7;
+  --color-slate-400: #9aa6af;
+  --color-slate-500: #76838d;
+  --color-slate-600: #73808b;
+  --color-slate-700: #45596e;
+  --color-slate-800: #33475c;
+  --color-slate-900: #26384b;
+
+  --color-brand-50: #fff1ed;
+  --color-brand-100: #ffddd4;
+  --color-brand-500: #ff7655;
+  --color-brand-600: #ff4d24;
+  --color-brand-700: #e63d17;
+
+  --color-ok: #168b62;
+  --color-ok-soft: #e4f4ee;
+  --color-warn: #b26a00;
+  --color-warn-soft: #fdf1dd;
+  --color-danger: #c53a31;
+  --color-danger-soft: #fbe9e7;
+
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  --shadow-panel: 0 14px 40px rgba(38, 56, 75, 0.075);
+
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
   --text-xxs: 0.6875rem;
   --text-xxs--line-height: 1.05rem;
 }
+
 
 @layer base {
   :root {
@@ -34,7 +66,7 @@
   }
 
   body {
-    background-color: var(--color-slate-50);
+    background-color: var(--color-paper);
     color: var(--color-slate-900);
     font-size: var(--text-sm);
     line-height: var(--text-sm--line-height);
@@ -49,9 +81,28 @@
 
 @utility card {
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-slate-200);
+  border: 1px solid color-mix(in srgb, var(--color-slate-200) 90%, transparent);
   background-color: white;
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Manrope 800 with tight tracking is the old system's page-title signature. */
+@utility page-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  color: var(--color-slate-900);
+}
+
+@utility eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--color-slate-500);
 }
 
 @utility card-pad {
@@ -71,7 +122,7 @@
   padding-block: --spacing(1.5);
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
-  font-weight: 500;
+  font-weight: 700;
   transition: background-color 120ms ease, border-color 120ms ease;
   cursor: pointer;
 }
@@ -179,20 +230,21 @@
   border-collapse: collapse;
 
   & th {
-    padding: --spacing(1.5) --spacing(2);
+    padding: --spacing(2) --spacing(2.5);
     text-align: left;
-    font-size: var(--text-xxs);
-    line-height: var(--text-xxs--line-height);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-size: 0.625rem;
+    line-height: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
     color: var(--color-slate-500);
+    background-color: var(--color-slate-50);
+    border-bottom: 1px solid var(--color-slate-100);
     white-space: nowrap;
   }
 
   & td {
-    padding: --spacing(1.5) --spacing(2);
-    border-top: 1px solid var(--color-slate-100);
+    padding: --spacing(2) --spacing(2.5);
+    border-bottom: 1px solid var(--color-slate-100);
     vertical-align: top;
   }
 

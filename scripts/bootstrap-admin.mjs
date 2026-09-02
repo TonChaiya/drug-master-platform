@@ -62,9 +62,9 @@ try {
   } else {
     console.log("  password: the value you set in BOOTSTRAP_ADMIN_PASSWORD");
   }
-  if (password.length < 12) {
+  if (password.length < 6) {
     console.log("");
-    console.log("WARNING: that password is shorter than the 12-character policy this app");
+    console.log("WARNING: that password is shorter than the 6-character policy this app");
     console.log("enforces for every other account. Fine for a local database; change it");
     console.log("before this database is reachable by anyone else.");
   }

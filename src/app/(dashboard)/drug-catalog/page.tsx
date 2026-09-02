@@ -19,7 +19,7 @@ export default async function DrugCatalogPage() {
   if (!facility) {
     return (
       <section className="card card-pad">
-        <h1 className="text-base font-semibold">Drug Catalog</h1>
+        <h1 className="page-title">Drug Catalog</h1>
         <p className="mt-1 text-xxs text-slate-500">เลือกสถานบริการก่อนจึงจะนำเข้าไฟล์ได้</p>
       </section>
     );
@@ -31,7 +31,7 @@ export default async function DrugCatalogPage() {
   return (
     <div className="space-y-3">
       <header>
-        <h1 className="text-base font-semibold">Drug Catalog</h1>
+        <h1 className="page-title">Drug Catalog</h1>
         <p className="text-xxs text-slate-500">
           {facility.code} · {facility.name}
           {snapshot ? ` — snapshot ล่าสุด ${snapshot.rowCount.toLocaleString("th-TH")} แถว (${formatBangkok(snapshot.createdAt)})` : " — ยังไม่มี snapshot"}

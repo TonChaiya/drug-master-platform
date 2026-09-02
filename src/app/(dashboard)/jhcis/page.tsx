@@ -34,7 +34,7 @@ export default async function JhcisPage() {
   if (!facility) {
     return (
       <section className="card card-pad">
-        <h1 className="text-base font-semibold">เชื่อมต่อ JHCIS</h1>
+        <h1 className="page-title">เชื่อมต่อ JHCIS</h1>
         <p className="mt-1 text-xxs text-slate-500">เลือกสถานบริการก่อนจึงจะจัดการ Agent ได้</p>
       </section>
     );
@@ -49,7 +49,7 @@ export default async function JhcisPage() {
   return (
     <div className="space-y-3">
       <header>
-        <h1 className="text-base font-semibold">เชื่อมต่อ JHCIS</h1>
+        <h1 className="page-title">เชื่อมต่อ JHCIS</h1>
         <p className="text-xxs text-slate-500">
           {facility.code} · {facility.name} — Agent เปิดเฉพาะขาออก HTTPS ไม่มีการเปิดพอร์ต MySQL ออกอินเทอร์เน็ต
         </p>
