@@ -12,9 +12,7 @@ interface Enrollment {
   expiresAt: string;
 }
 
-const INSTALLER_URL = process.env.NEXT_PUBLIC_AGENT_INSTALLER_URL ?? "";
-
-export function EnrollmentPanel() {
+export function EnrollmentPanel({ installer }: { installer: { url: string; version: string } }) {
   const router = useRouter();
   const { push } = useToast();
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
@@ -66,17 +64,23 @@ export function EnrollmentPanel() {
         </p>
       </div>
 
+      {installer.url ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand-100 bg-brand-50 p-2.5">
+          <a className="btn-primary btn-sm" href={installer.url} target="_blank" rel="noreferrer noopener">
+            ดาวน์โหลดตัวติดตั้ง Agent{installer.version ? ` ${installer.version}` : ""}
+          </a>
+          <span className="text-xxs text-slate-600">
+            ติดตั้งบนเครื่องที่ต่อ JHCIS ได้ ไม่ต้องใช้สิทธิ์ผู้ดูแลเครื่อง โปรแกรมจะอยู่ใน System Tray
+          </span>
+        </div>
+      ) : (
+        <p className="rounded-md bg-warn-soft px-2.5 py-2 text-xxs text-warn">
+          ยังไม่มีลิงก์ตัวติดตั้ง — ผู้ดูแลระบบส่วนกลางตั้งค่าได้ที่หน้า “ผู้ดูแลระบบ” หัวข้อ “ตัวติดตั้ง Agent”
+        </p>
+      )}
+
       <ol className="space-y-1.5 text-xxs text-slate-600">
-        <li>
-          1. ดาวน์โหลดและติดตั้ง Agent{" "}
-          {INSTALLER_URL ? (
-            <a className="text-brand-700 underline" href={INSTALLER_URL} rel="noreferrer noopener" target="_blank">
-              ดาวน์โหลดตัวติดตั้ง
-            </a>
-          ) : (
-            <span className="text-slate-400">(ยังไม่ได้ตั้งค่า NEXT_PUBLIC_AGENT_INSTALLER_URL)</span>
-          )}
-        </li>
+        <li>1. ดาวน์โหลดและติดตั้ง Agent จากปุ่มด้านบน</li>
         <li>2. กด “สร้างลิงก์ลงทะเบียน” ด้านล่าง แล้วเปิดลิงก์บนเครื่องที่ติดตั้ง Agent</li>
         <li>3. กรอก IP/พอร์ต/รหัสผ่าน JHCIS ในหน้าต่าง Agent แล้วกดทดสอบ</li>
         <li>4. Agent จะอ่าน office.offid และเชื่อมได้ต่อเมื่อตรงกับรหัสสถานบริการนี้</li>

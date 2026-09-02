@@ -3,6 +3,8 @@ import { requireUser } from "@/modules/auth/session";
 import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, facilitySummaries, listUsers } from "@/modules/admin/queries";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
+import { readInstallerLink } from "@/modules/agent/installer-link";
+import { AgentInstallerPanel } from "./agent-installer-panel";
 import { FacilityDataPanel } from "./facility-data-panel";
 import { TmtApiPanel } from "./tmt-api-panel";
 import { UserTable, type AdminUserRow } from "./user-table";
@@ -18,13 +20,14 @@ export default async function AdminPage() {
   }
   if (user.role !== "admin") redirect("/dashboard");
 
-  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus] = await Promise.all([
+  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus, installerLink] = await Promise.all([
     facilitySummaries(),
     listUsers(),
     countPendingUsers(),
     countMisconfiguredAdmins(),
     countFacilitylessUsers(),
     readTmtCredentialStatus(),
+    readInstallerLink(),
   ]);
 
   const rows: AdminUserRow[] = users.map((row) => ({
@@ -120,6 +123,11 @@ export default async function AdminPage() {
             mappedTotal: row.mappedTotal,
           }))}
         />
+      </section>
+
+      <section className="card card-pad">
+        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">ตัวติดตั้ง Agent</h2>
+        <AgentInstallerPanel initial={installerLink} />
       </section>
 
       <section className="card card-pad">

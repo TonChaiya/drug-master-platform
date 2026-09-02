@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
 import { requireUser } from "@/modules/auth/session";
+import { readInstallerLink } from "@/modules/agent/installer-link";
 import { listInstallations, recentCommands, recentSyncSessions } from "@/modules/agent/queries";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { EnrollmentPanel } from "./enrollment-panel";
@@ -40,10 +41,11 @@ export default async function JhcisPage() {
     );
   }
 
-  const [installations, sessions, commands] = await Promise.all([
+  const [installations, sessions, commands, installer] = await Promise.all([
     listInstallations(facility.id),
     recentSyncSessions(facility.id),
     recentCommands(facility.id),
+    readInstallerLink(),
   ]);
 
   // A tray that reported a different office.offid than this facility's code was
@@ -77,7 +79,7 @@ export default async function JhcisPage() {
         </p>
       </header>
 
-      <EnrollmentPanel />
+      <EnrollmentPanel installer={{ url: installer.url, version: installer.version }} />
 
       <section className="card card-pad">
         <h2 className="mb-2 text-sm font-semibold">เครื่องที่ลงทะเบียนแล้ว</h2>
