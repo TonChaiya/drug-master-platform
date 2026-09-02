@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+artifacts/poc/
+agent/windows-poc/.venv/
+agent/windows-poc/build/
+agent/windows-poc/dist/
+agent/windows-poc/__pycache__/
+agent/windows-poc/**/*.pyc
+tmp/
+*.tsbuildinfo

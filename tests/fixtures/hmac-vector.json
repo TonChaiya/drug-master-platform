@@ -1,0 +1,10 @@
+{
+  "secret": "fixed-secret-for-poc-tests",
+  "method": "POST",
+  "path": "/api/poc/agent/report",
+  "timestamp": "1767225600",
+  "nonce": "0123456789abcdef0123456789abcdef",
+  "body": "{\"installationId\":\"123e4567-e89b-42d3-a456-426614174000\",\"machineName\":\"POC-เครื่องทดสอบ\",\"agentVersion\":\"0.1.0\",\"officeId\":\"05957\",\"jhcisConnected\":true,\"eligibleDrugCount\":123,\"checkedAt\":\"2026-01-01T00:00:00Z\"}",
+  "bodySha256": "10043d6bd63f17dff72ef6f2cacd7d738270dffa4842181831fee145ba06d7d9",
+  "signature": "2923a8ef0882d2f60762f3faf563265068afb5013aa51f72339f33bf823f0184"
+}
