@@ -1,6 +1,6 @@
 {
-  "name": "tmt-drug-master-connectivity-poc",
-  "version": "0.1.0",
+  "name": "tmt-drug-master-platform",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,17 +9,19 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "poc:credentials": "node scripts/generate-poc-credentials.mjs",
-    "poc:migrate": "node scripts/migrate-poc.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
+    "keys:generate": "node scripts/generate-keys.mjs"
   },
   "dependencies": {
+    "drizzle-orm": "0.45.2",
     "mysql2": "3.24.3",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "zod": "4.5.4"
+    "zod": "4.5.4",
+    "@tailwindcss/postcss": "4.3.3",
+    "tailwindcss": "4.3.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -27,8 +29,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "9.39.2",
     "eslint-config-next": "16.3.4",
-    "typescript": "5.9.3",
-    "vitest": "4.1.11"
+    "typescript": "5.9.3"
   },
   "packageManager": "pnpm@11.19.0"
 }

@@ -1,52 +1,59 @@
-# TMT Drug Master Platform — Next.js Rewrite
+# TMT Drug Master Platform
 
-พื้นที่นี้เป็นข้อกำหนดและแผนสร้างระบบใหม่จาก `15.Drug_Master_Platform-old` โดยเขียนใหม่ด้วย Next.js ไม่ใช่การแปลงโค้ด PHP แบบบรรทัดต่อบรรทัด และไม่ย้ายข้อมูลจริง รหัสผ่าน token หรือไฟล์ติดตั้งเก่าเข้ามา
+ระบบจับคู่รายการยาของสถานบริการกับรหัสมาตรฐาน TMT/TTMT แล้วส่งออกเป็นไฟล์ DrugCat
 
-## เป้าหมาย
+รายการยาถูกดึงจาก JHCIS ในวง LAN ของแต่ละสถานบริการโดย Windows Agent ที่ติดตั้งไว้ที่เครื่องนั้น
+แล้วส่งขึ้นฐานข้อมูลกลางบน TiDB Cloud ผ่าน HTTPS ขาออกอย่างเดียว — เว็บบน cloud ไม่เคยต่อเข้า LAN โดยตรง
 
-- ดึงรายการยาที่เปิดใช้งานจาก JHCIS ของแต่ละสถานบริการผ่าน Windows Agent
-- เทียบ Drug Catalog ล่าสุดและคง mapping ที่ถูกต้อง
-- ค้นและ map มาตรฐาน TMT/TTMT โดยไม่เชื่อรหัสเดิมใน JHCIS
-- ส่งออกไฟล์ DrugCat `.xls` จากแม่แบบเดิมโดยคง 22 คอลัมน์
-- แยกข้อมูลทุกสถานบริการอย่างเคร่งครัด และให้ admin เห็นภาพรวมทั้งหมด
+```text
+JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  TiDB Cloud
+                                                               ↕
+                                                            TMT API
+```
 
-## สแตกที่เสนอ
+## เอกสาร
 
-- Next.js App Router + TypeScript
-- Tailwind CSS สำหรับ UI แบบ compact และ responsive
-- TiDB Cloud Starter (MySQL compatible) ผ่าน `DATABASE_URL`
-- Drizzle ORM + migrations โดยไม่ใช้ trigger/stored procedure
-- Zod สำหรับตรวจ input และ boundary ของ API
-- Vitest สำหรับ unit/integration และ Playwright สำหรับ workflow สำคัญ
-- Object storage แบบ private สำหรับไฟล์นำเข้า/ส่งออกที่เกินข้อจำกัด request ของโฮสต์
-- GitHub Releases สำหรับไฟล์ติดตั้ง Windows Agent
+| ไฟล์ | เนื้อหา |
+|---|---|
+| [AGENTS.md](AGENTS.md) | ข้อตกลงการทำงาน กฎ ponytail และข้อผิดพลาดของระบบเดิมที่ห้ามทำซ้ำ |
+| [docs/SPEC.md](docs/SPEC.md) | ระบบต้องทำอะไร: กฎธุรกิจ, แบบจำลองข้อมูล, TMT API, สัญญาไฟล์ DrugCat |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | ระบบทำงานอย่างไร: สถาปัตยกรรม, Agent protocol, ความปลอดภัย, การขึ้นระบบ |
 
-เวอร์ชันแพ็กเกจยังไม่ถูกล็อกในขั้นเอกสาร ต้องตรวจเวอร์ชันปัจจุบันก่อนเริ่ม scaffold
+## เริ่มใช้งาน
 
-## เอกสารหลัก
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm keys:generate      # คัดลอกค่าที่ได้ไปใส่ .env.local
+pnpm db:migrate
+pnpm bootstrap:admin    # รหัสผ่านสุ่ม แสดงครั้งเดียว
+pnpm dev                # http://localhost:3000
+```
 
-- [ขอบเขตและกฎธุรกิจ](docs/BUSINESS_RULES.md)
-- [สถาปัตยกรรม](docs/ARCHITECTURE.md)
-- [แบบจำลองข้อมูล](docs/DATA_MODEL.md)
-- [โปรโตคอล Agent](docs/AGENT_PROTOCOL.md)
-- [การใช้ TMT API](docs/TMT_API.md)
-- [DrugCat และการส่งออก](docs/DRUGCAT_EXPORT.md)
-- [ความปลอดภัยและการขึ้นระบบ](docs/SECURITY_AND_DEPLOYMENT.md)
-- [แผนดำเนินงาน](docs/IMPLEMENTATION_PLAN.md)
-- [แผนทดสอบ](docs/TEST_PLAN.md)
-- [แผนผังอ้างอิงระบบเดิม](docs/LEGACY_TRACEABILITY.md)
+`.env.local` ต้องมีอย่างน้อย `DB_*`, `SESSION_SECRET` และ `APP_ENCRYPTION_KEY`
+ถ้า `pnpm` ไม่อยู่ใน PATH: `corepack enable pnpm`
+
+รายละเอียดทั้งหมดอยู่ใน [docs/OPERATIONS.md](docs/OPERATIONS.md#4-การติดตั้งและใช้งาน)
+
+## โครงสร้าง
+
+```text
+src/
+  app/(auth)         เข้าสู่ระบบ / สมัครสมาชิก
+  app/(dashboard)    ภาพรวม, เชื่อมต่อ JHCIS, มาตรฐาน, Drug Catalog, จับคู่, ส่งออก, ผู้ดูแลระบบ
+  app/api/v1         REST API รวม Agent protocol
+  modules/           business logic แยกตามโดเมน
+  lib/excel/         ตัวอ่าน/เขียน .xls (BIFF8) และ .xlsx เขียนเอง ไม่มี dependency ภายนอก
+  lib/authorization/ facility scope ที่ทุก query ต้องผ่าน
+  db/                Drizzle schema และ SQL migrations
+agent/windows/       Windows Agent (Python) เผยแพร่ผ่าน GitHub Releases
+references/templates/ แม่แบบ DrugCat เปล่าที่อนุมัติแล้ว ใช้อ้างอิงรูปแบบไฟล์
+```
 
 ## สถานะ
 
-ขณะนี้มี Connectivity PoC สำหรับ Next.js และ Windows Agent แล้ว แต่ยังไม่ควร deploy เป็น production ตัว PoC ส่งเฉพาะผลเชื่อมต่อ JHCIS, `officeId` และจำนวนรายการที่เข้าเงื่อนไข ไม่ส่งแถวยาจริง
+ใช้งานได้ครบทั้งสายงานแล้ว: ดึงยาจาก JHCIS → ซิงก์มาตรฐาน → นำเข้า Drug Catalog → จับคู่ → ส่งออก `.xls`
 
-ค่าเริ่มต้นใช้ memory store สำหรับทดสอบในเครื่อง หากต้องการทดสอบ TiDB ให้คัดลอก placeholder จาก `.env.example` ไป `.env.local`, ตั้ง `POC_STATE_STORE=tidb`, ใช้ชื่อฐานเฉพาะที่ไม่ใช่ `sys` แล้วรัน `pnpm poc:migrate` ก่อนเริ่มเว็บ ความลับต้องอยู่ใน `.env.local` เท่านั้น
-
-## หลักการสำคัญ
-
-1. ทุก query ที่เป็นข้อมูลสถานบริการต้องมี `facilityId` จาก session/authorization context ห้ามรับจาก browser แล้วเชื่อโดยตรง
-2. เว็บบนอินเทอร์เน็ตห้ามเชื่อม MySQL ใน LAN โดยตรง ต้องรับข้อมูลจาก Agent แบบ outbound HTTPS เท่านั้น
-3. รหัสฐาน JHCIS อยู่ในเครื่องสถานบริการและป้องกันด้วย Windows DPAPI ห้ามส่งขึ้นฐานกลาง
-4. TMT API credential อยู่ฝั่ง server เท่านั้น และค่าที่เคยเปิดเผยต้องเปลี่ยนก่อน production
-5. ไม่มีขั้นตอนอนุมัติหลัง map; เมื่อบันทึกสำเร็จให้พร้อมส่งออกได้ทันที
-6. ห้าม seed `admin/admin` ใน production ใช้ bootstrap แบบครั้งเดียวและบังคับเปลี่ยนรหัส
+**ยังไม่ควร deploy เป็น production** จนกว่า checklist ใน
+[docs/OPERATIONS.md](docs/OPERATIONS.md#5-checklist-ก่อนขึ้น-production) จะผ่านครบ
+โดยเฉพาะการทดสอบกับ JHCIS จริง, การเปิดไฟล์ส่งออกด้วย Excel บน Windows จริง และการ rotate secrets

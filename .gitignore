@@ -3,11 +3,13 @@ node_modules/
 .env
 .env.local
 .env.*.local
-artifacts/poc/
-agent/windows-poc/.venv/
-agent/windows-poc/build/
-agent/windows-poc/dist/
-agent/windows-poc/__pycache__/
-agent/windows-poc/**/*.pyc
 tmp/
+artifacts/
 *.tsbuildinfo
+
+# Windows Agent build output — installers ship via GitHub Releases, never in Git.
+agent/windows/.venv/
+agent/windows/build/
+agent/windows/dist/
+agent/windows/**/__pycache__/
+agent/windows/**/*.pyc

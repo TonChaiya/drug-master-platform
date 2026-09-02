@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Connectivity PoC | TMT Drug Master",
-  description: "หน้าทดสอบการเชื่อมต่อ Web, TMT API และ Windows Agent",
+  title: "TMT Drug Master Platform",
+  description: "ระบบจัดการบัญชียาและมาตรฐาน TMT/TTMT สำหรับสถานบริการ",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
