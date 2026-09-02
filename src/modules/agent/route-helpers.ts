@@ -1,7 +1,7 @@
 import type { ZodType } from "zod";
 import { apiJson } from "@/lib/api-response";
 import { AgentError, agentErrors } from "./errors";
-import { assertInstallation, assertOffice, touchInstallation, verifyAgentRequest, type AgentIdentity } from "./auth";
+import { assertInstallation, assertOffice, clearOfficeMismatch, touchInstallation, verifyAgentRequest, type AgentIdentity } from "./auth";
 
 /** docs/OPERATIONS.md targets <= 1 MiB per agent request. */
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -38,7 +38,10 @@ export async function withAgentRequest<T extends { installationId: string; offic
     if (!parsed.success) throw agentErrors.bodyInvalid();
 
     assertInstallation(identity, parsed.data.installationId);
-    if (parsed.data.officeId) assertOffice(identity, parsed.data.officeId);
+    if (parsed.data.officeId) {
+      await assertOffice(identity, parsed.data.officeId);
+      await clearOfficeMismatch(identity.installationId);
+    }
     if (parsed.data.agentVersion) await touchInstallation(identity.installationId, parsed.data.agentVersion, parsed.data.officeId);
 
     const result = await handler({ identity, body: parsed.data });

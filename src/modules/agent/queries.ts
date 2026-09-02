@@ -11,6 +11,8 @@ export interface InstallationView {
   lastSeenAt: Date | null;
   enrolledAt: Date | null;
   activeCredentials: number;
+  lastMismatchOfficeId: string | null;
+  lastMismatchAt: Date | null;
 }
 
 export async function listInstallations(facilityId: string): Promise<InstallationView[]> {
@@ -40,6 +42,8 @@ export async function listInstallations(facilityId: string): Promise<Installatio
     lastSeenAt: row.lastSeenAt,
     enrolledAt: row.enrolledAt,
     activeCredentials: activeByInstallation.get(row.installationId) ?? 0,
+    lastMismatchOfficeId: row.lastMismatchOfficeId,
+    lastMismatchAt: row.lastMismatchAt,
   }));
 }
 

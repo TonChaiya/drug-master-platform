@@ -103,9 +103,29 @@ export function assertInstallation(identity: AgentIdentity, declaredInstallation
   if (identity.installationId !== declaredInstallationId) throw agentErrors.installationInactive();
 }
 
-/** office.offid read from JHCIS must equal the facility code the credential belongs to. */
-export function assertOffice(identity: AgentIdentity, officeId: string): void {
-  if (!constantTimeTextEqual(officeId, identity.facilityCode)) throw agentErrors.officeMismatch();
+/**
+ * office.offid read from JHCIS must equal the facility code the credential
+ * belongs to.
+ *
+ * The rejection is also written to the installation so the web can say so: the
+ * person signed in at that facility is the one who has to fix the pairing, and
+ * they never see the tray's error message.
+ */
+export async function assertOffice(identity: AgentIdentity, officeId: string): Promise<void> {
+  if (constantTimeTextEqual(officeId, identity.facilityCode)) return;
+  await db
+    .update(agentInstallations)
+    .set({ lastMismatchOfficeId: officeId.slice(0, 8), lastMismatchAt: new Date() })
+    .where(eq(agentInstallations.installationId, identity.installationId));
+  throw agentErrors.officeMismatch();
+}
+
+/** Clears the mismatch flag once the agent reports the right office again. */
+export async function clearOfficeMismatch(installationId: string): Promise<void> {
+  await db
+    .update(agentInstallations)
+    .set({ lastMismatchOfficeId: null, lastMismatchAt: null })
+    .where(eq(agentInstallations.installationId, installationId));
 }
 
 export async function touchInstallation(installationId: string, agentVersion: string, officeId?: string): Promise<void> {

@@ -3,6 +3,7 @@ import { requireUser } from "@/modules/auth/session";
 import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, facilitySummaries, listUsers } from "@/modules/admin/queries";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
+import { FacilityDataPanel } from "./facility-data-panel";
 import { TmtApiPanel } from "./tmt-api-panel";
 import { UserTable, type AdminUserRow } from "./user-table";
 
@@ -107,6 +108,18 @@ export default async function AdminPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="card card-pad">
+        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">จัดการข้อมูลรายสถานบริการ</h2>
+        <FacilityDataPanel
+          facilities={summaries.map((row) => ({
+            facilityId: row.facilityId,
+            facilityCode: row.facilityCode,
+            facilityName: row.facilityName,
+            mappedTotal: row.mappedTotal,
+          }))}
+        />
       </section>
 
       <section className="card card-pad">

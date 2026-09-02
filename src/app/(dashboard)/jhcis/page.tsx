@@ -46,8 +46,30 @@ export default async function JhcisPage() {
     recentCommands(facility.id),
   ]);
 
+  // A tray that reported a different office.offid than this facility's code was
+  // refused by the server; the person signed in here is the one who can fix it.
+  const mismatched = installations.filter((row) => row.lastMismatchAt !== null);
+
   return (
     <div className="space-y-3">
+      {mismatched.length > 0 ? (
+        <section className="card card-pad border-danger/30 bg-danger-soft" role="alert">
+          <h2 className="font-display text-sm font-extrabold text-danger">ไอดีไม่ตรงกับสถานบริการ</h2>
+          <p className="mt-1 text-xxs text-danger">
+            โปรดกลับไปที่สถานบริการและไอดีของท่านให้ถูกต้อง — Agent จะไม่ทำงานจนกว่ารหัสสถานบริการจะตรงกัน
+          </p>
+          <ul className="mt-2 space-y-1 text-xxs text-danger">
+            {mismatched.map((row) => (
+              <li key={row.installationId}>
+                เครื่อง <strong>{row.machineLabel}</strong> รายงาน office.offid{" "}
+                <code className="font-mono">{row.lastMismatchOfficeId ?? "—"}</code> แต่ไอดีที่ท่านใช้อยู่ผูกกับสถานบริการ{" "}
+                <code className="font-mono">{facility.code}</code> · ล่าสุด {formatBangkok(row.lastMismatchAt)}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <header>
         <h1 className="page-title">เชื่อมต่อ JHCIS</h1>
         <p className="text-xxs text-slate-500">
@@ -81,7 +103,12 @@ export default async function JhcisPage() {
                       <div className="font-medium">{row.machineLabel}</div>
                       <div className="font-mono text-xxs text-slate-400">{row.installationId}</div>
                     </td>
-                    <td className="font-mono">{row.declaredOfficeId ?? "—"}</td>
+                    <td className="font-mono">
+                      {row.declaredOfficeId ?? "—"}
+                      {row.lastMismatchAt ? (
+                        <span className="badge-danger ml-1">ไม่ตรง: {row.lastMismatchOfficeId ?? "?"}</span>
+                      ) : null}
+                    </td>
                     <td className="font-mono">{row.agentVersion ?? "—"}</td>
                     <td className="tabular-nums">{row.activeCredentials}</td>
                     <td>{formatBangkok(row.lastSeenAt)}</td>
