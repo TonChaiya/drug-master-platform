@@ -43,7 +43,7 @@ interface StatusResult {
   ok: boolean;
   latestAgent: AgentResult | null;
   events: PocEvent[];
-  persistence: "memory-ephemeral";
+  persistence: "memory-ephemeral" | "tidb";
 }
 
 function dateTime(value?: string | null): string {
@@ -200,7 +200,7 @@ export function PocDashboard({ version }: { version: string }) {
           </dl>
         </article>
 
-        <p className="notice wide">ข้อมูล Agent และ event ใช้ in-memory adapter สำหรับ PoC เท่านั้น อาจหายเมื่อ process/function restart และ replay cache แบบ memory ไม่ปลอดภัยเพียงพอสำหรับ production; ระบบจริงต้องเปลี่ยนเป็น transactional TiDB/Redis adapter</p>
+        <p className="notice wide">Persistence: {status?.persistence ?? "ยังไม่ทราบ"}. โหมด memory อาจหายเมื่อ process/function restart; โหมด TiDB นี้เป็นตาราง PoC เท่านั้นและยังไม่ใช่ schema ระบบจริง</p>
 
         <article className="card wide">
           <h2>Event ล่าสุด</h2>

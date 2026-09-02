@@ -23,6 +23,7 @@
 - staged Agent sync ไม่แตะ live rows ก่อน finish; retry batch idempotent
 - officeId mismatch/revoked key/replayed nonce/oversized payload ถูกปฏิเสธ
 - map บันทึกแล้ว export ได้ทันทีโดยไม่มี approval
+- Connectivity PoC: signed Agent report ถูกบันทึกและอ่านกลับจาก TiDB ผ่าน TLS โดยเก็บเฉพาะ office/count; replay nonce ซ้ำต้องถูกปฏิเสธ
 
 ## End-to-end
 
@@ -50,4 +51,3 @@
 - TMT/NLEM/REGNO subsets ที่ครอบคลุม ED, ED*, NED, inactive, missing enrichment
 - JHCIS rows 01/10/05/inactive เพื่อพิสูจน์ filter
 - blank approved `.xls` template และ expected export เล็ก ๆ ที่ไม่มีข้อมูลจริง
-

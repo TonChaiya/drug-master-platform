@@ -20,7 +20,7 @@ export interface StoredAgentReport extends AgentReport {
 export interface PocStateSnapshot {
   latestAgent: StoredAgentReport | null;
   events: PocEvent[];
-  persistence: "memory-ephemeral";
+  persistence: "memory-ephemeral" | "tidb";
 }
 
 export interface PocStateStore {
@@ -61,5 +61,13 @@ declare global {
   var pocStateStore: PocStateStore | undefined;
 }
 
-export const pocStateStore = globalThis.pocStateStore ?? new MemoryPocStateStore();
+async function createStateStore(): Promise<PocStateStore> {
+  if (process.env.NODE_ENV !== "test" && process.env.POC_STATE_STORE === "tidb") {
+    const { TiDbPocStateStore } = await import("@/lib/poc/tidb-state-store");
+    return new TiDbPocStateStore();
+  }
+  return new MemoryPocStateStore();
+}
+
+export const pocStateStore = globalThis.pocStateStore ?? (await createStateStore());
 if (process.env.NODE_ENV !== "production") globalThis.pocStateStore = pocStateStore;

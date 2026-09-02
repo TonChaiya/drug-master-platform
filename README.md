@@ -38,7 +38,9 @@
 
 ## สถานะ
 
-ขณะนี้เป็น `documentation baseline` ยังไม่มีแอป Next.js และยังไม่ควร deploy เป็น production ให้เริ่มพัฒนาตามลำดับใน `IMPLEMENTATION_PLAN.md` และห้ามข้าม quality gates ของ Agent, multi-tenancy และไฟล์ `.xls`
+ขณะนี้มี Connectivity PoC สำหรับ Next.js และ Windows Agent แล้ว แต่ยังไม่ควร deploy เป็น production ตัว PoC ส่งเฉพาะผลเชื่อมต่อ JHCIS, `officeId` และจำนวนรายการที่เข้าเงื่อนไข ไม่ส่งแถวยาจริง
+
+ค่าเริ่มต้นใช้ memory store สำหรับทดสอบในเครื่อง หากต้องการทดสอบ TiDB ให้คัดลอก placeholder จาก `.env.example` ไป `.env.local`, ตั้ง `POC_STATE_STORE=tidb`, ใช้ชื่อฐานเฉพาะที่ไม่ใช่ `sys` แล้วรัน `pnpm poc:migrate` ก่อนเริ่มเว็บ ความลับต้องอยู่ใน `.env.local` เท่านั้น
 
 ## หลักการสำคัญ
 
@@ -48,4 +50,3 @@
 4. TMT API credential อยู่ฝั่ง server เท่านั้น และค่าที่เคยเปิดเผยต้องเปลี่ยนก่อน production
 5. ไม่มีขั้นตอนอนุมัติหลัง map; เมื่อบันทึกสำเร็จให้พร้อมส่งออกได้ทันที
 6. ห้าม seed `admin/admin` ใน production ใช้ bootstrap แบบครั้งเดียวและบังคับเปลี่ยนรหัส
-

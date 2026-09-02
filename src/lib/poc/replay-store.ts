@@ -20,5 +20,13 @@ declare global {
   var pocReplayStore: ReplayStore | undefined;
 }
 
-export const replayStore = globalThis.pocReplayStore ?? new MemoryReplayStore();
+async function createReplayStore(): Promise<ReplayStore> {
+  if (process.env.NODE_ENV !== "test" && process.env.POC_STATE_STORE === "tidb") {
+    const { TiDbReplayStore } = await import("@/lib/poc/tidb-replay-store");
+    return new TiDbReplayStore();
+  }
+  return new MemoryReplayStore();
+}
+
+export const replayStore = globalThis.pocReplayStore ?? (await createReplayStore());
 if (process.env.NODE_ENV !== "production") globalThis.pocReplayStore = replayStore;

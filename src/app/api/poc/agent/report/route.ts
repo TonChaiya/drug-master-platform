@@ -18,7 +18,15 @@ export async function POST(request: Request) {
   if (body.byteLength > MAX_BODY_BYTES) {
     return noStoreJson({ ok: false, errorCode: "PAYLOAD_TOO_LARGE", message: "payload ต้องไม่เกิน 64 KiB" }, { status: 413 });
   }
-  const auth = await verifyAgentRequest(request, body, replayStore);
+  let auth: Awaited<ReturnType<typeof verifyAgentRequest>>;
+  try {
+    auth = await verifyAgentRequest(request, body, replayStore);
+  } catch {
+    return noStoreJson(
+      { ok: false, errorCode: "PERSISTENCE_UNAVAILABLE", message: "ระบบจัดเก็บข้อมูลไม่พร้อมใช้งานชั่วคราว" },
+      { status: 503 },
+    );
+  }
   if (!auth.ok) return noStoreJson({ ok: false, errorCode: auth.errorCode, message: auth.message }, { status: auth.status });
 
   let raw: unknown;
@@ -38,6 +46,14 @@ export async function POST(request: Request) {
 
   const requestId = randomUUID();
   const receivedAt = new Date().toISOString();
-  await pocStateStore.recordAgent({ ...parsed.data, requestId, receivedAt });
-  return noStoreJson({ ok: true, requestId, receivedAt, persistence: "memory-ephemeral" }, { status: 202 });
+  try {
+    await pocStateStore.recordAgent({ ...parsed.data, requestId, receivedAt });
+  } catch {
+    return noStoreJson(
+      { ok: false, errorCode: "PERSISTENCE_UNAVAILABLE", message: "ระบบจัดเก็บข้อมูลไม่พร้อมใช้งานชั่วคราว" },
+      { status: 503 },
+    );
+  }
+  const persistence = process.env.NODE_ENV !== "test" && process.env.POC_STATE_STORE === "tidb" ? "tidb" : "memory-ephemeral";
+  return noStoreJson({ ok: true, requestId, receivedAt, persistence }, { status: 202 });
 }

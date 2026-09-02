@@ -3,3 +3,6 @@ packages:
 
 allowBuilds:
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - mysql2@3.24.3
