@@ -19,6 +19,13 @@ export async function POST(request: Request) {
     return apiJson({ ok: true, role: user.role, mustChangePassword: user.mustChangePassword === 1 });
   } catch (error) {
     if (error instanceof AuthError) return apiJson({ ok: false, errorCode: "INVALID_CREDENTIALS", message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง หรือบัญชียังไม่เปิดใช้งาน" }, 401);
-    return apiJson({ ok: false, errorCode: "SERVICE_UNAVAILABLE", message: "เข้าสู่ระบบไม่สำเร็จชั่วคราว" }, 503);
+    // A wrong password and an unreachable database looked identical to whoever
+    // was staring at the login form. Keep the response vague, but leave the real
+    // cause in the platform log so a deploy can actually be debugged.
+    console.error("auth.login_failed", error);
+    return apiJson(
+      { ok: false, errorCode: "SERVICE_UNAVAILABLE", message: "เข้าสู่ระบบไม่สำเร็จชั่วคราว — ตรวจสถานะระบบที่ /api/v1/health" },
+      503,
+    );
   }
 }
