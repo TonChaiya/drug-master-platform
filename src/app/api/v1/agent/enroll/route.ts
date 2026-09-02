@@ -22,7 +22,9 @@ export async function POST(request: Request) {
       throw agentErrors.bodyInvalid();
     }
     const parsed = enrollRequestSchema.safeParse(parsedJson);
-    if (!parsed.success) throw agentErrors.enrollmentInvalid();
+    // A malformed field is not an expired token: blaming the token here sends
+    // the operator to regenerate a link that was never the problem.
+    if (!parsed.success) throw agentErrors.bodyInvalid(parsed.error.issues[0]?.path.join("."));
 
     const credential = await redeemEnrollment(parsed.data);
     return apiJson({

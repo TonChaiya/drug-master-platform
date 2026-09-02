@@ -49,5 +49,7 @@ export const agentErrors = {
   enrollmentInvalid: () => new AgentError("AGENT_ENROLLMENT_INVALID", 400, "enrollment token ไม่ถูกต้องหรือหมดอายุ"),
   commandInvalid: () => new AgentError("AGENT_COMMAND_INVALID", 409, "ไม่พบคำสั่งที่ Agent นี้ถือครองอยู่"),
   payloadTooLarge: () => new AgentError("AGENT_PAYLOAD_TOO_LARGE", 413, "payload ใหญ่เกินกำหนด"),
-  bodyInvalid: () => new AgentError("AGENT_BODY_INVALID", 400, "รูปแบบข้อมูลไม่ถูกต้อง"),
+  // The field name is safe to return: it names the request shape, never a value.
+  bodyInvalid: (field?: string) =>
+    new AgentError("AGENT_BODY_INVALID", 400, field ? `รูปแบบข้อมูลไม่ถูกต้องที่ฟิลด์ ${field}` : "รูปแบบข้อมูลไม่ถูกต้อง"),
 } as const;
