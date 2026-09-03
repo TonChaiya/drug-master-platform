@@ -34,13 +34,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
             {user.role === "admin" ? (
               <FacilitySwitcher options={facilities} selectedId={facility?.id ?? null} />
             ) : (
-              <span className="badge-muted">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xxs font-medium shadow-sm ring-1 ring-slate-200/70">
+                <span aria-hidden className="size-1.5 rounded-full bg-ok" />
                 {facility ? `${facility.code} · ${facility.name}` : "ไม่พบสถานบริการของบัญชีนี้"}
               </span>
             )}
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xxs text-slate-500">
-                {user.fullName} · {user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}
+            <div className="ml-auto flex items-center gap-2.5">
+              <div className="hidden text-right leading-tight sm:block">
+                <div className="text-xxs font-semibold text-slate-900">{user.fullName}</div>
+                <div className="text-xxs text-slate-500">{user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}</div>
+              </div>
+              {/* Initials rather than a photo: there is nowhere to upload one,
+                  and a coloured disc still tells you whose session this is. */}
+              <span
+                aria-hidden
+                className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 font-display text-xxs font-extrabold text-brand-700 ring-2 ring-white"
+              >
+                {user.fullName.trim().slice(0, 2)}
               </span>
               <LogoutButton />
             </div>

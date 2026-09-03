@@ -18,7 +18,10 @@
   --font-sans: var(--font-body), "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
   --font-display: var(--font-display-face), Manrope, "IBM Plex Sans Thai", system-ui, sans-serif;
 
-  --color-paper: #eef2f4;
+  /* Warm paper rather than cool grey: it lets the coral read as the one loud
+     thing on the page instead of competing with a blue-tinted ground. */
+  --color-paper: #f4f2ef;
+  --color-ink: #1b1a19;
 
   --color-slate-50: #f4f6f7;
   --color-slate-100: #e7ecef;
@@ -44,10 +47,23 @@
   --color-danger: #c53a31;
   --color-danger-soft: #fbe9e7;
 
-  --radius-md: 8px;
-  --radius-lg: 10px;
+  /* Accents for cards that mean different things. Used as a soft tint with a
+     saturated figure on top, never as a background for body text. */
+  --color-accent-mint: #0f9d76;
+  --color-accent-mint-soft: #e6f6f1;
+  --color-accent-sky: #2a7bd4;
+  --color-accent-sky-soft: #e6f0fb;
+  --color-accent-violet: #6d5bd0;
+  --color-accent-violet-soft: #efecfb;
+  --color-accent-amber: #c4820b;
+  --color-accent-amber-soft: #fdf3dd;
 
-  --shadow-panel: 0 14px 40px rgba(38, 56, 75, 0.075);
+  --radius-md: 10px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-panel: 0 1px 2px rgba(27, 26, 25, 0.04), 0 12px 32px -12px rgba(27, 26, 25, 0.12);
+  --shadow-lift: 0 2px 4px rgba(27, 26, 25, 0.05), 0 18px 40px -16px rgba(27, 26, 25, 0.18);
 
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
@@ -81,15 +97,37 @@
 
 @utility card {
   border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--color-slate-200) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-slate-200) 70%, transparent);
   background-color: white;
   box-shadow: var(--shadow-panel);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+/* A card that responds to the pointer reads as something you can act on.
+   Reserved for cards that are actually interactive. */
+@utility card-interactive {
+  @apply card;
+  &:hover {
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-2px);
+  }
+}
+
+/* Tinted statistic tile. The figure carries the colour; the ground stays pale
+   so Thai text on it keeps its contrast. */
+@utility tile {
+  border-radius: var(--radius-lg);
+  padding: --spacing(3);
+  transition: transform 180ms ease;
+  &:hover {
+    transform: translateY(-2px);
+  }
 }
 
 /* Manrope 800 with tight tracking is the old system's page-title signature. */
 @utility page-title {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.875rem;
   line-height: 1.15;
   font-weight: 800;
   letter-spacing: -0.045em;
@@ -117,18 +155,21 @@
   align-items: center;
   justify-content: center;
   gap: --spacing(1.5);
-  border-radius: var(--radius-md);
-  padding-inline: --spacing(3);
+  border-radius: var(--radius-full);
+  padding-inline: --spacing(3.5);
   padding-block: --spacing(1.5);
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
   font-weight: 700;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
   cursor: pointer;
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 }
 
 @utility btn-sm {
-  padding-inline: --spacing(2);
+  padding-inline: --spacing(2.5);
   padding-block: --spacing(1);
   font-size: var(--text-xxs);
   line-height: var(--text-xxs--line-height);
@@ -163,6 +204,7 @@
 @utility field {
   width: 100%;
   border-radius: var(--radius-md);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
   border: 1px solid var(--color-slate-300);
   background-color: white;
   padding-inline: --spacing(2.5);
@@ -248,9 +290,27 @@
     vertical-align: top;
   }
 
-  & tbody tr:hover {
-    background-color: var(--color-slate-50);
+  & tbody tr {
+    transition: background-color 120ms ease;
   }
+
+  & tbody tr:hover {
+    background-color: color-mix(in srgb, var(--color-brand-50) 60%, white);
+  }
+}
+
+/* The capsule used for the selected item in the rail. */
+@utility nav-pill {
+  display: flex;
+  align-items: center;
+  gap: --spacing(2);
+  height: --spacing(9);
+  padding-inline: --spacing(3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xxs);
+  line-height: var(--text-xxs--line-height);
+  font-weight: 700;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 
 button:disabled {

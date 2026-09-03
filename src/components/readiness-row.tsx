@@ -7,14 +7,14 @@ import type { ReadinessItem } from "@/modules/facilities/queries";
  */
 export function ReadinessRow({ items }: { items: ReadinessItem[] }) {
   return (
-    <ul className="grid gap-2 sm:grid-cols-3">
+    <ul className="grid gap-3 sm:grid-cols-3">
       {items.map((item) => (
-        <li key={item.key} className="card card-pad flex items-start justify-between gap-2">
+        <li key={item.key} className="card-interactive card-pad flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span
                 aria-hidden
-                className={`size-2 shrink-0 rounded-full ${item.ready ? "bg-ok" : "bg-danger"}`}
+                className={`size-2.5 shrink-0 rounded-full ring-4 ${item.ready ? "bg-ok ring-ok-soft" : "bg-danger ring-danger-soft"}`}
               />
               <strong className="text-sm">{item.label}</strong>
               <span className={item.ready ? "badge-ok" : "badge-danger"}>{item.ready ? "พร้อม" : "ยังไม่พร้อม"}</span>

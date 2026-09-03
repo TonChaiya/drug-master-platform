@@ -39,7 +39,7 @@ export function FacilitySwitcher({ options, selectedId }: { options: FacilityOpt
       </label>
       <select
         id="facility-switcher"
-        className="field max-w-56 py-1 text-xxs"
+        className="max-w-64 rounded-full border border-slate-200/70 bg-white px-3 py-1.5 text-xxs font-medium shadow-sm outline-none transition-shadow focus:ring-2 focus:ring-brand-100"
         value={selectedId ?? ""}
         disabled={pending}
         onChange={(event) => void select(event.target.value)}

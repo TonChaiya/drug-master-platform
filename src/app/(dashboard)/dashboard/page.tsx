@@ -6,12 +6,37 @@ import { requireUser } from "@/modules/auth/session";
 
 export const dynamic = "force-dynamic";
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/**
+ * Each figure gets its own colour so the four are told apart at a glance rather
+ * than by reading their labels. The tint stays pale and the figure carries the
+ * colour, which keeps Thai text on it legible.
+ */
+const TONES = {
+  ink: { tile: "bg-white border border-slate-200/70", value: "text-slate-900", chip: "bg-slate-100 text-slate-600" },
+  mint: { tile: "bg-accent-mint-soft", value: "text-accent-mint", chip: "bg-white/70 text-accent-mint" },
+  amber: { tile: "bg-accent-amber-soft", value: "text-accent-amber", chip: "bg-white/70 text-accent-amber" },
+  brand: { tile: "bg-brand-50", value: "text-brand-700", chip: "bg-white/70 text-brand-700" },
+} as const;
+
+function Stat({
+  label,
+  value,
+  hint,
+  tone = "ink",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: keyof typeof TONES;
+}) {
+  const style = TONES[tone];
   return (
-    <article className="card card-pad">
-      <p className="text-xxs text-slate-500">{label}</p>
-      <p className="mt-0.5 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint ? <p className="mt-0.5 text-xxs text-slate-500">{hint}</p> : null}
+    <article className={`tile ${style.tile}`}>
+      <p className="text-xxs font-medium text-slate-600">{label}</p>
+      <p className={`mt-1 font-display text-3xl font-extrabold tabular-nums ${style.value}`}>{value}</p>
+      {hint ? (
+        <p className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-xxs font-medium ${style.chip}`}>{hint}</p>
+      ) : null}
     </article>
   );
 }
@@ -42,7 +67,7 @@ export default async function DashboardPage() {
   const mappedPercent = overview.sourceTotal === 0 ? 0 : Math.round((overview.mappedTotal / overview.sourceTotal) * 100);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-xxs uppercase tracking-wide text-slate-500">TMT Drug Master</p>
@@ -55,15 +80,25 @@ export default async function DashboardPage() {
 
       <ReadinessRow items={overview.readiness} />
 
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="รายการยาจาก JHCIS"
           value={overview.sourceTotal.toLocaleString("th-TH")}
           hint={`01: ${overview.type01.toLocaleString("th-TH")} · 10: ${overview.type10.toLocaleString("th-TH")}`}
         />
-        <Stat label="จับคู่แล้ว" value={overview.mappedTotal.toLocaleString("th-TH")} hint={`${mappedPercent}% ของทั้งหมด`} />
-        <Stat label="คงค้าง" value={overview.pendingTotal.toLocaleString("th-TH")} hint="รอจับคู่มาตรฐาน" />
-        <Stat label="พร้อมส่งออก" value={overview.mappedTotal.toLocaleString("th-TH")} hint="ไม่มีขั้นตอนอนุมัติ" />
+        <Stat
+          tone="mint"
+          label="จับคู่แล้ว"
+          value={overview.mappedTotal.toLocaleString("th-TH")}
+          hint={`${mappedPercent}% ของทั้งหมด`}
+        />
+        <Stat tone="amber" label="คงค้าง" value={overview.pendingTotal.toLocaleString("th-TH")} hint="รอจับคู่มาตรฐาน" />
+        <Stat
+          tone="brand"
+          label="พร้อมส่งออก"
+          value={overview.mappedTotal.toLocaleString("th-TH")}
+          hint="ไม่มีขั้นตอนอนุมัติ"
+        />
       </section>
     </div>
   );
