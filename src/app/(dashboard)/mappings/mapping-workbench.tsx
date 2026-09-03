@@ -19,6 +19,8 @@ interface WorklistRow {
   tradeName: string | null;
   activeIngredient: string | null;
   manufacturer: string | null;
+  strength: string | null;
+  dosageForm: string | null;
   updateFlag: string | null;
   mappingSource: string | null;
 }
@@ -202,10 +204,10 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>รหัสยา</th>
-                  <th>ชื่อยา</th>
+                  <th>รหัสยา JHCIS</th>
+                  <th>ชื่อยาใน JHCIS</th>
                   <th>ชนิด</th>
-                  <th>มาตรฐานที่จับคู่</th>
+                  <th>จับคู่กับมาตรฐาน (จาก TMT API)</th>
                   <th>FLAG</th>
                   <th>ที่มา</th>
                   <th />
@@ -216,19 +218,36 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                   <Fragment key={row.sourceDrugId}>
                     <tr className={selected?.sourceDrugId === row.sourceDrugId ? "bg-brand-50" : undefined}>
                     <td className="font-mono">{row.drugcode}</td>
-                    <td className="max-w-64">
-                      <div>{row.drugname ?? row.drugnamethai ?? "—"}</div>
-                      {row.druggenericname ? <div className="text-xxs text-slate-400">{row.druggenericname}</div> : null}
+                    <td className="max-w-56">
+                      <div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>
+                      {row.druggenericname ? (
+                        <div className="text-xxs text-slate-500">{row.druggenericname}</div>
+                      ) : (
+                        <div className="text-xxs text-slate-400">ไม่มีชื่อสามัญใน JHCIS</div>
+                      )}
                     </td>
                     <td>
                       <span className="badge-muted">{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</span>
                     </td>
-                    <td>
+                    {/* Both sides of the pairing, so it can be judged by reading
+                        across the row instead of opening each one. */}
+                    <td className="max-w-80">
                       {row.standardCode ? (
-                        <>
-                          <div className="font-mono">{row.standardCode}</div>
-                          <div className="text-xxs text-slate-400">{row.tradeName ?? row.activeIngredient ?? ""}</div>
-                        </>
+                        <div className="border-l-2 border-brand-200 pl-2">
+                          <div className="flex flex-wrap items-baseline gap-x-1.5">
+                            <span className="font-mono text-xxs text-slate-500">{row.standardCode}</span>
+                            <span className="font-medium">{row.tradeName ?? "—"}</span>
+                          </div>
+                          <div className="text-xxs text-slate-600">
+                            {row.activeIngredient ?? "—"}
+                            {row.strength ? <span className="text-slate-500"> · {row.strength}</span> : null}
+                          </div>
+                          {row.dosageForm || row.manufacturer ? (
+                            <div className="text-xxs text-slate-400">
+                              {[row.dosageForm, row.manufacturer].filter(Boolean).join(" · ")}
+                            </div>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="badge-danger">ยังไม่จับคู่</span>
                       )}

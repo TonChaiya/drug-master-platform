@@ -20,6 +20,8 @@ export interface WorklistRow {
   tradeName: string | null;
   activeIngredient: string | null;
   manufacturer: string | null;
+  strength: string | null;
+  dosageForm: string | null;
   updateFlag: string | null;
   mappingSource: string | null;
   mappedAt: Date | null;
@@ -94,6 +96,8 @@ export async function mappingWorklist(options: {
       tradeName: standardProducts.tradeName,
       activeIngredient: standardProducts.activeIngredient,
       manufacturer: standardProducts.manufacturer,
+      strength: standardProducts.strength,
+      dosageForm: standardProducts.dosageForm,
     })
     .from(sourceDrugs)
     .leftJoin(drugMappings, eq(drugMappings.sourceDrugId, sourceDrugs.id))
