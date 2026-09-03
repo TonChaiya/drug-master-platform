@@ -220,11 +220,7 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                     <td className="font-mono">{row.drugcode}</td>
                     <td className="max-w-56">
                       <div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>
-                      {row.druggenericname ? (
-                        <div className="text-xxs text-slate-500">{row.druggenericname}</div>
-                      ) : (
-                        <div className="text-xxs text-slate-400">ไม่มีชื่อสามัญใน JHCIS</div>
-                      )}
+                      {row.druggenericname ? <div className="text-xxs text-slate-500">{row.druggenericname}</div> : null}
                     </td>
                     <td>
                       <span className="badge-muted">{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</span>
