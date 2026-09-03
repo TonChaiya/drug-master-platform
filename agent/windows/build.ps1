@@ -33,6 +33,12 @@ $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 Invoke-Native $venvPython @("-m", "pip", "install", "--upgrade", "pip") "pip upgrade"
 Invoke-Native $venvPython @("-m", "pip", "install", "-r", "requirements-build.txt") "dependency install"
 
+# Gate the build on the checks. Both defects that shipped last time were
+# reachable from these in under a second, so packaging past a red one would be
+# packaging a known-broken agent.
+Invoke-Native $venvPython @((Join-Path "tests" "test_signature.py")) "signature vector check"
+Invoke-Native $venvPython @((Join-Path "tests" "test_ui_smoke.py")) "UI smoke check"
+
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
 
 Invoke-Native $venvPython @(
