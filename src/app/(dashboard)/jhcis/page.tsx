@@ -79,7 +79,10 @@ export default async function JhcisPage() {
         </p>
       </header>
 
-      <EnrollmentPanel installer={{ url: installer.url, version: installer.version }} />
+      <EnrollmentPanel
+        installationCount={installations.length}
+        installer={{ url: installer.url, version: installer.version }}
+      />
 
       <section className="card card-pad">
         <h2 className="mb-2 text-sm font-semibold">เครื่องที่ลงทะเบียนแล้ว</h2>
