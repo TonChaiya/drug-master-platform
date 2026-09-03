@@ -230,17 +230,23 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                     <td className="max-w-80">
                       {row.standardCode ? (
                         <div className="border-l-2 border-brand-200 pl-2">
+                          {/* Generic name and strength lead: they are what says
+                              the pairing is right. The brand follows. */}
                           <div className="flex flex-wrap items-baseline gap-x-1.5">
                             <span className="font-mono text-xxs text-slate-500">{row.standardCode}</span>
-                            <span className="font-medium">{row.tradeName ?? "—"}</span>
+                            <span className="font-medium">
+                              {row.activeIngredient ?? "—"}
+                              {row.strength ? <span className="text-slate-600"> · {row.strength}</span> : null}
+                            </span>
                           </div>
-                          <div className="text-xxs text-slate-600">
-                            {row.activeIngredient ?? "—"}
-                            {row.strength ? <span className="text-slate-500"> · {row.strength}</span> : null}
-                          </div>
+                          {row.tradeName ? <div className="text-xxs text-slate-600">{row.tradeName}</div> : null}
                           {row.dosageForm || row.manufacturer ? (
                             <div className="text-xxs text-slate-400">
-                              {[row.dosageForm, row.manufacturer].filter(Boolean).join(" · ")}
+                              {row.dosageForm}
+                              {row.dosageForm && row.manufacturer ? " · " : ""}
+                              {/* The manufacturer separates two products that are
+                                  otherwise identical, so it carries weight. */}
+                              {row.manufacturer ? <span className="font-semibold text-slate-600">{row.manufacturer}</span> : null}
                             </div>
                           ) : null}
                         </div>
