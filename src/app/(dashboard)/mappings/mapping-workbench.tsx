@@ -234,9 +234,9 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                               the pairing is right. The brand follows. */}
                           <div className="flex flex-wrap items-baseline gap-x-1.5">
                             <span className="font-mono text-xxs text-slate-500">{row.standardCode}</span>
-                            <span className="font-medium">
+                            <span className="font-semibold text-ink">
                               {row.activeIngredient ?? "—"}
-                              {row.strength ? <span className="text-slate-600"> · {row.strength}</span> : null}
+                              {row.strength ? <span> · {row.strength}</span> : null}
                             </span>
                           </div>
                           {row.tradeName ? <div className="text-xxs text-slate-600">{row.tradeName}</div> : null}
@@ -246,7 +246,7 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                               {row.dosageForm && row.manufacturer ? " · " : ""}
                               {/* The manufacturer separates two products that are
                                   otherwise identical, so it carries weight. */}
-                              {row.manufacturer ? <span className="font-semibold text-slate-600">{row.manufacturer}</span> : null}
+                              {row.manufacturer ? <span className="font-semibold text-ink">{row.manufacturer}</span> : null}
                             </div>
                           ) : null}
                         </div>
