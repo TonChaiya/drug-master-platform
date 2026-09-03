@@ -72,6 +72,7 @@ export const standardSyncRuns = mysqlTable(
     startedAt: datetime("started_at", { mode: "date", fsp: 3 }).notNull(),
     finishedAt: datetime("finished_at", { mode: "date", fsp: 3 }),
     nextWindowBegin: date("next_window_begin", { mode: "string" }),
+    phase: varchar("phase", { length: 16 }),
     completedWindows: int("completed_windows").notNull().default(0),
     totalWindows: int("total_windows").notNull().default(0),
   },

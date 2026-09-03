@@ -7,6 +7,8 @@ import { fetchMasterTmt, fetchNlem, fetchRegno, fetchTmtVersion, type MasterTmtR
 import { normalizeRegistrationNumber, normalizeSearchText, standardStatusFromApi } from "./normalize";
 import { partitionWindows, TMT_DATA_START, todayIso, type SyncWindow } from "./windows";
 
+type SyncPhase = "master" | "enrich";
+
 const UPSERT_CHUNK = 500;
 /** Rows per CASE-batched UPDATE. Small enough to keep the statement readable to the server. */
 const ENRICH_CHUNK = 200;
@@ -14,6 +16,8 @@ const ENRICH_CHUNK = 200;
 export interface StandardSyncResult {
   runId: string;
   resumed: boolean;
+  /** True when the range was narrowed to what changed since the last success. */
+  incremental: boolean;
   beginDate: string;
   endDate: string;
   completedWindows: number;
@@ -22,7 +26,7 @@ export interface StandardSyncResult {
   windows: number;
   received: number;
   written: number;
-  /** NLEM/registration rows applied to products that this window did not itself return. */
+  /** NLEM/registration rows applied to stored products in the second pass. */
   enriched: number;
   warnings: string[];
 }
@@ -30,15 +34,19 @@ export interface StandardSyncResult {
 /**
  * Full MasterTMT sync for one date range.
  *
- * `/mastertmt` carries neither ISED nor the registration number, so each window
- * is enriched by joining `/nlem` and `/regno` on `tpucode = tpuid` before
- * anything is written (docs/SPEC.md).
+ * `/mastertmt` carries neither ISED nor the registration number, so `/nlem` and
+ * `/regno` supply them, joined on `tpucode = tpuid` (docs/SPEC.md).
  *
- * `/nlem` and `/regno` also report changes for products `/mastertmt` did not
- * return in the same window — a drug whose national-list status moved but whose
- * TPU record did not. Those are applied to the products already stored, because
- * ISED goes straight into the DrugCat export and a stale one is a wrong export.
- * The run is only marked successful once every partition has been applied.
+ * It runs in two passes over the same windows, and the order is the point.
+ * Applying a window's NLEM as it arrived only reached products already stored,
+ * so a national-list record for a drug whose TPU record came in a later window
+ * was dropped and never revisited — 3,432 of 3,447 missing NLEM values were
+ * lost that way, and ISED goes straight into the DrugCat export. Loading every
+ * product first, then applying NLEM and the registration numbers, removes the
+ * ordering entirely.
+ *
+ * The run is only marked successful once both passes have covered every
+ * window; a failure leaves the phase and the next window as the resume point.
  */
 export interface SyncProgress {
   status: string;
@@ -88,6 +96,33 @@ export async function readSyncProgress(): Promise<SyncProgress | null> {
   };
 }
 
+/**
+ * Every endpoint is change-based: begindate/enddate select records whose
+ * change_date falls in the range. So a repeat sync only has to ask for what
+ * changed since the last successful one, which is why pressing the button again
+ * is quick and still picks up TMT's edits.
+ *
+ * The window is backdated by an overlap because change_date can sit a little
+ * before the boundary we last asked for; re-reading a month costs one request
+ * per endpoint and is the difference between catching a late record and losing
+ * it for good.
+ */
+const INCREMENTAL_OVERLAP_DAYS = 30;
+
+async function lastSuccessfulEnd(): Promise<string | null> {
+  const rows = await db
+    .select({ windowEnd: standardSyncRuns.windowEnd })
+    .from(standardSyncRuns)
+    .where(and(eq(standardSyncRuns.source, "TMT"), eq(standardSyncRuns.status, "succeeded")))
+    .orderBy(desc(standardSyncRuns.startedAt))
+    .limit(1);
+  const value: unknown = rows[0]?.windowEnd;
+  if (!value) return null;
+  const iso = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+  const backdated = Date.parse(`${iso}T00:00:00Z`) - INCREMENTAL_OVERLAP_DAYS * 86_400_000;
+  return new Date(backdated).toISOString().slice(0, 10);
+}
+
 /** A run that stopped before finishing every window and can be picked up again. */
 async function findResumableRun() {
   const rows = await db
@@ -120,9 +155,14 @@ export async function syncMasterTmt(options: {
 
   const previous = options.resume === false ? null : await findResumableRun();
 
+  // With no dates: continue where a successful run left off, or load the whole
+  // history the first time. An explicit range always wins.
+  const since = options.beginDate ? null : await lastSuccessfulEnd();
+  const incremental = previous === null && options.beginDate === undefined && since !== null;
+
   // Resuming keeps the original range and picks up at the first window that was
   // never applied, so a dropped connection costs one window, not the whole load.
-  const beginDate = previous?.windowBegin ?? options.beginDate ?? TMT_DATA_START;
+  const beginDate = previous?.windowBegin ?? options.beginDate ?? since ?? TMT_DATA_START;
   const endDate = previous?.windowEnd ?? options.endDate ?? todayIso();
   const allWindows = partitionWindows(beginDate, endDate);
   const windows = previous?.nextWindowBegin
@@ -131,6 +171,7 @@ export async function syncMasterTmt(options: {
 
   const runId = previous?.id ?? randomUUID();
   const alreadyDone = allWindows.length - windows.length;
+  const startPhase: SyncPhase = previous?.phase === "enrich" ? "enrich" : "master";
 
   if (previous) {
     await db
@@ -149,7 +190,8 @@ export async function syncMasterTmt(options: {
       startedBy: options.userId,
       startedAt,
       nextWindowBegin: allWindows[0]?.begindate ?? null,
-      totalWindows: allWindows.length,
+      totalWindows: allWindows.length * 2,
+      phase: "master",
     });
   }
 
@@ -158,30 +200,44 @@ export async function syncMasterTmt(options: {
   let enriched = 0;
   let completed = alreadyDone;
 
+  /** Records progress after each window so a resume knows where to pick up. */
+  async function markWindow(window: SyncWindow, phase: SyncPhase): Promise<void> {
+    completed += 1;
+    const nextBegin = new Date(Date.parse(`${window.enddate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    const finishedPhase = nextBegin > endDate;
+    await db
+      .update(standardSyncRuns)
+      .set({
+        receivedRows: received,
+        changedRows: written,
+        completedWindows: completed,
+        totalWindows: allWindows.length * 2,
+        // Finishing the master pass rewinds to the first window for the second.
+        phase: finishedPhase && phase === "master" ? "enrich" : phase,
+        nextWindowBegin: finishedPhase ? (phase === "master" ? beginDate : null) : nextBegin,
+      })
+      .where(eq(standardSyncRuns.id, runId));
+  }
+
   try {
-    for (const window of windows) {
-      const applied = await syncOneWindow(window, version ?? "unknown", fetcher, warnings);
-      received += applied.received;
-      written += applied.written;
-      enriched += applied.enriched;
-      completed += 1;
-      // Recorded per window: this is what a resume reads back.
-      const nextBegin = new Date(Date.parse(`${window.enddate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-      await db
-        .update(standardSyncRuns)
-        .set({
-          receivedRows: received,
-          changedRows: written,
-          completedWindows: completed,
-          totalWindows: allWindows.length,
-          nextWindowBegin: nextBegin > endDate ? null : nextBegin,
-        })
-        .where(eq(standardSyncRuns.id, runId));
+    if (startPhase === "master") {
+      for (const window of windows) {
+        const applied = await loadMasterWindow(window, version ?? "unknown", fetcher, warnings);
+        received += applied.received;
+        written += applied.written;
+        await markWindow(window, "master");
+      }
+    }
+
+    // Every product is stored by now, so nothing NLEM reports can miss its row.
+    for (const window of startPhase === "enrich" ? windows : allWindows) {
+      enriched += await applyEnrichmentWindow(window, fetcher, warnings);
+      await markWindow(window, "enrich");
     }
 
     await db
       .update(standardSyncRuns)
-      .set({ status: "succeeded", receivedRows: received, changedRows: written, completedWindows: completed, nextWindowBegin: null, finishedAt: new Date() })
+      .set({ status: "succeeded", receivedRows: received, changedRows: written, completedWindows: completed, nextWindowBegin: null, phase: null, finishedAt: new Date() })
       .where(eq(standardSyncRuns.id, runId));
 
     await db.insert(auditLogs).values({
@@ -193,7 +249,21 @@ export async function syncMasterTmt(options: {
       afterJson: { version, windows: windows.length, received, written, enriched, warnings: warnings.length },
     });
 
-    return { runId, resumed: previous !== null, beginDate, endDate, completedWindows: completed, totalWindows: allWindows.length, version, windows: windows.length, received, written, enriched, warnings };
+    return {
+      runId,
+      resumed: previous !== null,
+      incremental,
+      beginDate,
+      endDate,
+      completedWindows: completed,
+      totalWindows: allWindows.length * 2,
+      version,
+      windows: windows.length,
+      received,
+      written,
+      enriched,
+      warnings,
+    };
   } catch (error) {
     const code = error instanceof Error ? error.name : "UNKNOWN";
     await db
@@ -205,22 +275,16 @@ export async function syncMasterTmt(options: {
   }
 }
 
-async function syncOneWindow(
+/** First pass: the product records themselves. ISED and the registration
+ * number are left for the second pass, which runs once every product exists. */
+async function loadMasterWindow(
   window: SyncWindow,
   version: string,
   fetcher: typeof fetch,
   warnings: string[],
-): Promise<{ received: number; written: number; enriched: number }> {
-  const [master, nlem, regno] = await Promise.all([
-    fetchMasterTmt(window, fetcher),
-    fetchNlem(window, fetcher),
-    fetchRegno(window, fetcher),
-  ]);
-
-  const nlemByCode = new Map(nlem.map((row) => [row.tpuid, row]));
-  const regnoByCode = new Map(regno.map((row) => [row.tpuid, row]));
-
-  const values = master.map((row) => toStandardProduct(row, nlemByCode.get(row.tpucode)?.nlem ?? null, regnoByCode.get(row.tpucode)?.regno ?? null, version, warnings));
+): Promise<{ received: number; written: number }> {
+  const master = await fetchMasterTmt(window, fetcher);
+  const values = master.map((row) => toStandardProduct(row, version, warnings));
 
   let written = 0;
   for (let start = 0; start < values.length; start += UPSERT_CHUNK) {
@@ -242,26 +306,23 @@ async function syncOneWindow(
           manufacturer: sql`values(${standardProducts.manufacturer})`,
           fsn: sql`values(${standardProducts.fsn})`,
           status: sql`values(${standardProducts.status})`,
-          rawNlem: sql`values(${standardProducts.rawNlem})`,
-          exportIsed: sql`values(${standardProducts.exportIsed})`,
-          registrationNumber: sql`values(${standardProducts.registrationNumber})`,
           sourceVersion: sql`values(${standardProducts.sourceVersion})`,
           normalizedGeneric: sql`values(${standardProducts.normalizedGeneric})`,
           normalizedTrade: sql`values(${standardProducts.normalizedTrade})`,
           normalizedManufacturer: sql`values(${standardProducts.normalizedManufacturer})`,
-          normalizedRegno: sql`values(${standardProducts.normalizedRegno})`,
           updatedAt: sql`CURRENT_TIMESTAMP(3)`,
         },
       });
     written += chunk.length;
   }
 
-  const masterCodes = new Set(master.map((row) => row.tpucode));
-  const enriched =
-    (await applyNlemToStoredProducts(nlem.filter((row) => !masterCodes.has(row.tpuid)), warnings)) +
-    (await applyRegnoToStoredProducts(regno.filter((row) => !masterCodes.has(row.tpuid))));
+  return { received: master.length, written };
+}
 
-  return { received: master.length, written, enriched };
+/** Second pass: ISED and registration numbers onto products already loaded. */
+async function applyEnrichmentWindow(window: SyncWindow, fetcher: typeof fetch, warnings: string[]): Promise<number> {
+  const [nlem, regno] = await Promise.all([fetchNlem(window, fetcher), fetchRegno(window, fetcher)]);
+  return (await applyNlemToStoredProducts(nlem, warnings)) + (await applyRegnoToStoredProducts(regno));
 }
 
 /**
@@ -323,14 +384,10 @@ function cap(value: string | null, limit: number): string | null {
 
 function toStandardProduct(
   row: MasterTmtRecord,
-  rawNlem: string | null,
-  registrationNumber: string | null,
   version: string,
   warnings: string[],
 ): typeof standardProducts.$inferInsert {
-  const ised = normalizeNlem(rawNlem);
-  if (ised.warning && warnings.length < 50) warnings.push(`${row.tpucode}: ${ised.warning}`);
-
+  void warnings;
   return {
     id: randomUUID(),
     standardCode: cap(row.tpucode, 64) ?? row.tpucode,
@@ -345,13 +402,9 @@ function toStandardProduct(
     manufacturer: cap(row.manufacturer, 255),
     fsn: row.fsn,
     status: standardStatusFromApi(row.status),
-    rawNlem: ised.raw,
-    exportIsed: ised.exportValue,
-    registrationNumber: cap(registrationNumber, 160),
     sourceVersion: version,
     normalizedGeneric: normalizeSearchText(row.activeingredient),
     normalizedTrade: normalizeSearchText(row.tradename),
     normalizedManufacturer: normalizeSearchText(row.manufacturer),
-    normalizedRegno: normalizeRegistrationNumber(registrationNumber),
   };
 }
