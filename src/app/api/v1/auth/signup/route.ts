@@ -20,7 +20,19 @@ export async function POST(request: Request) {
     return apiJson({ ok: true, message: "สมัครสมาชิกสำเร็จ กรุณาติดต่อผู้พัฒนาเพื่ออนุมัติไอดี" }, 201);
   } catch (error) {
     if (error instanceof AuthError && error.code === "USERNAME_TAKEN") return apiJson({ ok: false, errorCode: error.code, message: "ชื่อผู้ใช้นี้ไม่พร้อมใช้งาน" }, 409);
-    if (error instanceof AuthError && error.code === "FACILITY_NAME_MISMATCH") return apiJson({ ok: false, errorCode: error.code, message: "ชื่อสถานบริการไม่ตรงกับรหัสที่มีอยู่" }, 409);
+    if (error instanceof AuthError && error.code === "FACILITY_NAME_MISMATCH") {
+      // Naming the registered facility turns a dead end into something the
+      // person can fix: either they mistyped the name, or the code is wrong.
+      return apiJson(
+        {
+          ok: false,
+          errorCode: error.code,
+          message: `รหัส ${parsed.data.facilityCode} ลงทะเบียนไว้ในชื่อ “${error.registeredFacilityName}” — หากเป็นสถานบริการเดียวกัน กรุณากรอกชื่อให้ตรง`,
+          registeredFacilityName: error.registeredFacilityName,
+        },
+        409,
+      );
+    }
     return apiJson({ ok: false, errorCode: "SERVICE_UNAVAILABLE", message: "สมัครสมาชิกไม่สำเร็จชั่วคราว" }, 503);
   }
 }

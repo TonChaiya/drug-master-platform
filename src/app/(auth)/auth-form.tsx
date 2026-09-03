@@ -11,6 +11,32 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
+  const [facilityName, setFacilityName] = useState("");
+  const [facilityNote, setFacilityNote] = useState<string | null>(null);
+
+  /**
+   * Several accounts share one facility, so the second person to sign up has to
+   * name a facility that already exists. Asking them to reproduce its name
+   * exactly is a trap; the code is the identifier, so look the name up from it.
+   */
+  async function lookupFacility(code: string) {
+    if (!/^\d{5}$/.test(code)) {
+      setFacilityNote(null);
+      return;
+    }
+    const response = await fetch(`/api/v1/facilities/lookup?code=${code}`);
+    const result = (await response.json()) as { registered?: boolean; facilityName?: string; active?: boolean };
+    if (!response.ok || !result.registered || !result.facilityName) {
+      setFacilityNote("รหัสนี้ยังไม่มีในระบบ — บัญชีแรกของสถานบริการนี้ กรุณากรอกชื่อให้ถูกต้อง");
+      return;
+    }
+    setFacilityName(result.facilityName);
+    setFacilityNote(
+      result.active
+        ? `พบสถานบริการนี้แล้ว บัญชีของท่านจะใช้ข้อมูลร่วมกับไอดีอื่นของ ${result.facilityName}`
+        : `สถานบริการ ${result.facilityName} ถูกปิดใช้งานอยู่ กรุณาติดต่อผู้ดูแลระบบ`,
+    );
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,12 +115,31 @@ export function AuthForm({ mode }: { mode: Mode }) {
               <div className="grid gap-2.5 sm:grid-cols-[8rem_1fr]">
                 <div>
                   <label className="label" htmlFor="facilityCode">รหัสสถานบริการ</label>
-                  <input className="field font-mono" id="facilityCode" name="facilityCode" required inputMode="numeric" pattern="[0-9]{5}" maxLength={5} />
+                  <input
+                    className="field font-mono"
+                    id="facilityCode"
+                    name="facilityCode"
+                    required
+                    inputMode="numeric"
+                    pattern="[0-9]{5}"
+                    maxLength={5}
+                    onBlur={(event) => void lookupFacility(event.target.value.trim())}
+                  />
                 </div>
                 <div>
                   <label className="label" htmlFor="facilityName">ชื่อสถานบริการ</label>
-                  <input className="field" id="facilityName" name="facilityName" required minLength={2} maxLength={255} />
+                  <input
+                    className="field"
+                    id="facilityName"
+                    name="facilityName"
+                    required
+                    minLength={2}
+                    maxLength={255}
+                    value={facilityName}
+                    onChange={(event) => setFacilityName(event.target.value)}
+                  />
                 </div>
+                {facilityNote ? <p className="text-xxs text-slate-500 sm:col-span-2">{facilityNote}</p> : null}
               </div>
             </>
           ) : null}

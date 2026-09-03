@@ -3,12 +3,18 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditLogs, facilities, users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "./password";
+import { normalizeFacilityName } from "@/lib/validation/facility";
 import { normalizeUsername } from "./schemas";
 
 const DUMMY_HASH = "scrypt$v=1$N=32768,r=8,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 export class AuthError extends Error {
-  constructor(public readonly code: "USERNAME_TAKEN" | "FACILITY_NAME_MISMATCH" | "INVALID_CREDENTIALS") {
+  constructor(
+    public readonly code: "USERNAME_TAKEN" | "FACILITY_NAME_MISMATCH" | "INVALID_CREDENTIALS",
+    /** For FACILITY_NAME_MISMATCH: the name the code is registered under, so
+     * the message can tell the person what to type instead of just "no". */
+    public readonly registeredFacilityName?: string,
+  ) {
     super(code);
   }
 }
@@ -30,7 +36,10 @@ export async function signup(input: SignupInput): Promise<void> {
     if (duplicate.length) throw new AuthError("USERNAME_TAKEN");
     const existingFacilities = await tx.select().from(facilities).where(eq(facilities.facilityCode, input.facilityCode)).limit(1);
     let facilityId = existingFacilities[0]?.id;
-    if (existingFacilities[0] && existingFacilities[0].facilityName.trim() !== input.facilityName.trim()) throw new AuthError("FACILITY_NAME_MISMATCH");
+    const existing = existingFacilities[0];
+    if (existing && normalizeFacilityName(existing.facilityName) !== normalizeFacilityName(input.facilityName)) {
+      throw new AuthError("FACILITY_NAME_MISMATCH", existing.facilityName);
+    }
     if (!facilityId) {
       facilityId = randomUUID();
       await tx.insert(facilities).values({ id: facilityId, facilityCode: input.facilityCode, facilityName: input.facilityName.trim() });
