@@ -26,7 +26,7 @@ export const standardProducts = mysqlTable(
     standardCode: varchar("standard_code", { length: 64 }).notNull(),
     standardType: varchar("standard_type", { length: 8 }).notNull(),
     activeIngredient: text("active_ingredient"),
-    strength: varchar("strength", { length: 255 }),
+    strength: text("strength"),
     dosageForm: varchar("dosage_form", { length: 255 }),
     contentValue: varchar("content_value", { length: 80 }),
     contentUnit: varchar("content_unit", { length: 80 }),
@@ -71,6 +71,9 @@ export const standardSyncRuns = mysqlTable(
     startedBy: varchar("started_by", { length: 36 }),
     startedAt: datetime("started_at", { mode: "date", fsp: 3 }).notNull(),
     finishedAt: datetime("finished_at", { mode: "date", fsp: 3 }),
+    nextWindowBegin: date("next_window_begin", { mode: "string" }),
+    completedWindows: int("completed_windows").notNull().default(0),
+    totalWindows: int("total_windows").notNull().default(0),
   },
   (table) => [index("idx_standard_sync_source_started").on(table.source, table.startedAt)],
 );

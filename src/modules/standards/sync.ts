@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditLogs, standardProducts, standardSyncRuns } from "@/db/schema";
 import { normalizeNlem } from "@/modules/mappings/ised";
 import { fetchMasterTmt, fetchNlem, fetchRegno, fetchTmtVersion, type MasterTmtRecord, type NlemRecord, type RegnoRecord } from "./tmt-client";
 import { normalizeRegistrationNumber, normalizeSearchText, standardStatusFromApi } from "./normalize";
-import { partitionWindows, type SyncWindow } from "./windows";
+import { partitionWindows, TMT_DATA_START, todayIso, type SyncWindow } from "./windows";
 
 const UPSERT_CHUNK = 500;
 /** Rows per CASE-batched UPDATE. Small enough to keep the statement readable to the server. */
@@ -13,6 +13,11 @@ const ENRICH_CHUNK = 200;
 
 export interface StandardSyncResult {
   runId: string;
+  resumed: boolean;
+  beginDate: string;
+  endDate: string;
+  completedWindows: number;
+  totalWindows: number;
   version: string | null;
   windows: number;
   received: number;
@@ -35,14 +40,29 @@ export interface StandardSyncResult {
  * ISED goes straight into the DrugCat export and a stale one is a wrong export.
  * The run is only marked successful once every partition has been applied.
  */
+/** A run that stopped before finishing every window and can be picked up again. */
+async function findResumableRun() {
+  const rows = await db
+    .select()
+    .from(standardSyncRuns)
+    .where(and(eq(standardSyncRuns.source, "TMT"), inArray(standardSyncRuns.status, ["running", "failed"])))
+    .orderBy(desc(standardSyncRuns.startedAt))
+    .limit(1);
+  const run = rows[0];
+  return run?.nextWindowBegin ? run : null;
+}
+
 export async function syncMasterTmt(options: {
-  beginDate: string;
-  endDate: string;
+  /** Defaults to the first date TMT holds data for. */
+  beginDate?: string;
+  /** Defaults to today. */
+  endDate?: string;
   userId: string;
   fetcher?: typeof fetch;
+  /** Set false to force a fresh run instead of continuing an unfinished one. */
+  resume?: boolean;
 }): Promise<StandardSyncResult> {
   const fetcher = options.fetcher ?? fetch;
-  const runId = randomUUID();
   const startedAt = new Date();
   const warnings: string[] = [];
 
@@ -50,23 +70,45 @@ export async function syncMasterTmt(options: {
   const version = versionResult.tmtVersion;
   if (!versionResult.ok) warnings.push(`อ่านเวอร์ชัน TMT ไม่สำเร็จ: ${versionResult.message}`);
 
-  const windows = partitionWindows(options.beginDate, options.endDate);
+  const previous = options.resume === false ? null : await findResumableRun();
 
-  await db.insert(standardSyncRuns).values({
-    id: runId,
-    source: "TMT",
-    method: "api",
-    windowBegin: options.beginDate,
-    windowEnd: options.endDate,
-    cursorValue: version,
-    status: "running",
-    startedBy: options.userId,
-    startedAt,
-  });
+  // Resuming keeps the original range and picks up at the first window that was
+  // never applied, so a dropped connection costs one window, not the whole load.
+  const beginDate = previous?.windowBegin ?? options.beginDate ?? TMT_DATA_START;
+  const endDate = previous?.windowEnd ?? options.endDate ?? todayIso();
+  const allWindows = partitionWindows(beginDate, endDate);
+  const windows = previous?.nextWindowBegin
+    ? allWindows.filter((window) => window.enddate >= previous.nextWindowBegin!)
+    : allWindows;
 
-  let received = 0;
-  let written = 0;
+  const runId = previous?.id ?? randomUUID();
+  const alreadyDone = allWindows.length - windows.length;
+
+  if (previous) {
+    await db
+      .update(standardSyncRuns)
+      .set({ status: "running", cursorValue: version, errorCode: null, finishedAt: null })
+      .where(eq(standardSyncRuns.id, runId));
+  } else {
+    await db.insert(standardSyncRuns).values({
+      id: runId,
+      source: "TMT",
+      method: "api",
+      windowBegin: beginDate,
+      windowEnd: endDate,
+      cursorValue: version,
+      status: "running",
+      startedBy: options.userId,
+      startedAt,
+      nextWindowBegin: allWindows[0]?.begindate ?? null,
+      totalWindows: allWindows.length,
+    });
+  }
+
+  let received = previous?.receivedRows ?? 0;
+  let written = previous?.changedRows ?? 0;
   let enriched = 0;
+  let completed = alreadyDone;
 
   try {
     for (const window of windows) {
@@ -74,15 +116,24 @@ export async function syncMasterTmt(options: {
       received += applied.received;
       written += applied.written;
       enriched += applied.enriched;
+      completed += 1;
+      // Recorded per window: this is what a resume reads back.
+      const nextBegin = new Date(Date.parse(`${window.enddate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
       await db
         .update(standardSyncRuns)
-        .set({ receivedRows: received, changedRows: written })
+        .set({
+          receivedRows: received,
+          changedRows: written,
+          completedWindows: completed,
+          totalWindows: allWindows.length,
+          nextWindowBegin: nextBegin > endDate ? null : nextBegin,
+        })
         .where(eq(standardSyncRuns.id, runId));
     }
 
     await db
       .update(standardSyncRuns)
-      .set({ status: "succeeded", receivedRows: received, changedRows: written, finishedAt: new Date() })
+      .set({ status: "succeeded", receivedRows: received, changedRows: written, completedWindows: completed, nextWindowBegin: null, finishedAt: new Date() })
       .where(eq(standardSyncRuns.id, runId));
 
     await db.insert(auditLogs).values({
@@ -94,12 +145,13 @@ export async function syncMasterTmt(options: {
       afterJson: { version, windows: windows.length, received, written, enriched, warnings: warnings.length },
     });
 
-    return { runId, version, windows: windows.length, received, written, enriched, warnings };
+    return { runId, resumed: previous !== null, beginDate, endDate, completedWindows: completed, totalWindows: allWindows.length, version, windows: windows.length, received, written, enriched, warnings };
   } catch (error) {
     const code = error instanceof Error ? error.name : "UNKNOWN";
     await db
       .update(standardSyncRuns)
-      .set({ status: "failed", errorCode: code.slice(0, 64), receivedRows: received, changedRows: written, finishedAt: new Date() })
+      // nextWindowBegin is deliberately left where it is: it is the resume point.
+      .set({ status: "failed", errorCode: code.slice(0, 64), receivedRows: received, changedRows: written, completedWindows: completed, finishedAt: new Date() })
       .where(eq(standardSyncRuns.id, runId));
     throw error;
   }
@@ -209,6 +261,18 @@ async function applyRegnoToStoredProducts(entries: RegnoRecord[]): Promise<numbe
   return matched;
 }
 
+/**
+ * Caps every value at its column width.
+ *
+ * MasterTMT once returned a 353-character strength and the entire window's
+ * insert failed, which stalled the historical load at that year. Truncating a
+ * single oversized field degrades one row instead of losing thousands.
+ */
+function cap(value: string | null, limit: number): string | null {
+  if (value === null) return null;
+  return value.length <= limit ? value : value.slice(0, limit);
+}
+
 function toStandardProduct(
   row: MasterTmtRecord,
   rawNlem: string | null,
@@ -221,21 +285,21 @@ function toStandardProduct(
 
   return {
     id: randomUUID(),
-    standardCode: row.tpucode,
+    standardCode: cap(row.tpucode, 64) ?? row.tpucode,
     standardType: "TMT",
     activeIngredient: row.activeingredient,
     strength: row.strength,
-    dosageForm: row.dosageform,
-    contentValue: row.contvalue,
-    contentUnit: row.contunit,
-    dispensingUnit: row.dispunit,
-    tradeName: row.tradename,
-    manufacturer: row.manufacturer,
+    dosageForm: cap(row.dosageform, 255),
+    contentValue: cap(row.contvalue, 80),
+    contentUnit: cap(row.contunit, 80),
+    dispensingUnit: cap(row.dispunit, 80),
+    tradeName: cap(row.tradename, 255),
+    manufacturer: cap(row.manufacturer, 255),
     fsn: row.fsn,
     status: standardStatusFromApi(row.status),
     rawNlem: ised.raw,
     exportIsed: ised.exportValue,
-    registrationNumber,
+    registrationNumber: cap(registrationNumber, 160),
     sourceVersion: version,
     normalizedGeneric: normalizeSearchText(row.activeingredient),
     normalizedTrade: normalizeSearchText(row.tradename),

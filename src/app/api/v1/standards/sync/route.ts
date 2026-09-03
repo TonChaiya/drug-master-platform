@@ -7,10 +7,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/**
+ * All fields optional: with none, the sync covers the whole TMT history to
+ * today and continues an unfinished run rather than starting it again.
+ */
 const schema = z
   .object({
-    beginDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    beginDate: isoDate.optional(),
+    endDate: isoDate.optional(),
+    resume: z.boolean().optional(),
   })
   .strict();
 
@@ -19,7 +26,7 @@ export async function POST(request: Request) {
   const admin = await requireAdmin();
   if (!admin.ok) return admin.response;
 
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const parsed = schema.safeParse((await request.json().catch(() => null)) ?? {});
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ช่วงวันที่ไม่ถูกต้อง" }, 400);
 
   try {

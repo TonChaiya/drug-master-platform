@@ -13,6 +13,20 @@ export interface SyncWindow {
 
 const MAX_WINDOW_DAYS = 365;
 
+/**
+ * First date worth asking for.
+ *
+ * Probed against the live API: /mastertmt returns nothing for any window before
+ * November 2013, where the initial 9,604-row load sits, and /concept reports no
+ * change_date earlier than 2013-06-27. Starting on 1 January 2013 covers that
+ * with one cheap empty window rather than guessing a tighter bound.
+ */
+export const TMT_DATA_START = "2013-01-01";
+
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function toIso(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
