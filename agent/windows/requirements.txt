@@ -2,3 +2,4 @@ mysql-connector-python==26.7.0
 Pillow==12.3.0
 pystray==0.19.5
 requests==2.34.2
+customtkinter==5.2.2

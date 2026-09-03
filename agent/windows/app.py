@@ -6,6 +6,8 @@ import socket
 import sys
 import threading
 import tkinter as tk
+
+import customtkinter as ctk
 from collections.abc import Callable
 from dataclasses import replace
 from logging.handlers import RotatingFileHandler
@@ -25,6 +27,17 @@ from version import VERSION
 
 APP_NAME = "TMT Drug Master Agent"
 STATE_COLORS = {"ok": "#087c5b", "error": "#b42318", "busy": "#c58a00", "idle": "#64748b"}
+
+# Same palette as the web app so the two do not look like different products.
+INK = "#26384b"
+PAPER = "#eef2f4"
+LINE = "#dce3e7"
+MUTED = "#73808b"
+ORANGE = "#ff4d24"
+ORANGE_DARK = "#e63d17"
+
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("blue")
 
 
 def setup_logger() -> logging.Logger:
@@ -60,6 +73,10 @@ class AgentApp:
         self.settings_status: ttk.Label | None = None
 
         self.pending_enrollment: object | None = None
+        # Tk prints callback exceptions to stderr, which a --windowed build
+        # discards. An enrolment click that failed this way left the agent
+        # looking like it had simply ignored the link.
+        self.root.report_callback_exception = self._log_callback_exception
         self.worker = CommandWorker(self.store, VERSION, self._on_status, self._on_config_reloaded)
         self.ipc = IpcServer(self._on_ipc_message)
 
@@ -122,12 +139,18 @@ class AgentApp:
         self.icon.icon = create_icon(color)
         self.icon.title = f"{APP_NAME} - {self.status_text}"
         if self.settings_status is not None and self.settings_status.winfo_exists():
-            self.settings_status.configure(text=self.status_text, foreground=color)
+            # CustomTkinter names this text_color; ttk's `foreground` raises here.
+            self.settings_status.configure(text=self.status_text, text_color=color)
 
     # ------------------------------------------------------------------- ipc
 
+    def _log_callback_exception(self, exc_type, value, traceback_object) -> None:
+        self.logger.error("ui_callback_failed", exc_info=(exc_type, value, traceback_object))
+        self.set_status(f"เกิดข้อผิดพลาดในหน้าจอ: {value}", "error")
+
     def _on_ipc_message(self, message: dict[str, object]) -> None:
         if message.get("type") == "enroll" and isinstance(message.get("url"), str):
+            self.logger.info("enrollment_link_received via=ipc")
             self.root.after(0, lambda: self.handle_enrollment_link(str(message["url"])))
 
     # ------------------------------------------------------------ enrollment
@@ -136,24 +159,44 @@ class AgentApp:
         try:
             link = parse_enrollment_link(url)
         except ValueError as error:
+            self.logger.warning("enrollment_link_invalid error=%s", error)
             self.set_status(str(error), "error")
             self.open_settings()
             return
 
-        self.open_settings()
-        self.set_status("ได้รับลิงก์ลงทะเบียน กรุณาตรวจการตั้งค่า JHCIS แล้วกด “ลงทะเบียน”", "busy")
+        self.logger.info("enrollment_link_parsed server=%s facility=%s", link.server_url, link.facility_code)
         self.pending_enrollment = link
-        if isinstance(self.entries.get("server_url"), tk.Entry):
-            widget = self.entries["server_url"]
-            assert isinstance(widget, tk.Entry)
+        self.open_settings()
+
+        # The link carries the server it came from; the field must follow it.
+        # This used to be guarded by isinstance(widget, tk.Entry), which stopped
+        # matching when the form moved to CustomTkinter, so the link's server was
+        # silently ignored and enrolment went to whatever was already typed.
+        widget = self.entries.get("server_url")
+        if widget is not None and hasattr(widget, "delete"):
             widget.delete(0, tk.END)
             widget.insert(0, link.server_url)
+
+        # Clicking "connect" on the web should finish the job. Only stop for the
+        # operator when JHCIS is not configured yet, because office.offid has to
+        # be read from it before this machine can be tied to a facility.
+        try:
+            self.config_from_form().validate_jhcis()
+        except ValueError as error:
+            self.logger.info("enrollment_waiting_for_jhcis reason=%s", error)
+            self.set_status(f"ได้รับลิงก์ลงทะเบียนแล้ว — กรอกข้อมูล JHCIS ให้ครบก่อน ({error})", "busy")
+            return
+
+        self.set_status("ได้รับลิงก์ลงทะเบียน กำลังลงทะเบียนอัตโนมัติ…", "busy")
+        self.enroll_action()
 
     def enroll_action(self) -> None:
         link = self.pending_enrollment
         if link is None:
+            self.logger.info("enroll_requested_without_link")
             self.set_status("ยังไม่มีลิงก์ลงทะเบียน กรุณาเปิดลิงก์จากหน้าเว็บบนเครื่องนี้", "error")
             return
+        self.logger.info("enroll_started facility=%s", link.facility_code)
 
         def work() -> str:
             config = self.config_from_form()
@@ -216,21 +259,91 @@ class AgentApp:
 
     # ------------------------------------------------------------------- form
 
-    def _entry(self, parent: ttk.Frame, row: int, key: str, label: str, value: str, secret: bool = False) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=(0, 10), pady=3)
-        entry = ttk.Entry(parent, show="•" if secret else "")
-        entry.grid(row=row, column=1, sticky="ew", pady=3)
+    def _entry(self, parent, row: int, key: str, label: str, value: str, secret: bool = False, hint: str = "") -> None:
+        """One labelled field. Label above the box, so long Thai labels do not
+        squeeze the input on a narrow window."""
+        holder = ctk.CTkFrame(parent, fg_color="transparent")
+        holder.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        holder.columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            holder, text=label, anchor="w", text_color=MUTED, font=("Segoe UI Semibold", 11)
+        ).grid(row=0, column=0, sticky="w")
+
+        entry = ctk.CTkEntry(
+            holder,
+            height=36,
+            corner_radius=8,
+            border_width=1,
+            border_color=LINE,
+            fg_color="#ffffff",
+            text_color=INK,
+            show="•" if secret else "",
+        )
+        entry.grid(row=1, column=0, sticky="ew", pady=(3, 0))
         entry.insert(0, value)
         self._enable_clipboard(entry)
         self.entries[key] = entry
 
-    def _enable_clipboard(self, entry: ttk.Entry) -> None:
+        if hint:
+            ctk.CTkLabel(holder, text=hint, anchor="w", text_color=MUTED, font=("Segoe UI", 10)).grid(
+                row=2, column=0, sticky="w", pady=(2, 0)
+            )
+
+    def _card(self, parent, title: str, subtitle: str = ""):
+        card = ctk.CTkFrame(parent, corner_radius=10, fg_color="#ffffff", border_width=1, border_color=LINE)
+        card.pack(fill="x", pady=(0, 12))
+        card.columnconfigure(0, weight=1)
+
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=16, pady=14)
+        inner.columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(inner, text=title, anchor="w", text_color=INK, font=("Segoe UI Semibold", 14)).grid(
+            row=0, column=0, sticky="w"
+        )
+        if subtitle:
+            ctk.CTkLabel(
+                inner, text=subtitle, anchor="w", justify="left", text_color=MUTED,
+                font=("Segoe UI", 11), wraplength=560,
+            ).grid(row=1, column=0, sticky="w", pady=(2, 10))
+        else:
+            ctk.CTkLabel(inner, text="", height=4).grid(row=1, column=0)
+        return inner
+
+    def _stat(self, parent, column: int, label: str, value: str):
+        tile = ctk.CTkFrame(parent, corner_radius=10, fg_color=PAPER)
+        tile.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0))
+        tile.columnconfigure(0, weight=1)
+        ctk.CTkLabel(tile, text=label, text_color=MUTED, font=("Segoe UI", 10), anchor="w").grid(
+            row=0, column=0, sticky="w", padx=12, pady=(10, 0)
+        )
+        widget = ctk.CTkLabel(tile, text=value, text_color=INK, font=("Segoe UI Semibold", 15), anchor="w")
+        widget.grid(row=1, column=0, sticky="w", padx=12, pady=(0, 10))
+        return widget
+
+    def _button(self, parent, text: str, command, primary: bool = False):
+        return ctk.CTkButton(
+            parent,
+            text=text,
+            command=command,
+            height=36,
+            corner_radius=8,
+            font=("Segoe UI Semibold", 12),
+            fg_color=ORANGE if primary else "#ffffff",
+            hover_color=ORANGE_DARK if primary else PAPER,
+            text_color="#ffffff" if primary else INK,
+            border_width=0 if primary else 1,
+            border_color=LINE,
+        )
+
+    def _enable_clipboard(self, entry) -> None:
         menu = tk.Menu(entry, tearoff=False)
         menu.add_command(label="ตัด", command=lambda: entry.event_generate("<<Cut>>"))
         menu.add_command(label="คัดลอก", command=lambda: entry.event_generate("<<Copy>>"))
         menu.add_command(label="วาง", command=lambda: entry.event_generate("<<Paste>>"))
 
-        def popup(event: "tk.Event[ttk.Entry]") -> str:
+        def popup(event) -> str:
             entry.focus_set()
             menu.tk_popup(event.x_root, event.y_root)
             return "break"
@@ -252,9 +365,10 @@ class AgentApp:
         }
         for key, value in values.items():
             widget = self.entries.get(key)
-            if isinstance(widget, ttk.Entry):
+            if widget is not None and hasattr(widget, "delete"):
                 widget.delete(0, tk.END)
                 widget.insert(0, value)
+        self._refresh_dashboard()
 
     def open_settings(self) -> None:
         if self.settings_window is not None and self.settings_window.winfo_exists():
@@ -263,57 +377,118 @@ class AgentApp:
             self.settings_window.focus_force()
             return
 
-        window = tk.Toplevel(self.root)
+        window = ctk.CTkToplevel(self.root)
         self.settings_window = window
         window.title(f"{APP_NAME} v{VERSION}")
-        window.geometry("660x560")
-        window.minsize(600, 520)
+        window.geometry("640x720")
+        window.minsize(600, 620)
+        window.configure(fg_color=PAPER)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
 
-        frame = ttk.Frame(window, padding=16)
-        frame.pack(fill="both", expand=True)
-        frame.columnconfigure(1, weight=1)
+        shell = ctk.CTkScrollableFrame(window, fg_color=PAPER, corner_radius=0)
+        shell.pack(fill="both", expand=True, padx=18, pady=16)
 
-        ttk.Label(frame, text="การเชื่อมต่อ JHCIS", font=("Segoe UI", 15, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(
-            frame,
-            text="รหัสผ่านฐานข้อมูลถูกเก็บด้วย Windows DPAPI บนเครื่องนี้เท่านั้น ไม่ถูกส่งขึ้นระบบกลาง",
-            foreground="#64748b",
-            wraplength=600,
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(2, 12))
-
-        self.entries = {}
-        self._entry(frame, 2, "jhcis_host", "JHCIS Host / IP", self.config.jhcis_host)
-        self._entry(frame, 3, "jhcis_port", "Port", str(self.config.jhcis_port))
-        self._entry(frame, 4, "jhcis_database", "Database", self.config.jhcis_database)
-        self._entry(frame, 5, "jhcis_user", "User", self.config.jhcis_user)
-        self._entry(frame, 6, "jhcis_password", "Database password", self.config.jhcis_password, True)
-        self._entry(frame, 7, "server_url", "Server URL", self.config.server_url)
-        self._entry(frame, 8, "machine_label", "ชื่อเครื่อง", self.config.machine_label or socket.gethostname())
-
-        info = (
-            f"Installation ID: {self.config.installation_id}\n"
-            f"สถานบริการที่ลงทะเบียน: {self.config.facility_code or '— ยังไม่ได้ลงทะเบียน —'}"
+        header = ctk.CTkFrame(shell, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 14))
+        badge = ctk.CTkLabel(
+            header, text="TM", width=38, height=38, corner_radius=8,
+            fg_color=ORANGE, text_color="#ffffff", font=("Segoe UI Black", 13),
         )
-        ttk.Label(frame, text=info, foreground="#64748b", justify="left").grid(row=9, column=0, columnspan=2, sticky="w", pady=(10, 4))
+        badge.pack(side="left")
+        titles = ctk.CTkFrame(header, fg_color="transparent")
+        titles.pack(side="left", padx=12)
+        ctk.CTkLabel(titles, text="TMT Drug Master Agent", anchor="w", text_color=INK,
+                     font=("Segoe UI Black", 17)).pack(anchor="w")
+        ctk.CTkLabel(titles, text=f"เวอร์ชัน {VERSION}", anchor="w", text_color=MUTED,
+                     font=("Segoe UI", 11)).pack(anchor="w")
 
-        self.settings_status = ttk.Label(frame, text=self.status_text, foreground=STATE_COLORS[self.status_state], wraplength=600)
-        self.settings_status.grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 10))
+        # ------------------------------------------------------------ status
+        status_card = self._card(shell, "สถานะการทำงาน")
+        self.settings_status = ctk.CTkLabel(
+            status_card, text=self.status_text, anchor="w", justify="left",
+            text_color=STATE_COLORS[self.status_state], font=("Segoe UI Semibold", 12), wraplength=540,
+        )
+        self.settings_status.grid(row=2, column=0, sticky="w")
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=11, column=0, columnspan=2, sticky="ew")
-        ttk.Button(buttons, text="ทดสอบ JHCIS", command=self.test_connection).pack(side="left", padx=(0, 6))
-        ttk.Button(buttons, text="ลงทะเบียน", command=self.enroll_action).pack(side="left", padx=6)
-        ttk.Button(buttons, text="ดึงรายการยาตอนนี้", command=self.sync_now).pack(side="left", padx=6)
-        ttk.Button(buttons, text="บันทึกและย่อไป Tray", command=self.save_and_hide).pack(side="right")
+        stats = ctk.CTkFrame(status_card, fg_color="transparent")
+        stats.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        for column in range(3):
+            stats.columnconfigure(column, weight=1)
+        self.stat_facility = self._stat(stats, 0, "สถานบริการ", self.config.facility_code or "—")
+        self.stat_machine = self._stat(stats, 1, "ชื่อเครื่อง", self.config.machine_label or socket.gethostname())
+        self.stat_sync = self._stat(stats, 2, "ดึงล่าสุด", "—")
+
+        # -------------------------------------------------------------- JHCIS
+        jhcis = self._card(
+            shell,
+            "ฐานข้อมูล JHCIS ในวง LAN นี้",
+            "กรอกเฉพาะส่วนนี้ รหัสผ่านถูกเก็บด้วย Windows DPAPI บนเครื่องนี้เท่านั้น ไม่ถูกส่งขึ้นระบบกลาง",
+        )
+        self.entries = {}
+        pair = ctk.CTkFrame(jhcis, fg_color="transparent")
+        pair.grid(row=2, column=0, sticky="ew")
+        pair.columnconfigure(0, weight=3)
+        pair.columnconfigure(1, weight=1)
+        host_holder = ctk.CTkFrame(pair, fg_color="transparent")
+        host_holder.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        host_holder.columnconfigure(0, weight=1)
+        port_holder = ctk.CTkFrame(pair, fg_color="transparent")
+        port_holder.grid(row=0, column=1, sticky="ew")
+        port_holder.columnconfigure(0, weight=1)
+        self._entry(host_holder, 0, "jhcis_host", "Host / IP", self.config.jhcis_host)
+        self._entry(port_holder, 0, "jhcis_port", "Port", str(self.config.jhcis_port))
+
+        self._entry(jhcis, 3, "jhcis_database", "ชื่อฐานข้อมูล", self.config.jhcis_database)
+        self._entry(jhcis, 4, "jhcis_user", "ผู้ใช้ฐานข้อมูล", self.config.jhcis_user)
+        self._entry(jhcis, 5, "jhcis_password", "รหัสผ่านฐานข้อมูล", self.config.jhcis_password, True)
+
+        test_row = ctk.CTkFrame(jhcis, fg_color="transparent")
+        test_row.grid(row=6, column=0, sticky="w")
+        self._button(test_row, "ทดสอบการเชื่อมต่อ JHCIS", self.test_connection).pack(side="left")
+
+        # ------------------------------------------------------------- server
+        server = self._card(
+            shell,
+            "การเชื่อมต่อระบบกลาง",
+            "ปกติไม่ต้องแก้ การลงทะเบียนทำได้จากหน้าเว็บ เมนู “เชื่อมต่อ JHCIS” แล้วกดสร้างลิงก์ลงทะเบียน",
+        )
+        self._entry(server, 2, "server_url", "Server URL", self.config.server_url)
+        self._entry(
+            server, 3, "machine_label", "ชื่อเครื่อง",
+            self.config.machine_label or socket.gethostname(),
+            hint="เว้นว่างไว้ ระบบจะใช้ชื่อเครื่องจริงของ Windows",
+        )
+        ctk.CTkLabel(
+            server, text=f"Installation ID: {self.config.installation_id}", anchor="w",
+            text_color=MUTED, font=("Consolas", 10),
+        ).grid(row=4, column=0, sticky="w", pady=(2, 10))
+
+        server_row = ctk.CTkFrame(server, fg_color="transparent")
+        server_row.grid(row=5, column=0, sticky="w")
+        self._button(server_row, "ลงทะเบียนด้วยลิงก์ที่คัดลอกมา", self.enroll_action).pack(side="left")
+
+        # ------------------------------------------------------------ actions
+        actions = ctk.CTkFrame(shell, fg_color="transparent")
+        actions.pack(fill="x", pady=(2, 0))
+        self._button(actions, "บันทึกและย่อไป Tray", self.save_and_hide, primary=True).pack(side="right")
+        self._button(actions, "ดึงรายการยาตอนนี้", self.sync_now).pack(side="right", padx=(0, 8))
+        self._button(actions, "เปิด log", self.open_log).pack(side="left")
+
+        self._refresh_dashboard()
+
+    def _refresh_dashboard(self) -> None:
+        """Keeps the three tiles in step with the config the worker is using."""
+        if self.settings_window is None or not self.settings_window.winfo_exists():
+            return
+        if getattr(self, "stat_facility", None) is not None:
+            self.stat_facility.configure(text=self.config.facility_code or "—")
+            self.stat_machine.configure(text=self.config.machine_label or socket.gethostname())
 
     def config_from_form(self) -> AgentConfig:
         if not self.entries:
             return self.config
         def text(key: str) -> str:
-            widget = self.entries[key]
-            assert isinstance(widget, ttk.Entry)
-            return widget.get()
+            return self.entries[key].get()
 
         try:
             port = int(text("jhcis_port").strip())
@@ -335,6 +510,10 @@ class AgentApp:
         try:
             self._persist(self.config_from_form())
             self.logger.info("config_saved")
+            if self.pending_enrollment is not None:
+                self.set_status("บันทึกแล้ว กำลังลงทะเบียนต่อ…", "busy")
+                self.enroll_action()
+                return
             self.set_status("บันทึกการตั้งค่าแล้ว", "ok")
             if self.settings_window is not None:
                 self.settings_window.withdraw()

@@ -41,6 +41,9 @@ Invoke-Native $venvPython @(
   "--name", "TMTDrugMasterAgent",
   "--paths", ".",
   "--add-data", "version.py;.",
+  # customtkinter ships its themes as data files; without this the built exe
+  # starts and then dies looking for them.
+  "--collect-data", "customtkinter",
   "app.py") "PyInstaller"
 
 $exe = Join-Path $PSScriptRoot "dist\TMTDrugMasterAgent.exe"

@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 # agent silently discarded a foreign config, overwrote it on the next save,
 # and appended to a log already full of the other program's errors.
 APP_DIRECTORY = "TMTDrugMasterPlatformAgent"
+DEFAULT_SERVER_URL = "https://drug-master-platform.vercel.app"
 OFFICE_PATTERN = re.compile(r"^\d{5}$")
 
 
@@ -79,7 +80,9 @@ class AgentConfig:
     """
 
     installation_id: str
-    server_url: str = ""
+    # Prefilled so a รพ.สต. only has to type its JHCIS details. Overridable for
+    # a self-hosted deployment.
+    server_url: str = DEFAULT_SERVER_URL
     key_id: str = ""
     secret: str = ""
     facility_code: str = ""
