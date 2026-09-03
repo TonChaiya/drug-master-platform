@@ -220,17 +220,36 @@ export async function syncMasterTmt(options: {
   }
 
   try {
+    let insertedProducts = 0;
+
     if (startPhase === "master") {
       for (const window of windows) {
         const applied = await loadMasterWindow(window, version ?? "unknown", fetcher, warnings);
         received += applied.received;
         written += applied.written;
+        insertedProducts += applied.inserted;
         await markWindow(window, "master");
       }
     }
 
+    /*
+     * An incremental run asks both passes for the same recent window, which is
+     * enough for a product whose own record changed. It is not enough for a
+     * product arriving now whose /nlem entry carries an older change_date —
+     * 1137700's is dated 2022-12-02. Such a product would land with no ISED and
+     * never be revisited, which is the failure this rework exists to remove, so
+     * any insertion widens the second pass to the whole history.
+     */
+    let enrichWindows = startPhase === "enrich" ? windows : allWindows;
+    if (incremental && insertedProducts > 0) {
+      enrichWindows = partitionWindows(TMT_DATA_START, endDate);
+      warnings.push(
+        `มีรายการยาใหม่ ${insertedProducts.toLocaleString("th-TH")} รายการ จึงอ่าน /nlem และ /regno ย้อนทั้งช่วงเพื่อไม่ให้ ISED และเลขทะเบียนตกหล่น`,
+      );
+    }
+
     // Every product is stored by now, so nothing NLEM reports can miss its row.
-    for (const window of startPhase === "enrich" ? windows : allWindows) {
+    for (const window of enrichWindows) {
       enriched += await applyEnrichmentWindow(window, fetcher, warnings);
       await markWindow(window, "enrich");
     }
@@ -282,14 +301,24 @@ async function loadMasterWindow(
   version: string,
   fetcher: typeof fetch,
   warnings: string[],
-): Promise<{ received: number; written: number }> {
+): Promise<{ received: number; written: number; inserted: number }> {
   const master = await fetchMasterTmt(window, fetcher);
   const values = master.map((row) => toStandardProduct(row, version, warnings));
 
   let written = 0;
+  let inserted = 0;
   for (let start = 0; start < values.length; start += UPSERT_CHUNK) {
     const chunk = values.slice(start, start + UPSERT_CHUNK);
     if (chunk.length === 0) continue;
+
+    // Counted before the upsert: a product that did not exist has no NLEM yet,
+    // and that is what decides how far the second pass has to read back.
+    const codes = chunk.map((row) => row.standardCode);
+    const known = await db
+      .select({ standardCode: standardProducts.standardCode })
+      .from(standardProducts)
+      .where(inArray(standardProducts.standardCode, codes));
+    inserted += codes.length - known.length;
     await db
       .insert(standardProducts)
       .values(chunk)
@@ -316,7 +345,7 @@ async function loadMasterWindow(
     written += chunk.length;
   }
 
-  return { received: master.length, written };
+  return { received: master.length, written, inserted };
 }
 
 /** Second pass: ISED and registration numbers onto products already loaded. */
