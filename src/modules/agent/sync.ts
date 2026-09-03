@@ -7,6 +7,8 @@ import type { AgentIdentity } from "./auth";
 import type { SourceRow } from "./schemas";
 
 const MAX_EXPECTED_ROWS = 200_000;
+/** Rows per upsert statement. Each statement is one round trip to TiDB. */
+const UPSERT_CHUNK = 500;
 
 /** Opens a receiving session. Nothing reaches source_drugs until finish() succeeds. */
 export async function beginSync(identity: AgentIdentity, officeId: string, expectedRows: number): Promise<{ sessionId: string; batchSize: number }> {
@@ -102,42 +104,69 @@ export async function finishSync(identity: AgentIdentity, sessionId: string, off
   const rows = staged.map((item) => item.payloadJson as SourceRow);
 
   const result = await db.transaction(async (tx) => {
-    let inserted = 0;
-    let updated = 0;
-
     const existing = await tx
-      .select({ id: sourceDrugs.id, drugcode: sourceDrugs.drugcode })
+      .select({ drugcode: sourceDrugs.drugcode })
       .from(sourceDrugs)
       .where(eq(sourceDrugs.facilityId, identity.facilityId));
-    const known = new Map(existing.map((row) => [row.drugcode, row.id]));
+    const known = new Set(existing.map((row) => row.drugcode));
 
-    for (const row of rows) {
-      const values = {
-        facilityId: identity.facilityId,
-        drugcode: row.drugcode,
-        drugname: row.drugname ?? null,
-        drugnamethai: row.drugnamethai ?? null,
-        druggenericname: row.druggenericname ?? null,
-        drugtype: row.drugtype,
-        pack: row.pack ?? null,
-        unitsell: row.unitsell ?? null,
-        unitusage: row.unitusage ?? null,
-        cost: row.cost == null ? null : String(row.cost),
-        sell: row.sell == null ? null : String(row.sell),
-        nationaccount: row.nationaccount ?? null,
-        drugcode24: row.drugcode24 ?? null,
-        active: 1,
-        lastSeenSyncId: sessionId,
-        updatedAt: now,
-      };
-      const id = known.get(row.drugcode);
-      if (id) {
-        await tx.update(sourceDrugs).set(values).where(eq(sourceDrugs.id, id));
-        updated += 1;
-      } else {
-        await tx.insert(sourceDrugs).values({ id: randomUUID(), ...values });
-        inserted += 1;
-      }
+    // Counted from what was already there, because the upsert cannot say which
+    // rows it inserted and asking afterwards would cost another round trip.
+    const inserted = rows.reduce((total, row) => (known.has(row.drugcode) ? total : total + 1), 0);
+    const updated = rows.length - inserted;
+
+    const values = rows.map((row) => ({
+      id: randomUUID(),
+      facilityId: identity.facilityId,
+      drugcode: row.drugcode,
+      drugname: row.drugname ?? null,
+      drugnamethai: row.drugnamethai ?? null,
+      druggenericname: row.druggenericname ?? null,
+      drugtype: row.drugtype,
+      pack: row.pack ?? null,
+      unitsell: row.unitsell ?? null,
+      unitusage: row.unitusage ?? null,
+      cost: row.cost == null ? null : String(row.cost),
+      sell: row.sell == null ? null : String(row.sell),
+      nationaccount: row.nationaccount ?? null,
+      drugcode24: row.drugcode24 ?? null,
+      active: 1,
+      lastSeenSyncId: sessionId,
+      updatedAt: now,
+    }));
+
+    /*
+     * One statement per chunk instead of one per drug.
+     *
+     * The old loop issued an UPDATE or INSERT for every row, and every one was a
+     * round trip to TiDB — about 45 ms each, so a facility with 188 drugs spent
+     * eight seconds waiting on the network to do a second of work. The unique
+     * key on (facility_id, drugcode) makes the whole batch a single upsert.
+     */
+    for (let start = 0; start < values.length; start += UPSERT_CHUNK) {
+      const chunk = values.slice(start, start + UPSERT_CHUNK);
+      if (chunk.length === 0) continue;
+      await tx
+        .insert(sourceDrugs)
+        .values(chunk)
+        .onDuplicateKeyUpdate({
+          set: {
+            drugname: sql`values(${sourceDrugs.drugname})`,
+            drugnamethai: sql`values(${sourceDrugs.drugnamethai})`,
+            druggenericname: sql`values(${sourceDrugs.druggenericname})`,
+            drugtype: sql`values(${sourceDrugs.drugtype})`,
+            pack: sql`values(${sourceDrugs.pack})`,
+            unitsell: sql`values(${sourceDrugs.unitsell})`,
+            unitusage: sql`values(${sourceDrugs.unitusage})`,
+            cost: sql`values(${sourceDrugs.cost})`,
+            sell: sql`values(${sourceDrugs.sell})`,
+            nationaccount: sql`values(${sourceDrugs.nationaccount})`,
+            drugcode24: sql`values(${sourceDrugs.drugcode24})`,
+            active: sql`values(${sourceDrugs.active})`,
+            lastSeenSyncId: sql`values(${sourceDrugs.lastSeenSyncId})`,
+            updatedAt: sql`values(${sourceDrugs.updatedAt})`,
+          },
+        });
     }
 
     // Anything not present in this snapshot is no longer active in JHCIS.

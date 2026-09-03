@@ -29,8 +29,10 @@ function createPool(): Pool {
   return mysql.createPool({
     ...env,
     waitForConnections: true,
-    connectionLimit: 8,
-    maxIdle: 4,
+    // A page issues its independent reads together, so the pool has to be able
+    // to carry them at once or they queue and the parallelism is lost.
+    connectionLimit: 16,
+    maxIdle: 8,
     idleTimeout: 30_000,
     enableKeepAlive: true,
     timezone: "Z",

@@ -11,7 +11,12 @@ type SyncPhase = "master" | "enrich";
 
 const UPSERT_CHUNK = 500;
 /** Rows per CASE-batched UPDATE. Small enough to keep the statement readable to the server. */
-const ENRICH_CHUNK = 200;
+/*
+ * Rows per CASE-batched UPDATE. Each chunk is one round trip, and the full
+ * history applies about 61,000 enrichments: at 200 a chunk that was 300 round
+ * trips of waiting, most of it latency rather than work.
+ */
+const ENRICH_CHUNK = 1000;
 
 export interface StandardSyncResult {
   runId: string;

@@ -42,45 +42,56 @@ export function formatBangkok(value: Date | null | undefined): string {
 
 /** One round of small aggregate queries; everything is scoped by facilityId. */
 export async function facilityOverview(facilityId: string): Promise<FacilityOverview> {
-  const [drugCounts] = await db
-    .select({
-      total: sql<number>`COUNT(*)`,
-      type01: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '01' THEN 1 ELSE 0 END)`,
-      type10: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '10' THEN 1 ELSE 0 END)`,
-    })
-    .from(sourceDrugs)
-    .where(and(eq(sourceDrugs.facilityId, facilityId), eq(sourceDrugs.active, 1)));
+  /*
+   * Six independent reads, issued together.
+   *
+   * Awaiting them one after another spent six round trips where one would do,
+   * and a round trip is the whole cost here: the queries themselves take a few
+   * milliseconds, the trip to TiDB takes tens — hundreds if the function is not
+   * in the same region as the database.
+   */
+  const [drugCountRows, mappedCountRows, lastSync, installations, latestImport, standardCountRows] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        type01: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '01' THEN 1 ELSE 0 END)`,
+        type10: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '10' THEN 1 ELSE 0 END)`,
+      })
+      .from(sourceDrugs)
+      .where(and(eq(sourceDrugs.facilityId, facilityId), eq(sourceDrugs.active, 1))),
 
-  const [mappedCount] = await db
-    .select({ total: count() })
-    .from(drugMappings)
-    .where(eq(drugMappings.facilityId, facilityId));
+    db.select({ total: count() }).from(drugMappings).where(eq(drugMappings.facilityId, facilityId)),
 
-  const lastSync = await db
-    .select({ finishedAt: agentSyncSessions.finishedAt })
-    .from(agentSyncSessions)
-    .where(and(eq(agentSyncSessions.facilityId, facilityId), eq(agentSyncSessions.status, "complete")))
-    .orderBy(desc(agentSyncSessions.finishedAt))
-    .limit(1);
+    db
+      .select({ finishedAt: agentSyncSessions.finishedAt })
+      .from(agentSyncSessions)
+      .where(and(eq(agentSyncSessions.facilityId, facilityId), eq(agentSyncSessions.status, "complete")))
+      .orderBy(desc(agentSyncSessions.finishedAt))
+      .limit(1),
 
-  const installations = await db
-    .select({ total: count() })
-    .from(agentInstallations)
-    .where(and(eq(agentInstallations.facilityId, facilityId), eq(agentInstallations.status, "active")));
+    db
+      .select({ total: count() })
+      .from(agentInstallations)
+      .where(and(eq(agentInstallations.facilityId, facilityId), eq(agentInstallations.status, "active"))),
 
-  const latestImport = await db
-    .select({ createdAt: drugCatalogImports.createdAt, rowCount: drugCatalogImports.rowCount })
-    .from(drugCatalogImports)
-    .where(eq(drugCatalogImports.facilityId, facilityId))
-    .orderBy(desc(drugCatalogImports.createdAt))
-    .limit(1);
+    db
+      .select({ createdAt: drugCatalogImports.createdAt, rowCount: drugCatalogImports.rowCount })
+      .from(drugCatalogImports)
+      .where(eq(drugCatalogImports.facilityId, facilityId))
+      .orderBy(desc(drugCatalogImports.createdAt))
+      .limit(1),
 
-  const [standardCount] = await db
-    .select({
-      tmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
-      ttmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TTMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
-    })
-    .from(standardProducts);
+    db
+      .select({
+        tmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
+        ttmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TTMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
+      })
+      .from(standardProducts),
+  ]);
+
+  const drugCounts = drugCountRows[0];
+  const mappedCount = mappedCountRows[0];
+  const standardCount = standardCountRows[0];
 
   const sourceTotal = Number(drugCounts?.total ?? 0);
   const mappedTotal = Number(mappedCount?.total ?? 0);
