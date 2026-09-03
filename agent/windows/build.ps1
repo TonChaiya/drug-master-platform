@@ -50,6 +50,13 @@ Invoke-Native $venvPython @(
   # customtkinter ships its themes as data files; without this the built exe
   # starts and then dies looking for them.
   "--collect-data", "customtkinter",
+  # mysql-connector imports its error-message locales and auth plugins by
+  # name at runtime, so PyInstaller's static analysis misses them. The gap
+  # only shows when the connector tries to raise an error: it then failed
+  # inside get_client_error with "No localization support for language
+  # 'eng'", which replaced every JHCIS connection error with an ImportError
+  # and hid the real cause.
+  "--collect-submodules", "mysql.connector",
   "app.py") "PyInstaller"
 
 $exe = Join-Path $PSScriptRoot "dist\TMTDrugMasterAgent.exe"
@@ -57,6 +64,22 @@ if (-not (Test-Path $exe)) { throw "Build produced no executable" }
 
 $reported = (& $exe --version 2>$null | Out-String).Trim()
 if ($reported -ne $version) { throw "Executable reports $reported but version.py says $version" }
+
+# Exercise a failing JHCIS connection inside the packaged binary. A missing
+# lazy import cannot be caught in the venv, only here, and this is the exact
+# check that would have caught the mysql-connector locale gap.
+#
+# The exe is windowed: it has no console, so its output is invisible and the
+# shell does not wait for it. Start-Process -Wait -PassThru gives a real exit
+# code, and the self-test leaves its reason in a file to report.
+$selftestReport = Join-Path $env:LOCALAPPDATA "TMTDrugMasterPlatformAgent\selftest.txt"
+Remove-Item $selftestReport -ErrorAction SilentlyContinue
+$selftest = Start-Process -FilePath $exe -ArgumentList "--selftest" -Wait -PassThru
+if ($selftest.ExitCode -ne 0) {
+  $reason = if (Test-Path $selftestReport) { (Get-Content $selftestReport -Raw).Trim() } else { "no report written" }
+  throw "packaged self-test failed (exit $($selftest.ExitCode)): $reason"
+}
+Write-Host "OK: packaged self-test - $((Get-Content $selftestReport -Raw).Trim())"
 
 Write-Host "OK: dist\TMTDrugMasterAgent.exe ($version)"
 

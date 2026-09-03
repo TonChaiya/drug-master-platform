@@ -67,6 +67,24 @@ def _mysql_error(error: MySqlError) -> JhcisFailure:
     return JhcisFailure("JHCIS_DATABASE", "JHCIS ตอบกลับด้วย database error")
 
 
+def _driver_incomplete() -> JhcisFailure:
+    """
+    The MySQL driver imports its error-message locales and auth plugins by name
+    at runtime, so a packaged build can be missing one. It surfaces only while
+    connecting, and once did so as "No localization support for language 'eng'"
+    raised from inside the driver's own error construction — which replaced
+    every real JHCIS error with an ImportError.
+
+    It gets its own code rather than being folded into JHCIS_CONNECTION: this is
+    a broken installation, not an unreachable database, and the build's
+    self-test has to be able to tell them apart.
+    """
+    return JhcisFailure(
+        "JHCIS_DRIVER_INCOMPLETE",
+        "ตัวโปรแกรมติดตั้งไม่สมบูรณ์ (ขาดโมดูลของไดรเวอร์ MySQL) กรุณาติดตั้ง Agent เวอร์ชันใหม่",
+    )
+
+
 def _connect(config: AgentConfig):
     config.validate_jhcis()
     return mysql.connector.connect(
@@ -127,6 +145,8 @@ def read_office(config: AgentConfig) -> JhcisSnapshot:
         raise
     except MySqlError as error:
         raise _mysql_error(error) from None
+    except ImportError:
+        raise _driver_incomplete() from None
     except (OSError, ValueError):
         raise JhcisFailure("JHCIS_CONNECTION", "เชื่อมต่อ JHCIS ไม่สำเร็จ") from None
     finally:
@@ -164,6 +184,8 @@ def read_drugs(config: AgentConfig, batch_size: int = 300) -> Iterator[tuple[str
         raise
     except MySqlError as error:
         raise _mysql_error(error) from None
+    except ImportError:
+        raise _driver_incomplete() from None
     except (OSError, ValueError):
         raise JhcisFailure("JHCIS_CONNECTION", "เชื่อมต่อ JHCIS ไม่สำเร็จ") from None
     finally:

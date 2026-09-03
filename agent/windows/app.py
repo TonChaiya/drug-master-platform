@@ -557,6 +557,54 @@ class AgentApp:
         self.root.mainloop()
 
 
+def selftest() -> int:
+    """
+    Drives a JHCIS connection that is meant to fail, inside this binary.
+
+    A PyInstaller build can be missing a module the driver imports by name,
+    and nothing reveals that until the driver takes that path. Here the
+    connection is aimed at a closed port so the failure runs through
+    mysql-connector's error construction, which is where the missing
+    `mysql.connector.locales.eng.client_error` used to turn every JHCIS error
+    into an ImportError and hide the real cause.
+
+    Passes when the failure comes back as a mapped JhcisFailure.
+    """
+    from tmt_agent.config import AgentConfig, app_data_dir
+    from tmt_agent.errors import JhcisFailure
+
+    def report(text: str, code: int) -> int:
+        # A --windowed build has no console, so printing proves nothing. The
+        # result goes to a file the caller can read and assert on.
+        print(text)
+        try:
+            (app_data_dir() / "selftest.txt").write_text(text, encoding="utf-8")
+        except OSError:
+            pass
+        return code
+
+    probe = AgentConfig(
+        installation_id="00000000-0000-4000-8000-000000000000",
+        jhcis_host="127.0.0.1",
+        jhcis_port=1,  # nothing listens here
+        jhcis_database="selftest",
+        jhcis_user="selftest",
+        jhcis_password="selftest",
+    )
+    try:
+        read_office(probe)
+    except JhcisFailure as failure:
+        # A closed port must read as a host problem. JHCIS_DRIVER_INCOMPLETE
+        # here means this binary is missing a module the driver loads by name,
+        # which is precisely what this check exists to catch.
+        if failure.code == "JHCIS_HOST":
+            return report(f"selftest OK: closed port reported as {failure.code}", 0)
+        return report(f"selftest FAILED: expected JHCIS_HOST, got {failure.code} - {failure}", 1)
+    except Exception as error:  # noqa: BLE001 - the point is to catch anything else
+        return report(f"selftest FAILED: {type(error).__name__}: {error}", 1)
+    return report("selftest FAILED: a connection to a closed port succeeded", 1)
+
+
 def main() -> int:
     if "--version" in sys.argv:
         print(VERSION)
@@ -564,6 +612,8 @@ def main() -> int:
     if "--register-protocol" in sys.argv:
         register_protocol_handler(sys.executable)
         return 0
+    if "--selftest" in sys.argv:
+        return selftest()
 
     link = next((argument for argument in sys.argv[1:] if argument.startswith("tmtagent://")), None)
 
