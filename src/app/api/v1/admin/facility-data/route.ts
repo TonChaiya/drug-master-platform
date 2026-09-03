@@ -4,20 +4,21 @@ import { db } from "@/db/client";
 import { facilities } from "@/db/schema";
 import { apiJson } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/authorization/require-context";
-import { clearMappings } from "@/modules/mappings/service";
+import { AdminActionError, clearFacilityData } from "@/modules/admin/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Destructive and admin-only. The facility must be named explicitly in the body
- * and re-confirmed by its 5-digit code, so a mis-click cannot wipe the wrong
- * facility (docs/OPERATIONS.md).
+ * Destructive and admin-only. The facility is named explicitly and re-confirmed
+ * by its 5-digit code, so a mis-click cannot wipe the wrong one
+ * (docs/OPERATIONS.md).
  */
 const schema = z
   .object({
     facilityId: z.uuid(),
     confirmFacilityCode: z.string().trim().regex(/^\d{5}$/),
+    scope: z.enum(["mappings", "catalog", "source", "agents", "all"]),
   })
   .strict();
 
@@ -39,6 +40,15 @@ export async function POST(request: Request) {
     return apiJson({ ok: false, errorCode: "CONFIRMATION_MISMATCH", message: "รหัสสถานบริการที่ยืนยันไม่ตรงกัน" }, 409);
   }
 
-  const deleted = await clearMappings(facility.id, admin.user.id);
-  return apiJson({ ok: true, deleted });
+  try {
+    const deleted = await clearFacilityData({
+      actorUserId: admin.user.id,
+      facilityId: facility.id,
+      scope: parsed.data.scope,
+    });
+    return apiJson({ ok: true, deleted });
+  } catch (error) {
+    if (error instanceof AdminActionError) return apiJson({ ok: false, errorCode: error.code, message: error.message }, 409);
+    return apiJson({ ok: false, errorCode: "ADMIN_ACTION_FAILED", message: "ล้างข้อมูลไม่สำเร็จ" }, 500);
+  }
 }

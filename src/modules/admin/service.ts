@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { agentInstallations, auditLogs, facilities, sessions, users } from "@/db/schema";
+import {
+  agentCommands,
+  agentCredentials,
+  agentEnrollmentTokens,
+  agentInstallations,
+  agentSyncSessions,
+  agentSyncStaging,
+  auditLogs,
+  drugCatalogImports,
+  drugCatalogRows,
+  drugMappings,
+  facilities,
+  sessions,
+  sourceDrugs,
+  users,
+} from "@/db/schema";
 import { isValidOfficeId, normalizeFacilityName } from "@/lib/validation/facility";
 
 export class AdminActionError extends Error {
@@ -199,4 +214,101 @@ export async function updateFacility(options: {
   });
 
   return { agentWarning };
+}
+
+/** What an admin may wipe for one facility. */
+export type ClearScope = "mappings" | "catalog" | "source" | "agents" | "all";
+
+export interface ClearResult {
+  mappings: number;
+  catalogRows: number;
+  catalogImports: number;
+  sourceDrugs: number;
+  agents: number;
+}
+
+async function countRows(table: typeof sourceDrugs | typeof drugMappings, facilityId: string): Promise<number> {
+  const [row] = await db.select({ total: sql<number>`COUNT(*)` }).from(table).where(eq(table.facilityId, facilityId));
+  return Number(row?.total ?? 0);
+}
+
+/**
+ * Wipes one facility's working data.
+ *
+ * Order matters and is dictated by what points at what: mappings reference
+ * source_drugs and a catalog import, so they go first; the agent's staging rows
+ * reference its sync sessions, and its credentials reference the installation.
+ * Nothing here touches the shared TMT/TTMT catalogue, another facility's rows,
+ * the accounts, or audit_logs — the audit trail is the record that this
+ * happened, so deleting it alongside would defeat the point.
+ */
+export async function clearFacilityData(options: {
+  actorUserId: string;
+  facilityId: string;
+  scope: ClearScope;
+}): Promise<ClearResult> {
+  const rows = await db
+    .select({ id: facilities.id, facilityCode: facilities.facilityCode })
+    .from(facilities)
+    .where(eq(facilities.id, options.facilityId))
+    .limit(1);
+  const facility = rows[0];
+  if (!facility) throw new AdminActionError("FACILITY_NOT_FOUND", "ไม่พบสถานบริการ");
+
+  const { scope } = options;
+  const wipeMappings = scope === "mappings" || scope === "catalog" || scope === "source" || scope === "all";
+  const wipeCatalog = scope === "catalog" || scope === "source" || scope === "all";
+  const wipeSource = scope === "source" || scope === "all";
+  const wipeAgents = scope === "agents" || scope === "all";
+
+  const before: ClearResult = {
+    mappings: wipeMappings ? await countRows(drugMappings, facility.id) : 0,
+    catalogRows: 0,
+    catalogImports: 0,
+    sourceDrugs: wipeSource ? await countRows(sourceDrugs, facility.id) : 0,
+    agents: 0,
+  };
+
+  await db.transaction(async (tx) => {
+    if (wipeMappings) await tx.delete(drugMappings).where(eq(drugMappings.facilityId, facility.id));
+
+    if (wipeCatalog) {
+      const [rowResult] = await tx.delete(drugCatalogRows).where(eq(drugCatalogRows.facilityId, facility.id));
+      const [importResult] = await tx.delete(drugCatalogImports).where(eq(drugCatalogImports.facilityId, facility.id));
+      before.catalogRows = rowResult.affectedRows;
+      before.catalogImports = importResult.affectedRows;
+    }
+
+    if (wipeSource) await tx.delete(sourceDrugs).where(eq(sourceDrugs.facilityId, facility.id));
+
+    if (wipeAgents) {
+      const installations = await tx
+        .select({ installationId: agentInstallations.installationId })
+        .from(agentInstallations)
+        .where(eq(agentInstallations.facilityId, facility.id));
+      const ids = installations.map((row) => row.installationId);
+
+      await tx.delete(agentSyncStaging).where(eq(agentSyncStaging.facilityId, facility.id));
+      await tx.delete(agentSyncSessions).where(eq(agentSyncSessions.facilityId, facility.id));
+      await tx.delete(agentCommands).where(eq(agentCommands.facilityId, facility.id));
+      await tx.delete(agentEnrollmentTokens).where(eq(agentEnrollmentTokens.facilityId, facility.id));
+      if (ids.length > 0) {
+        await tx.delete(agentCredentials).where(inArray(agentCredentials.installationId, ids));
+        await tx.delete(agentInstallations).where(inArray(agentInstallations.installationId, ids));
+      }
+      before.agents = ids.length;
+    }
+
+    await tx.insert(auditLogs).values({
+      id: randomUUID(),
+      actorUserId: options.actorUserId,
+      effectiveFacilityId: facility.id,
+      action: "admin.facility_data_cleared",
+      entityType: "facility",
+      entityId: facility.id,
+      beforeJson: { facilityCode: facility.facilityCode, scope, ...before },
+    });
+  });
+
+  return before;
 }

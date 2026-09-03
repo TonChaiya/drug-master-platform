@@ -5,8 +5,7 @@ import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
 import { AgentInstallerPanel } from "./agent-installer-panel";
-import { FacilityDataPanel } from "./facility-data-panel";
-import { FacilityEditPanel } from "./facility-edit-panel";
+import { FacilityAdminPanel } from "./facility-admin-panel";
 import { TmtApiPanel } from "./tmt-api-panel";
 import { UserTable, type AdminUserRow } from "./user-table";
 
@@ -133,25 +132,19 @@ export default async function AdminPage() {
       </section>
 
       <section className="card card-pad">
-        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">แก้ไขสถานบริการ</h2>
-        <FacilityEditPanel
+        <h2 className="mb-1 font-display text-base font-extrabold tracking-tight">จัดการสถานบริการ</h2>
+        <p className="mb-3 text-xxs text-slate-500">
+          เลือกสถานบริการหนึ่งแห่ง แล้วแก้ไขชื่อ/รหัส หรือล้างข้อมูลของแห่งนั้นได้ในที่เดียว
+        </p>
+        <FacilityAdminPanel
           facilities={summaries.map((row) => ({
             facilityId: row.facilityId,
             facilityCode: row.facilityCode,
             facilityName: row.facilityName,
-            agentCount: row.agentCount,
-          }))}
-        />
-      </section>
-
-      <section className="card card-pad">
-        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">จัดการข้อมูลรายสถานบริการ</h2>
-        <FacilityDataPanel
-          facilities={summaries.map((row) => ({
-            facilityId: row.facilityId,
-            facilityCode: row.facilityCode,
-            facilityName: row.facilityName,
+            sourceTotal: row.sourceTotal,
             mappedTotal: row.mappedTotal,
+            agentCount: row.agentCount,
+            accountCount: row.accountCount,
           }))}
         />
       </section>
