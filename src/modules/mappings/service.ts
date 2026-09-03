@@ -102,7 +102,10 @@ export async function saveManualMapping(input: ManualMappingInput): Promise<{ ma
     // ISED always comes from the standard, never from user input.
     ised: standard.exportIsed,
     ndc24: input.ndc24?.trim() || drug.drugcode24 || null,
-    packsize: input.packsize?.trim() || drug.pack || null,
+    // PACKSIZE has no TMT field and is empty on every row of the approved
+    // DrugCat files, so it carries only what a user typed. cdrug.pack is a
+    // different quantity and putting it here would invent a value.
+    packsize: input.packsize?.trim() || null,
     packPrice: input.packPrice?.trim() || null,
     updateFlag,
     dateChange: input.dateChange || day,
@@ -224,7 +227,7 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
       specPrep: null,
       ised: standard.exportIsed,
       ndc24: drug.drugcode24 ?? null,
-      packsize: drug.pack ?? null,
+      packsize: null,
       // The code exists in the latest snapshot, so this is an edit, not an add.
       updateFlag: "E",
       dateChange: day,
