@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiJson } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/authorization/require-context";
-import { syncMasterTmt } from "@/modules/standards/sync";
+import { readSyncProgress, syncMasterTmt } from "@/modules/standards/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +20,16 @@ const schema = z
     resume: z.boolean().optional(),
   })
   .strict();
+
+/**
+ * Progress of the latest run. The sync request itself does not return until the
+ * whole load finishes, so the page polls this to show how far along it is.
+ */
+export async function GET() {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin.response;
+  return apiJson({ ok: true, progress: await readSyncProgress() });
+}
 
 /** Syncing rewrites the shared standard catalogue, so it is admin-only. */
 export async function POST(request: Request) {

@@ -40,6 +40,54 @@ export interface StandardSyncResult {
  * ISED goes straight into the DrugCat export and a stale one is a wrong export.
  * The run is only marked successful once every partition has been applied.
  */
+export interface SyncProgress {
+  status: string;
+  beginDate: string | null;
+  endDate: string | null;
+  completedWindows: number;
+  totalWindows: number;
+  percent: number;
+  receivedRows: number;
+  changedRows: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  errorCode: string | null;
+  resumable: boolean;
+}
+
+function isoDate(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return typeof value === "string" ? value.slice(0, 10) : null;
+}
+
+/** Latest TMT run, shaped for the progress bar on the standards page. */
+export async function readSyncProgress(): Promise<SyncProgress | null> {
+  const rows = await db
+    .select()
+    .from(standardSyncRuns)
+    .where(eq(standardSyncRuns.source, "TMT"))
+    .orderBy(desc(standardSyncRuns.startedAt))
+    .limit(1);
+  const run = rows[0];
+  if (!run) return null;
+
+  const total = run.totalWindows || 0;
+  return {
+    status: run.status,
+    beginDate: isoDate(run.windowBegin),
+    endDate: isoDate(run.windowEnd),
+    completedWindows: run.completedWindows,
+    totalWindows: total,
+    percent: total > 0 ? Math.min(100, Math.round((run.completedWindows / total) * 100)) : 0,
+    receivedRows: run.receivedRows,
+    changedRows: run.changedRows,
+    startedAt: run.startedAt ? run.startedAt.toISOString() : null,
+    finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
+    errorCode: run.errorCode,
+    resumable: run.nextWindowBegin !== null && run.status !== "succeeded",
+  };
+}
+
 /** A run that stopped before finishing every window and can be picked up again. */
 async function findResumableRun() {
   const rows = await db

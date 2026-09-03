@@ -3,6 +3,7 @@ import { requireUser } from "@/modules/auth/session";
 import { standardCounts } from "@/modules/standards/search";
 import { listStandardImports } from "@/modules/standards/ttmt-import";
 import { formatBangkok } from "@/modules/facilities/queries";
+import { readSyncProgress } from "@/modules/standards/sync";
 import { StandardsPanel } from "./standards-panel";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function StandardsPage() {
         </p>
       </header>
 
-      <StandardsPanel isAdmin={user.role === "admin"} />
+      <StandardsPanel initialProgress={await readSyncProgress()} isAdmin={user.role === "admin"} />
 
       <section className="card card-pad">
         <h2 className="mb-2 text-sm font-semibold">ประวัตินำเข้า MasterTTMT</h2>
