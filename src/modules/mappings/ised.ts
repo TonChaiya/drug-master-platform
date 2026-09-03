@@ -22,6 +22,9 @@ export function normalizeNlem(raw: string | null | undefined): IsedNormalization
   if (value === "ED") return { raw: value, exportValue: "E", warning: null };
   if (value === "ED*") return { raw: value, exportValue: "E*", warning: null };
   if (value === "NED") return { raw: value, exportValue: "N", warning: null };
+  // The API returns ED/ED*/NED today, but it also publishes the already-mapped
+  // forms; accepting them keeps a normalised feed from blanking every ISED.
+  if (value === "E" || value === "E*" || value === "N") return { raw: value, exportValue: value, warning: null };
   return {
     raw: value,
     exportValue: null,

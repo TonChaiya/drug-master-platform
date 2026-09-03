@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditLogs, standardProducts, standardSyncRuns } from "@/db/schema";
 import { normalizeNlem } from "@/modules/mappings/ised";
-import { fetchMasterTmt, fetchNlem, fetchRegno, fetchTmtVersion, type MasterTmtRecord } from "./tmt-client";
+import { fetchMasterTmt, fetchNlem, fetchRegno, fetchTmtVersion, type MasterTmtRecord, type NlemRecord, type RegnoRecord } from "./tmt-client";
 import { normalizeRegistrationNumber, normalizeSearchText, standardStatusFromApi } from "./normalize";
 import { partitionWindows, type SyncWindow } from "./windows";
 
 const UPSERT_CHUNK = 500;
+/** Rows per CASE-batched UPDATE. Small enough to keep the statement readable to the server. */
+const ENRICH_CHUNK = 200;
 
 export interface StandardSyncResult {
   runId: string;
@@ -15,6 +17,8 @@ export interface StandardSyncResult {
   windows: number;
   received: number;
   written: number;
+  /** NLEM/registration rows applied to products that this window did not itself return. */
+  enriched: number;
   warnings: string[];
 }
 
@@ -23,8 +27,13 @@ export interface StandardSyncResult {
  *
  * `/mastertmt` carries neither ISED nor the registration number, so each window
  * is enriched by joining `/nlem` and `/regno` on `tpucode = tpuid` before
- * anything is written (docs/SPEC.md). The run is only marked successful once
- * every partition has been applied.
+ * anything is written (docs/SPEC.md).
+ *
+ * `/nlem` and `/regno` also report changes for products `/mastertmt` did not
+ * return in the same window — a drug whose national-list status moved but whose
+ * TPU record did not. Those are applied to the products already stored, because
+ * ISED goes straight into the DrugCat export and a stale one is a wrong export.
+ * The run is only marked successful once every partition has been applied.
  */
 export async function syncMasterTmt(options: {
   beginDate: string;
@@ -57,12 +66,14 @@ export async function syncMasterTmt(options: {
 
   let received = 0;
   let written = 0;
+  let enriched = 0;
 
   try {
     for (const window of windows) {
       const applied = await syncOneWindow(window, version ?? "unknown", fetcher, warnings);
       received += applied.received;
       written += applied.written;
+      enriched += applied.enriched;
       await db
         .update(standardSyncRuns)
         .set({ receivedRows: received, changedRows: written })
@@ -80,10 +91,10 @@ export async function syncMasterTmt(options: {
       action: "standards.tmt_synced",
       entityType: "standard_sync_run",
       entityId: runId,
-      afterJson: { version, windows: windows.length, received, written, warnings: warnings.length },
+      afterJson: { version, windows: windows.length, received, written, enriched, warnings: warnings.length },
     });
 
-    return { runId, version, windows: windows.length, received, written, warnings };
+    return { runId, version, windows: windows.length, received, written, enriched, warnings };
   } catch (error) {
     const code = error instanceof Error ? error.name : "UNKNOWN";
     await db
@@ -99,7 +110,7 @@ async function syncOneWindow(
   version: string,
   fetcher: typeof fetch,
   warnings: string[],
-): Promise<{ received: number; written: number }> {
+): Promise<{ received: number; written: number; enriched: number }> {
   const [master, nlem, regno] = await Promise.all([
     fetchMasterTmt(window, fetcher),
     fetchNlem(window, fetcher),
@@ -145,7 +156,57 @@ async function syncOneWindow(
     written += chunk.length;
   }
 
-  return { received: master.length, written };
+  const masterCodes = new Set(master.map((row) => row.tpucode));
+  const enriched =
+    (await applyNlemToStoredProducts(nlem.filter((row) => !masterCodes.has(row.tpuid)), warnings)) +
+    (await applyRegnoToStoredProducts(regno.filter((row) => !masterCodes.has(row.tpuid))));
+
+  return { received: master.length, written, enriched };
+}
+
+/**
+ * Applies NLEM to products already in the catalogue. Only rows that exist are
+ * touched: a TPU we have never seen has no name, strength or manufacturer, and
+ * inserting a shell row for it would put an unsearchable entry in front of the
+ * people doing the mapping.
+ */
+async function applyNlemToStoredProducts(entries: NlemRecord[], warnings: string[]): Promise<number> {
+  let matched = 0;
+  for (let start = 0; start < entries.length; start += ENRICH_CHUNK) {
+    const chunk = entries.slice(start, start + ENRICH_CHUNK);
+    const normalized = chunk.map((row) => {
+      const ised = normalizeNlem(row.nlem);
+      if (ised.warning && warnings.length < 50) warnings.push(`${row.tpuid}: ${ised.warning}`);
+      return { code: row.tpuid, raw: ised.raw, exportValue: ised.exportValue };
+    });
+    const [result] = await db
+      .update(standardProducts)
+      .set({
+        rawNlem: sql`CASE ${standardProducts.standardCode} ${sql.join(normalized.map((row) => sql`WHEN ${row.code} THEN ${row.raw}`), sql` `)} END`,
+        exportIsed: sql`CASE ${standardProducts.standardCode} ${sql.join(normalized.map((row) => sql`WHEN ${row.code} THEN ${row.exportValue}`), sql` `)} END`,
+        updatedAt: sql`CURRENT_TIMESTAMP(3)`,
+      })
+      .where(and(eq(standardProducts.standardType, "TMT"), inArray(standardProducts.standardCode, normalized.map((row) => row.code))));
+    matched += result.affectedRows;
+  }
+  return matched;
+}
+
+async function applyRegnoToStoredProducts(entries: RegnoRecord[]): Promise<number> {
+  let matched = 0;
+  for (let start = 0; start < entries.length; start += ENRICH_CHUNK) {
+    const chunk = entries.slice(start, start + ENRICH_CHUNK);
+    const [result] = await db
+      .update(standardProducts)
+      .set({
+        registrationNumber: sql`CASE ${standardProducts.standardCode} ${sql.join(chunk.map((row) => sql`WHEN ${row.tpuid} THEN ${row.regno}`), sql` `)} END`,
+        normalizedRegno: sql`CASE ${standardProducts.standardCode} ${sql.join(chunk.map((row) => sql`WHEN ${row.tpuid} THEN ${normalizeRegistrationNumber(row.regno)}`), sql` `)} END`,
+        updatedAt: sql`CURRENT_TIMESTAMP(3)`,
+      })
+      .where(and(eq(standardProducts.standardType, "TMT"), inArray(standardProducts.standardCode, chunk.map((row) => row.tpuid))));
+    matched += result.affectedRows;
+  }
+  return matched;
 }
 
 function toStandardProduct(
