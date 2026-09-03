@@ -6,6 +6,7 @@ import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
 import { AgentInstallerPanel } from "./agent-installer-panel";
 import { FacilityDataPanel } from "./facility-data-panel";
+import { FacilityEditPanel } from "./facility-edit-panel";
 import { TmtApiPanel } from "./tmt-api-panel";
 import { UserTable, type AdminUserRow } from "./user-table";
 
@@ -111,6 +112,18 @@ export default async function AdminPage() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="card card-pad">
+        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">แก้ไขสถานบริการ</h2>
+        <FacilityEditPanel
+          facilities={summaries.map((row) => ({
+            facilityId: row.facilityId,
+            facilityCode: row.facilityCode,
+            facilityName: row.facilityName,
+            agentCount: row.agentCount,
+          }))}
+        />
       </section>
 
       <section className="card card-pad">
