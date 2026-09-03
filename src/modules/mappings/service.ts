@@ -72,13 +72,15 @@ export async function saveManualMapping(input: ManualMappingInput): Promise<{ ma
 
   const snapshot = await latestImport(input.facilityId);
   let presentInSnapshot = false;
+  let catalogNdc24: string | null = null;
   if (snapshot) {
     const rows = await db
-      .select({ id: drugCatalogRows.id })
+      .select({ id: drugCatalogRows.id, ndc24: drugCatalogRows.ndc24 })
       .from(drugCatalogRows)
       .where(and(eq(drugCatalogRows.importId, snapshot.id), eq(drugCatalogRows.hospdrugcode, drug.drugcode)))
       .limit(1);
     presentInSnapshot = rows.length > 0;
+    catalogNdc24 = rows[0]?.ndc24 ?? null;
   }
   const updateFlag = decideUpdateFlagWithSnapshot(Boolean(snapshot), presentInSnapshot);
 
@@ -101,7 +103,10 @@ export async function saveManualMapping(input: ManualMappingInput): Promise<{ ma
     distributor: input.distributor?.trim() || null,
     // ISED always comes from the standard, never from user input.
     ised: standard.exportIsed,
-    ndc24: input.ndc24?.trim() || drug.drugcode24 || null,
+    // NDC24 comes from the Drug Catalog file, never from cdrug.drugcode24:
+    // the file has already been through the central system that validates it,
+    // and JHCIS is not reliably right. Absent from the file means absent here.
+    ndc24: input.ndc24?.trim() || catalogNdc24 || null,
     // PACKSIZE has no TMT field and is empty on every row of the approved
     // DrugCat files, so it carries only what a user typed. cdrug.pack is a
     // different quantity and putting it here would invent a value.
@@ -160,7 +165,7 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
   if (!snapshot) throw new MappingRuleError("CATALOG_SNAPSHOT_MISSING", "ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้");
 
   const drugs = await db
-    .select({ id: sourceDrugs.id, drugcode: sourceDrugs.drugcode, drugtype: sourceDrugs.drugtype, pack: sourceDrugs.pack, drugcode24: sourceDrugs.drugcode24 })
+    .select({ id: sourceDrugs.id, drugcode: sourceDrugs.drugcode, drugtype: sourceDrugs.drugtype })
     .from(sourceDrugs)
     .where(and(eq(sourceDrugs.facilityId, facilityId), eq(sourceDrugs.active, 1)));
 
@@ -171,10 +176,10 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
   const alreadyMapped = new Set(mapped.map((row) => row.sourceDrugId));
 
   const catalogRows = await db
-    .select({ hospdrugcode: drugCatalogRows.hospdrugcode, tmtid: drugCatalogRows.tmtid })
+    .select({ hospdrugcode: drugCatalogRows.hospdrugcode, tmtid: drugCatalogRows.tmtid, ndc24: drugCatalogRows.ndc24 })
     .from(drugCatalogRows)
     .where(eq(drugCatalogRows.importId, snapshot.id));
-  const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row.tmtid]));
+  const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row]));
 
   const wantedCodes = [...new Set(catalogRows.map((row) => row.tmtid).filter((code): code is string => Boolean(code)))];
   const standards = wantedCodes.length
@@ -196,12 +201,12 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
       result.skippedAlreadyMapped += 1;
       continue;
     }
-    const tmtid = catalogByCode.get(drug.drugcode);
-    if (!tmtid) {
+    const catalogRow = catalogByCode.get(drug.drugcode);
+    if (!catalogRow?.tmtid) {
       result.skippedNoStandard += 1;
       continue;
     }
-    const standard = standardByCode.get(tmtid);
+    const standard = standardByCode.get(catalogRow.tmtid);
     if (!standard) {
       result.skippedNoStandard += 1;
       continue;
@@ -226,7 +231,8 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
       productCat: drug.drugtype === "10" ? "3" : "1",
       specPrep: null,
       ised: standard.exportIsed,
-      ndc24: drug.drugcode24 ?? null,
+      // From the file, like TMTID itself — not from cdrug.drugcode24.
+      ndc24: catalogRow.ndc24,
       packsize: null,
       // The code exists in the latest snapshot, so this is an edit, not an add.
       updateFlag: "E",

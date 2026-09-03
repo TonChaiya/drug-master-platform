@@ -55,9 +55,13 @@ function contentText(contentValue: string | null, contentUnit: string | null, di
  * Columns with no source stay empty rather than being filled from something
  * that merely looks similar. SPECPREP, DFSCODE and PACKSIZE have no TMT field
  * and are blank in the approved DrugCat files, so they carry only what a user
- * typed on the mapping screen. UNITPRICE and NDC24 do fall back to JHCIS,
- * because price and the hospital NDC24 are local facts TMT never carries and
- * the approved files do fill them.
+ * typed on the mapping screen.
+ *
+ * NDC24 comes from the Drug Catalog file alone. cdrug.drugcode24 is not a
+ * substitute: the file has already been through the central system that
+ * validates it, and JHCIS is not reliably right. No value in the file means no
+ * value here. UNITPRICE still falls back to the JHCIS selling price, which is a
+ * local fact TMT never carries.
  */
 export async function buildExportRows(facilityId: string, selection: ExportSelection): Promise<ExportRow[]> {
   const conditions = [eq(drugMappings.facilityId, facilityId), eq(sourceDrugs.active, 1)];
@@ -67,7 +71,6 @@ export async function buildExportRows(facilityId: string, selection: ExportSelec
     .select({
       drugcode: sourceDrugs.drugcode,
       sell: sourceDrugs.sell,
-      drugcode24: sourceDrugs.drugcode24,
       standardCode: drugMappings.standardCode,
       productCat: drugMappings.productCat,
       specPrep: drugMappings.specPrep,
@@ -114,7 +117,7 @@ export async function buildExportRows(facilityId: string, selection: ExportSelec
     manufacturer: text(row.manufacturer),
     // Prefer the mapping's stored ISED; fall back to the standard's current value.
     ised: text(row.mappingIsed) || text(row.standardIsed),
-    ndc24: text(row.ndc24) || text(row.drugcode24),
+    ndc24: text(row.ndc24),
     packsize: text(row.packsize),
     packprice: text(row.packPrice),
     updateflag: text(row.updateFlag),

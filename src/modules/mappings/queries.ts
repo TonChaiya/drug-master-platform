@@ -14,7 +14,6 @@ export interface WorklistRow {
   drugtype: string;
   pack: string | null;
   sell: string | null;
-  drugcode24: string | null;
   mappingId: string | null;
   standardCode: string | null;
   standardType: string | null;
@@ -86,7 +85,6 @@ export async function mappingWorklist(options: {
       drugtype: sourceDrugs.drugtype,
       pack: sourceDrugs.pack,
       sell: sourceDrugs.sell,
-      drugcode24: sourceDrugs.drugcode24,
       mappingId: drugMappings.id,
       standardCode: drugMappings.standardCode,
       updateFlag: drugMappings.updateFlag,

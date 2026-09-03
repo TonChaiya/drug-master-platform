@@ -13,7 +13,6 @@ interface WorklistRow {
   drugtype: string;
   pack: string | null;
   sell: string | null;
-  drugcode24: string | null;
   mappingId: string | null;
   standardCode: string | null;
   standardType: string | null;
