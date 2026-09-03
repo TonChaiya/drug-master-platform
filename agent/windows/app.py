@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 import os
 import socket
 import sys
@@ -73,6 +74,7 @@ class AgentApp:
         self.settings_status: ttk.Label | None = None
 
         self.pending_enrollment: object | None = None
+        self.last_sync_text = "—"
         # Tk prints callback exceptions to stderr, which a --windowed build
         # discards. An enrolment click that failed this way left the agent
         # looking like it had simply ignored the link.
@@ -126,6 +128,8 @@ class AgentApp:
         self.store.save(config)
         self.config = config
         self.worker.replace_config(config)
+        # Enrolment changes the facility, so the tiles have to follow it.
+        self.root.after(0, self._refresh_dashboard)
 
     # ---------------------------------------------------------------- status
 
@@ -135,6 +139,9 @@ class AgentApp:
     def set_status(self, text: str, state: str = "idle") -> None:
         self.status_text = text[:150]
         self.status_state = state
+        if state == "ok" and "รายการ" in text:
+            self.last_sync_text = datetime.now().strftime("%d/%m %H:%M")
+            self._refresh_dashboard()
         color = STATE_COLORS.get(state, STATE_COLORS["idle"])
         self.icon.icon = create_icon(color)
         self.icon.title = f"{APP_NAME} - {self.status_text}"
@@ -416,7 +423,7 @@ class AgentApp:
             stats.columnconfigure(column, weight=1)
         self.stat_facility = self._stat(stats, 0, "สถานบริการ", self.config.facility_code or "—")
         self.stat_machine = self._stat(stats, 1, "ชื่อเครื่อง", self.config.machine_label or socket.gethostname())
-        self.stat_sync = self._stat(stats, 2, "ดึงล่าสุด", "—")
+        self.stat_sync = self._stat(stats, 2, "ดึงล่าสุด", self.last_sync_text)
 
         # -------------------------------------------------------------- JHCIS
         jhcis = self._card(
@@ -483,6 +490,7 @@ class AgentApp:
         if getattr(self, "stat_facility", None) is not None:
             self.stat_facility.configure(text=self.config.facility_code or "—")
             self.stat_machine.configure(text=self.config.machine_label or socket.gethostname())
+            self.stat_sync.configure(text=self.last_sync_text)
 
     def config_from_form(self) -> AgentConfig:
         if not self.entries:
