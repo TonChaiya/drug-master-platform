@@ -60,11 +60,19 @@ class JhcisSnapshot:
 def _mysql_error(error: MySqlError) -> JhcisFailure:
     if error.errno in {1044, 1045, 1698}:
         return JhcisFailure("JHCIS_AUTH", "JHCIS ปฏิเสธชื่อผู้ใช้หรือรหัสผ่าน")
+    if error.errno == 1130:
+        return JhcisFailure(
+            "JHCIS_HOST_DENIED",
+            "JHCIS ไม่อนุญาตให้เครื่องนี้เชื่อมต่อ ต้องเปิดสิทธิ์ผู้ใช้ฐานข้อมูลให้เครื่องในวง LAN",
+        )
     if error.errno in {2003, 2005}:
         return JhcisFailure("JHCIS_HOST", "ติดต่อ JHCIS host/port ไม่สำเร็จ")
     if error.errno in {1049, 1146}:
         return JhcisFailure("JHCIS_SCHEMA", "ไม่พบฐานหรือตาราง JHCIS ที่กำหนด")
-    return JhcisFailure("JHCIS_DATABASE", "JHCIS ตอบกลับด้วย database error")
+    # Everything else carries the driver's own code and text. A bare
+    # "database error" sent an operator hunting the wrong thing for an hour when
+    # the real answer was already in the exception.
+    return JhcisFailure("JHCIS_DATABASE", f"JHCIS ตอบกลับด้วย database error [{error.errno}] {error}")
 
 
 def _driver_incomplete() -> JhcisFailure:
@@ -85,19 +93,57 @@ def _driver_incomplete() -> JhcisFailure:
     )
 
 
+# utf8mb4 arrived in MySQL 5.5.3. JHCIS servers in the field are frequently
+# older than that and answer "Unknown character set: 'utf8mb4'" (errno 1115),
+# which is what stopped this agent connecting to a real รพ.สต. database while
+# the developer's own MySQL worked. Thai sits entirely in the BMP, so three-byte
+# utf8 loses nothing here; utf8mb4 is still tried first for newer servers.
+CHARSETS = ("utf8mb4", "utf8")
+UNKNOWN_CHARSET = 1115
+
+
 def _connect(config: AgentConfig):
     config.validate_jhcis()
-    return mysql.connector.connect(
-        host=config.jhcis_host,
-        port=config.jhcis_port,
-        database=config.jhcis_database,
-        user=config.jhcis_user,
-        password=config.jhcis_password,
-        connection_timeout=8,
-        autocommit=False,
-        use_pure=True,
-        charset="utf8mb4",
-    )
+    last_error: MySqlError | None = None
+    for charset in CHARSETS:
+        try:
+            return mysql.connector.connect(
+                host=config.jhcis_host,
+                port=config.jhcis_port,
+                database=config.jhcis_database,
+                user=config.jhcis_user,
+                password=config.jhcis_password,
+                connection_timeout=8,
+                autocommit=False,
+                use_pure=True,
+                charset=charset,
+            )
+        except MySqlError as error:
+            if error.errno != UNKNOWN_CHARSET:
+                raise
+            last_error = error
+    raise last_error if last_error else RuntimeError("no charset attempted")
+
+
+SYNTAX_ERROR = 1064
+
+
+def _begin_read_only(cursor) -> None:
+    """
+    Opens the snapshot transaction the read runs in.
+
+    READ ONLY arrived in MySQL 5.6 and JHCIS in the field runs 5.1, which
+    rejects it as a syntax error — that is what stopped this agent on a real
+    รพ.สต. server. Where the server understands it the guarantee is kept; where
+    it does not, the transaction is still only ever fed SELECTs and is always
+    rolled back, so JHCIS is never written to either way.
+    """
+    try:
+        cursor.execute("START TRANSACTION READ ONLY")
+    except MySqlError as error:
+        if error.errno != SYNTAX_ERROR:
+            raise
+        cursor.execute("START TRANSACTION")
 
 
 def _read_office_id(cursor) -> str:
@@ -131,7 +177,7 @@ def read_office(config: AgentConfig) -> JhcisSnapshot:
         connection = _connect(config)
         cursor = connection.cursor()
         try:
-            cursor.execute("START TRANSACTION READ ONLY")
+            _begin_read_only(cursor)
             office_id = _read_office_id(cursor)
             cursor.execute(COUNT_SQL)
             row = cursor.fetchone()
@@ -165,7 +211,7 @@ def read_drugs(config: AgentConfig, batch_size: int = 300) -> Iterator[tuple[str
         connection = _connect(config)
         cursor = connection.cursor()
         try:
-            cursor.execute("START TRANSACTION READ ONLY")
+            _begin_read_only(cursor)
             office_id = _read_office_id(cursor)
             cursor.execute(COUNT_SQL)
             count_row = cursor.fetchone()
