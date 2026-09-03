@@ -4,6 +4,13 @@ import { isValidOfficeId } from "@/lib/validation/facility";
 const officeId = z.string().refine(isValidOfficeId, "officeId ต้องเป็นเลข 5 หลักและไม่ใช่ 0000x");
 const agentVersion = z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/).max(32);
 const money = z.union([z.number(), z.string()]).nullable().optional();
+/** Reported by the agent to identify the PC; absent when it cannot read it. */
+const macAddress = z
+  .string()
+  .trim()
+  .regex(/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/)
+  .nullable()
+  .optional();
 
 export const enrollRequestSchema = z
   .object({
@@ -12,6 +19,7 @@ export const enrollRequestSchema = z
     machineLabel: z.string().trim().min(1).max(128),
     officeId,
     agentVersion,
+    macAddress,
   })
   .strict();
 
@@ -20,6 +28,7 @@ export const pollRequestSchema = z
     installationId: z.uuid(),
     agentVersion,
     officeId,
+    macAddress,
   })
   .strict();
 

@@ -42,7 +42,8 @@ export default async function JhcisPage() {
   }
 
   const [installations, sessions, commands, installer] = await Promise.all([
-    listInstallations(facility.id),
+    // A user sees the machines they registered; an admin sees the facility's.
+    listInstallations(facility.id, user.role === "admin" ? undefined : user.id),
     recentSyncSessions(facility.id),
     recentCommands(facility.id),
     readInstallerLink(),
@@ -85,15 +86,22 @@ export default async function JhcisPage() {
       />
 
       <section className="card card-pad">
-        <h2 className="mb-2 text-sm font-semibold">เครื่องที่ลงทะเบียนแล้ว</h2>
+        <h2 className="mb-2 text-sm font-semibold">
+          {user.role === "admin" ? "เครื่องที่ลงทะเบียนแล้ว (ทุกไอดีของสถานบริการนี้)" : "เครื่องที่ไอดีนี้ลงทะเบียน"}
+        </h2>
         {installations.length === 0 ? (
-          <p className="text-xxs text-slate-500">ยังไม่มีเครื่องใดลงทะเบียนกับสถานบริการนี้</p>
+          <p className="text-xxs text-slate-500">
+            {user.role === "admin"
+              ? "ยังไม่มีเครื่องใดลงทะเบียนกับสถานบริการนี้"
+              : "ไอดีนี้ยังไม่ได้ลงทะเบียนเครื่องใด — เครื่องที่ไอดีอื่นลงทะเบียนไว้จะไม่แสดงที่นี่"}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>เครื่อง</th>
+                  <th>MAC</th>
                   <th>office.offid</th>
                   <th>เวอร์ชัน</th>
                   <th>key ที่ใช้ได้</th>
@@ -108,6 +116,7 @@ export default async function JhcisPage() {
                       <div className="font-medium">{row.machineLabel}</div>
                       <div className="font-mono text-xxs text-slate-400">{row.installationId}</div>
                     </td>
+                    <td className="font-mono text-xxs">{row.macAddress ?? "—"}</td>
                     <td className="font-mono">
                       {row.declaredOfficeId ?? "—"}
                       {row.lastMismatchAt ? (

@@ -63,6 +63,30 @@ def _crypt_unprotect(value: str) -> str:
         ctypes.windll.kernel32.LocalFree(destination.pbData)
 
 
+def machine_mac() -> str | None:
+    """
+    The machine's MAC address, for telling one รพ.สต. PC from another.
+
+    Not the IP: a DHCP lease moves, so an address recorded today misidentifies
+    the machine tomorrow. The MAC and the Windows computer name both stay put.
+
+    Best-effort — a failure here must never stop an enrolment, so it reports
+    nothing rather than raising.
+    """
+    import re
+    import uuid as uuid_module
+
+    try:
+        node = uuid_module.getnode()
+    except Exception:  # noqa: BLE001 - identification must never break enrolment
+        return None
+    # Bit 41 set means Python invented a random address because it could not
+    # read a real one; recording that would be worse than recording nothing.
+    if (node >> 40) % 2:
+        return None
+    return ":".join(re.findall("..", "%012x" % node)).upper()
+
+
 def app_data_dir() -> Path:
     local = os.environ.get("LOCALAPPDATA")
     if not local:

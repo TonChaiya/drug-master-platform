@@ -16,7 +16,14 @@ export interface AgentContext<T> {
  * bytes, so the body must not be re-serialised), verify the signature, parse with
  * zod, then assert the declared installation and officeId against the credential.
  */
-export async function withAgentRequest<T extends { installationId: string; officeId?: string; agentVersion?: string }>(
+export async function withAgentRequest<
+  T extends {
+    installationId: string;
+    officeId?: string;
+    agentVersion?: string;
+    macAddress?: string | null;
+  },
+>(
   request: Request,
   path: string,
   schema: ZodType<T>,
@@ -42,7 +49,14 @@ export async function withAgentRequest<T extends { installationId: string; offic
       await assertOffice(identity, parsed.data.officeId);
       await clearOfficeMismatch(identity.installationId);
     }
-    if (parsed.data.agentVersion) await touchInstallation(identity.installationId, parsed.data.agentVersion, parsed.data.officeId);
+    if (parsed.data.agentVersion) {
+      await touchInstallation(
+        identity.installationId,
+        parsed.data.agentVersion,
+        parsed.data.officeId,
+        parsed.data.macAddress,
+      );
+    }
 
     const result = await handler({ identity, body: parsed.data });
     return apiJson({ ok: true, ...(result as Record<string, unknown>) });

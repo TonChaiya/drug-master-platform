@@ -110,6 +110,9 @@ export async function redeemEnrollment(input: EnrollRequest): Promise<IssuedCred
           declaredOfficeId: input.officeId,
           status: "active",
           agentVersion: input.agentVersion,
+          // Re-enrolling hands the machine to whoever issued the new link.
+          enrolledBy: enrollment.createdBy,
+          macAddress: input.macAddress ?? null,
           enrolledAt: now,
           lastSeenAt: now,
         })
@@ -122,6 +125,8 @@ export async function redeemEnrollment(input: EnrollRequest): Promise<IssuedCred
         declaredOfficeId: input.officeId,
         status: "active",
         agentVersion: input.agentVersion,
+        enrolledBy: enrollment.createdBy,
+        macAddress: input.macAddress ?? null,
         enrolledAt: now,
         lastSeenAt: now,
       });

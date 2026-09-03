@@ -13,13 +13,26 @@ export interface InstallationView {
   activeCredentials: number;
   lastMismatchOfficeId: string | null;
   lastMismatchAt: Date | null;
+  enrolledBy: string | null;
+  macAddress: string | null;
 }
 
-export async function listInstallations(facilityId: string): Promise<InstallationView[]> {
+/**
+ * Machines registered against a facility.
+ *
+ * `enrolledBy` narrows it to the account that registered them: several accounts
+ * share a facility, and a user managing their own machine has no business
+ * revoking or re-syncing a colleague's. An admin passes nothing and sees all.
+ */
+export async function listInstallations(facilityId: string, enrolledBy?: string): Promise<InstallationView[]> {
+  const scope = enrolledBy
+    ? and(eq(agentInstallations.facilityId, facilityId), eq(agentInstallations.enrolledBy, enrolledBy))
+    : eq(agentInstallations.facilityId, facilityId);
+
   const installations = await db
     .select()
     .from(agentInstallations)
-    .where(eq(agentInstallations.facilityId, facilityId))
+    .where(scope)
     .orderBy(desc(agentInstallations.lastSeenAt));
 
   const credentials = await db
@@ -44,6 +57,8 @@ export async function listInstallations(facilityId: string): Promise<Installatio
     activeCredentials: activeByInstallation.get(row.installationId) ?? 0,
     lastMismatchOfficeId: row.lastMismatchOfficeId,
     lastMismatchAt: row.lastMismatchAt,
+    enrolledBy: row.enrolledBy,
+    macAddress: row.macAddress,
   }));
 }
 

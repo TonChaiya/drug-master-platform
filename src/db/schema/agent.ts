@@ -16,6 +16,9 @@ export const agentInstallations = mysqlTable(
     agentVersion: varchar("agent_version", { length: 32 }),
     createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
     enrolledAt: datetime("enrolled_at", { mode: "date", fsp: 3 }),
+    macAddress: varchar("mac_address", { length: 17 }),
+    /** The account that registered this machine; re-enrolling reassigns it. */
+    enrolledBy: varchar("enrolled_by", { length: 36 }),
     lastMismatchOfficeId: varchar("last_mismatch_office_id", { length: 8 }),
     lastMismatchAt: datetime("last_mismatch_at", { mode: "date", fsp: 3 }),
   },

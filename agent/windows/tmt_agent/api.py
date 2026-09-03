@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from tmt_agent.config import AgentConfig
+from tmt_agent.config import AgentConfig, machine_mac
 from tmt_agent.errors import ServerFailure
 from tmt_agent.security import PROTOCOL, new_nonce, new_timestamp, sign_request
 
@@ -78,6 +78,7 @@ class AgentApi:
             "machineLabel": machine_label,
             "officeId": office_id,
             "agentVersion": agent_version,
+            "macAddress": machine_mac(),
         }
         try:
             response = requests.post(
@@ -95,7 +96,12 @@ class AgentApi:
     def poll_command(self, office_id: str, agent_version: str) -> dict[str, Any] | None:
         body = self._post_signed(
             "/api/v1/agent/commands/poll",
-            {"installationId": self.config.installation_id, "officeId": office_id, "agentVersion": agent_version},
+            {
+                "installationId": self.config.installation_id,
+                "officeId": office_id,
+                "agentVersion": agent_version,
+                "macAddress": machine_mac(),
+            },
         )
         command = body.get("command")
         return command if isinstance(command, dict) else None

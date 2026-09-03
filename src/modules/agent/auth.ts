@@ -128,9 +128,21 @@ export async function clearOfficeMismatch(installationId: string): Promise<void>
     .where(eq(agentInstallations.installationId, installationId));
 }
 
-export async function touchInstallation(installationId: string, agentVersion: string, officeId?: string): Promise<void> {
+export async function touchInstallation(
+  installationId: string,
+  agentVersion: string,
+  officeId?: string,
+  macAddress?: string | null,
+): Promise<void> {
   await db
     .update(agentInstallations)
-    .set({ lastSeenAt: new Date(), agentVersion, ...(officeId ? { declaredOfficeId: officeId } : {}) })
+    .set({
+      lastSeenAt: new Date(),
+      agentVersion,
+      ...(officeId ? { declaredOfficeId: officeId } : {}),
+      // Only overwrite when the agent reported one: an older build sends
+      // nothing, and blanking what we already know would be a step backwards.
+      ...(macAddress ? { macAddress } : {}),
+    })
     .where(eq(agentInstallations.installationId, installationId));
 }
