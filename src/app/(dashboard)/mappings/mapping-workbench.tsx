@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
 import { StandardSearch, type StandardRow } from "@/components/standard-search";
 
@@ -43,6 +43,13 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<WorklistRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const chooserRef = useRef<HTMLDivElement | null>(null);
+
+  // Opening the chooser under a row near the fold would otherwise leave it
+  // half off screen; "nearest" scrolls only when it actually has to.
+  useEffect(() => {
+    chooserRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selected]);
   const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -207,7 +214,8 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
               </thead>
               <tbody>
                 {worklist.rows.map((row) => (
-                  <tr key={row.sourceDrugId} className={selected?.sourceDrugId === row.sourceDrugId ? "bg-brand-50" : undefined}>
+                  <Fragment key={row.sourceDrugId}>
+                    <tr className={selected?.sourceDrugId === row.sourceDrugId ? "bg-brand-50" : undefined}>
                     <td className="font-mono">{row.drugcode}</td>
                     <td className="max-w-64">
                       <div>{row.drugname ?? row.drugnamethai ?? "—"}</div>
@@ -238,7 +246,38 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                         {selected?.sourceDrugId === row.sourceDrugId ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}
                       </button>
                     </td>
-                  </tr>
+                    </tr>
+
+                    {selected?.sourceDrugId === row.sourceDrugId ? (
+                      <tr key={`${row.sourceDrugId}-chooser`} className="bg-brand-50/40">
+                        <td colSpan={7} className="p-0">
+                          <div ref={chooserRef} className="border-y-2 border-brand-600 bg-white p-3">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                              <h3 className="text-sm font-semibold">
+                                เลือกมาตรฐานให้ <span className="font-mono">{row.drugcode}</span> —{" "}
+                                {row.drugname ?? row.drugnamethai ?? ""}
+                              </h3>
+                              <button type="button" className="btn-secondary btn-sm" onClick={() => setSelected(null)}>
+                                ปิด
+                              </button>
+                            </div>
+                            <p className="mt-0.5 text-xxs text-slate-500">
+                              drugtype {row.drugtype} ใช้คลัง {row.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น
+                              และเลือกได้เฉพาะรายการที่เปิดใช้งาน รหัส TMT เดิมใน JHCIS ไม่ถูกใช้เป็นคำตอบโดยตรง
+                            </p>
+                            <div className="mt-2">
+                              <StandardSearch
+                                standardType={row.drugtype === "10" ? "TTMT" : "TMT"}
+                                lockType
+                                selectedCode={row.standardCode}
+                                onSelect={(standard) => void saveMapping(row, standard)}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -262,25 +301,6 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
         ) : null}
       </section>
 
-      {selected ? (
-        <section className="card card-pad">
-          <h2 className="text-sm font-semibold">
-            เลือกมาตรฐานให้ <span className="font-mono">{selected.drugcode}</span> — {selected.drugname ?? selected.drugnamethai ?? ""}
-          </h2>
-          <p className="mt-0.5 text-xxs text-slate-500">
-            drugtype {selected.drugtype} ใช้คลัง {selected.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น และเลือกได้เฉพาะรายการที่เปิดใช้งาน
-            รหัส TMT เดิมใน JHCIS ไม่ถูกใช้เป็นคำตอบโดยตรง
-          </p>
-          <div className="mt-3">
-            <StandardSearch
-              standardType={selected.drugtype === "10" ? "TTMT" : "TMT"}
-              lockType
-              selectedCode={selected.standardCode}
-              onSelect={(standard) => void saveMapping(selected, standard)}
-            />
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
