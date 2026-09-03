@@ -12,7 +12,12 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from urllib.parse import urlparse
 
-APP_DIRECTORY = "TMTDrugMasterAgent"
+# The retired PHP agent (agentAutoData) shipped under the same name and
+# stored an incompatible config.json and its own agent.log in
+# %LOCALAPPDATA%\\TMTDrugMasterAgent. Sharing that directory meant this
+# agent silently discarded a foreign config, overwrote it on the next save,
+# and appended to a log already full of the other program's errors.
+APP_DIRECTORY = "TMTDrugMasterPlatformAgent"
 OFFICE_PATTERN = re.compile(r"^\d{5}$")
 
 

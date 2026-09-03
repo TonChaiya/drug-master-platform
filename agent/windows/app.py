@@ -83,10 +83,23 @@ class AgentApp:
 
     def _load_config(self) -> AgentConfig:
         try:
-            return self.store.load()
-        except (OSError, ValueError, KeyError, TypeError):
+            config = self.store.load()
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            # Logged, not just shown: the dialog is gone the moment it is
+            # dismissed, and this is the first thing to check afterwards.
+            self.logger.warning("config_unreadable path=%s error=%s", self.store.path, type(error).__name__)
             messagebox.showwarning(APP_NAME, "อ่านการตั้งค่าเดิมไม่สำเร็จ กรุณาตั้งค่าใหม่")
             return AgentConfig.blank()
+        self.logger.info(
+            "config_loaded enrolled=%s server=%s facility=%s jhcis=%s:%s/%s",
+            config.enrolled,
+            config.server_url or "-",
+            config.facility_code or "-",
+            config.jhcis_host,
+            config.jhcis_port,
+            config.jhcis_database,
+        )
+        return config
 
     def _on_config_reloaded(self, config: AgentConfig) -> None:
         self.config = config
@@ -340,6 +353,13 @@ class AgentApp:
         self.root.destroy()
 
     def run(self) -> None:
+        self.logger.info(
+            "agent_started version=%s enrolled=%s poll_interval=%ss auto_sync=%s",
+            VERSION,
+            self.config.enrolled,
+            self.config.poll_interval_seconds,
+            self.config.auto_sync_enabled,
+        )
         self.icon.run_detached()
         self.ipc.start()
         self.worker.start()

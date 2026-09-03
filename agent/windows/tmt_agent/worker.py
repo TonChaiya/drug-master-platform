@@ -93,6 +93,7 @@ class CommandWorker:
         self._config_mtime = store.mtime()
         self._backoff = 0
         self._last_auto_sync = 0.0
+        self._announced_unenrolled = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -141,6 +142,10 @@ class CommandWorker:
         try:
             if command_type == "sync_now":
                 outcome = run_sync(self._config, self.agent_version, lambda text: self.on_status(text, "busy"))
+                logger.info(
+                    "sync_now_ok received=%s inserted=%s updated=%s deactivated=%s",
+                    outcome.received, outcome.inserted, outcome.updated, outcome.deactivated,
+                )
                 message = f"ส่ง {outcome.received:,} รายการ (เพิ่ม {outcome.inserted:,} แก้ไข {outcome.updated:,} ปิดใช้ {outcome.deactivated:,})"
                 self.on_status(message, "ok")
                 api.complete_command(command_id, claim_token, True, "OK", message)
@@ -172,9 +177,14 @@ class CommandWorker:
         interval = self._config.auto_sync_interval_minutes * 60
         if self._last_auto_sync and time.monotonic() - self._last_auto_sync < interval:
             return
+        logger.info("auto_sync_started interval=%smin", self._config.auto_sync_interval_minutes)
         try:
             outcome = run_sync(self._config, self.agent_version, lambda text: self.on_status(text, "busy"))
             self._last_auto_sync = time.monotonic()
+            logger.info(
+                "auto_sync_ok received=%s inserted=%s updated=%s deactivated=%s",
+                outcome.received, outcome.inserted, outcome.updated, outcome.deactivated,
+            )
             self.on_status(f"auto sync สำเร็จ {outcome.received:,} รายการ", "ok")
         except AgentFailure as failure:
             self._last_auto_sync = time.monotonic()
@@ -185,8 +195,12 @@ class CommandWorker:
         while not self.stop_event.is_set():
             self._reload_if_changed()
             if not self._config.enrolled:
+                if not self._announced_unenrolled:
+                    logger.info("waiting_for_enrollment: open the link from the JHCIS page on this machine")
+                    self._announced_unenrolled = True
                 self._sleep(10)
                 continue
+            self._announced_unenrolled = False
 
             api = AgentApi(self._config)
             try:
@@ -194,6 +208,7 @@ class CommandWorker:
                 command = api.poll_command(snapshot.office_id, self.agent_version)
                 self._backoff = 0
                 if command:
+                    logger.info("command_received type=%s", command.get("commandType"))
                     self._handle(api, command)
                 else:
                     self._maybe_auto_sync(api)
