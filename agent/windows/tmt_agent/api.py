@@ -78,7 +78,7 @@ class AgentApi:
             "machineLabel": machine_label,
             "officeId": office_id,
             "agentVersion": agent_version,
-            "macAddress": machine_mac(),
+            "macAddress": machine_mac(self.config.jhcis_host),
         }
         try:
             response = requests.post(
@@ -100,7 +100,7 @@ class AgentApi:
                 "installationId": self.config.installation_id,
                 "officeId": office_id,
                 "agentVersion": agent_version,
-                "macAddress": machine_mac(),
+                "macAddress": machine_mac(self.config.jhcis_host),
             },
         )
         command = body.get("command")

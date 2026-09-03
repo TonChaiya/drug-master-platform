@@ -63,28 +63,181 @@ def _crypt_unprotect(value: str) -> str:
         ctypes.windll.kernel32.LocalFree(destination.pbData)
 
 
-def machine_mac() -> str | None:
+# Picking an adapter, not calling uuid.getnode(). getnode() returns whichever
+# address it finds first, and on a real machine that was the Bluetooth PAN
+# adapter (B4:6D:83:13:0C:0D) while the Wi-Fi card actually carrying the LAN was
+# B4:6D:83:13:0C:09. A MAC that names the wrong adapter is worse than no MAC,
+# because it looks correct and matches nothing in the router's DHCP table.
+MAX_ADAPTER_NAME_LENGTH = 256
+MAX_ADAPTER_DESCRIPTION_LENGTH = 128
+MAX_ADAPTER_ADDRESS_LENGTH = 8
+
+# Present on almost every machine and useless for identification: they appear and
+# disappear, and several of them share one vendor prefix with the real card.
+VIRTUAL_ADAPTER = re.compile(
+    r"bluetooth|wi-?fi direct|virtual|vmware|hyper-v|vbox|tap-|tunnel|loopback|wan miniport|docker|zerotier|tailscale",
+    re.IGNORECASE,
+)
+
+
+class IpAddressString(ctypes.Structure):
+    _fields_ = [("String", ctypes.c_char * 16)]
+
+
+class IpAddrString(ctypes.Structure):
+    pass
+
+
+IpAddrString._fields_ = [
+    ("Next", ctypes.POINTER(IpAddrString)),
+    ("IpAddress", IpAddressString),
+    ("IpMask", IpAddressString),
+    ("Context", wintypes.DWORD),
+]
+
+
+class IpAdapterInfo(ctypes.Structure):
+    pass
+
+
+# Trailing lease timestamps are declared for completeness only; the list is
+# walked through Next pointers, so their width never affects traversal.
+IpAdapterInfo._fields_ = [
+    ("Next", ctypes.POINTER(IpAdapterInfo)),
+    ("ComboIndex", wintypes.DWORD),
+    ("AdapterName", ctypes.c_char * (MAX_ADAPTER_NAME_LENGTH + 4)),
+    ("Description", ctypes.c_char * (MAX_ADAPTER_DESCRIPTION_LENGTH + 4)),
+    ("AddressLength", ctypes.c_uint),
+    ("Address", ctypes.c_ubyte * MAX_ADAPTER_ADDRESS_LENGTH),
+    ("Index", wintypes.DWORD),
+    ("Type", ctypes.c_uint),
+    ("DhcpEnabled", ctypes.c_uint),
+    ("CurrentIpAddress", ctypes.POINTER(IpAddrString)),
+    ("IpAddressList", IpAddrString),
+    ("GatewayList", IpAddrString),
+    ("DhcpServer", IpAddrString),
+    ("HaveWins", wintypes.BOOL),
+    ("PrimaryWinsServer", IpAddrString),
+    ("SecondaryWinsServer", IpAddrString),
+    ("LeaseObtained", ctypes.c_int64),
+    ("LeaseExpires", ctypes.c_int64),
+]
+
+
+@dataclass(frozen=True)
+class NetworkAdapter:
+    mac: str
+    description: str
+    addresses: tuple[str, ...]
+    has_gateway: bool
+
+
+def _chain(first: IpAddrString) -> list[str]:
+    values: list[str] = []
+    entry = first
+    while True:
+        text = entry.IpAddress.String.decode("ascii", "ignore")
+        if text and text != "0.0.0.0":
+            values.append(text)
+        if not entry.Next:
+            return values
+        entry = entry.Next.contents
+
+
+def list_adapters() -> list[NetworkAdapter]:
+    """Every IPv4-capable adapter Windows knows about, with its own MAC."""
+    iphlpapi = ctypes.windll.iphlpapi
+    size = wintypes.ULONG(0)
+    iphlpapi.GetAdaptersInfo(None, ctypes.byref(size))
+    if not size.value:
+        return []
+    buffer = ctypes.create_string_buffer(size.value)
+    head = ctypes.cast(buffer, ctypes.POINTER(IpAdapterInfo))
+    if iphlpapi.GetAdaptersInfo(head, ctypes.byref(size)) != 0:
+        return []
+
+    adapters: list[NetworkAdapter] = []
+    node = head
+    while node:
+        entry = node.contents
+        if entry.AddressLength == 6:
+            adapters.append(
+                NetworkAdapter(
+                    mac=":".join("%02X" % byte for byte in entry.Address[:6]),
+                    description=entry.Description.decode("mbcs", "ignore"),
+                    addresses=tuple(_chain(entry.IpAddressList)),
+                    has_gateway=bool(_chain(entry.GatewayList)),
+                )
+            )
+        node = entry.Next
+    return adapters
+
+
+def _route_source_ip(host: str | None) -> str | None:
     """
-    The machine's MAC address, for telling one รพ.สต. PC from another.
+    The local address Windows would use to reach `host`.
 
-    Not the IP: a DHCP lease moves, so an address recorded today misidentifies
-    the machine tomorrow. The MAC and the Windows computer name both stay put.
+    A UDP socket is connected but nothing is sent: this only asks the routing
+    table which adapter would carry the traffic, so it costs nothing and works
+    while the host is switched off.
+    """
+    import socket
 
-    Best-effort — a failure here must never stop an enrolment, so it reports
+    for target in (host, "8.8.8.8"):
+        if not target:
+            continue
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                probe.connect((target, 9))
+                address = probe.getsockname()[0]
+            finally:
+                probe.close()
+        except OSError:
+            continue
+        # A JHCIS on this same PC routes over loopback, which belongs to no
+        # adapter; ask again for the route off the machine instead.
+        if address and not address.startswith("127."):
+            return address
+    return None
+
+
+def machine_mac(prefer_host: str | None = None) -> str | None:
+    """
+    The MAC of the adapter this PC uses on the รพ.สต. LAN.
+
+    Chosen by route rather than by enumeration order: the adapter holding the
+    address that would reach JHCIS is the one the router and the JHCIS server
+    see, so it is the one an admin can match against a DHCP table.
+
+    Best-effort - a failure here must never stop an enrolment, so it reports
     nothing rather than raising.
     """
-    import re
-    import uuid as uuid_module
-
     try:
-        node = uuid_module.getnode()
+        adapters = list_adapters()
+        if not adapters:
+            return None
+
+        source = _route_source_ip(prefer_host)
+        if source:
+            for adapter in adapters:
+                if source in adapter.addresses:
+                    return adapter.mac
+
+        # Nothing routable right now (cable out, JHCIS unreachable). Fall back to
+        # the most plausible physical card so a machine that is offline at
+        # enrolment still reports a stable address.
+        best = min(
+            adapters,
+            key=lambda adapter: (
+                bool(VIRTUAL_ADAPTER.search(adapter.description)),
+                not adapter.has_gateway,
+                not adapter.addresses,
+            ),
+        )
+        return None if VIRTUAL_ADAPTER.search(best.description) else best.mac
     except Exception:  # noqa: BLE001 - identification must never break enrolment
         return None
-    # Bit 41 set means Python invented a random address because it could not
-    # read a real one; recording that would be worse than recording nothing.
-    if (node >> 40) % 2:
-        return None
-    return ":".join(re.findall("..", "%012x" % node)).upper()
 
 
 def app_data_dir() -> Path:
