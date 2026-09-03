@@ -34,6 +34,18 @@ function text(value: string | null | undefined): string {
 }
 
 /**
+ * CONTENT is the pack description, not the dispensing unit alone.
+ *
+ * Checked against an approved DrugCat file: "1 mL ampoule" is contvalue "1" +
+ * contunit "mL" + dispunit "ampoule", and a product with no content value is
+ * just its dispensing unit ("tablet"). Emitting dispunit on its own dropped the
+ * pack size from every injectable.
+ */
+function contentText(contentValue: string | null, contentUnit: string | null, dispensingUnit: string | null): string {
+  return [contentValue, contentUnit, dispensingUnit].map(text).filter((part) => part !== "").join(" ");
+}
+
+/**
  * Builds the export set for a facility.
  *
  * Field sources follow docs/SPEC.md: GENERICNAME from the standard's
@@ -69,6 +81,8 @@ export async function buildExportRows(facilityId: string, selection: ExportSelec
       tradeName: standardProducts.tradeName,
       dosageForm: standardProducts.dosageForm,
       strength: standardProducts.strength,
+      contentValue: standardProducts.contentValue,
+      contentUnit: standardProducts.contentUnit,
       dispensingUnit: standardProducts.dispensingUnit,
       manufacturer: standardProducts.manufacturer,
       standardIsed: standardProducts.exportIsed,
@@ -89,7 +103,7 @@ export async function buildExportRows(facilityId: string, selection: ExportSelec
     dfscode: text(row.dfscode),
     dosageform: text(row.dosageForm),
     strength: text(row.strength),
-    content: text(row.dispensingUnit),
+    content: contentText(row.contentValue, row.contentUnit, row.dispensingUnit),
     unitprice: text(row.unitPrice) || text(row.sell),
     distributor: text(row.distributor),
     manufacturer: text(row.manufacturer),
