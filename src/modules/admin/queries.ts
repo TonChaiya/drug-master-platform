@@ -12,6 +12,9 @@ export interface FacilitySummary {
   mappedTotal: number;
   pendingTotal: number;
   agentCount: number;
+  /** Agents still declaring a different office.offid than this facility's code. */
+  agentMismatchCount: number;
+  accountCount: number;
   lastMappedAt: Date | null;
 }
 
@@ -39,11 +42,29 @@ export async function facilitySummaries(): Promise<FacilitySummary[]> {
     .orderBy(asc(facilities.facilityCode));
 
   const agents = await db
-    .select({ facilityId: agentInstallations.facilityId, total: count() })
+    .select({
+      facilityId: agentInstallations.facilityId,
+      total: count(),
+      // An agent whose declared office.offid is no longer this facility's code
+      // is refused by the server on every request. Counting it as simply
+      // "1 agent" made a facility with no working agent look connected.
+      mismatched: sql<number>`SUM(CASE WHEN ${agentInstallations.declaredOfficeId} IS NOT NULL
+        AND ${agentInstallations.declaredOfficeId} <> ${facilities.facilityCode} THEN 1 ELSE 0 END)`,
+    })
     .from(agentInstallations)
+    .innerJoin(facilities, eq(facilities.id, agentInstallations.facilityId))
     .where(eq(agentInstallations.status, "active"))
     .groupBy(agentInstallations.facilityId);
-  const agentByFacility = new Map(agents.map((row) => [row.facilityId, Number(row.total)]));
+  const agentByFacility = new Map(
+    agents.map((row) => [row.facilityId, { total: Number(row.total), mismatched: Number(row.mismatched ?? 0) }]),
+  );
+
+  // A facility nobody can sign in to is worth seeing, and the table never said.
+  const accounts = await db
+    .select({ facilityId: users.facilityId, total: count() })
+    .from(users)
+    .groupBy(users.facilityId);
+  const accountByFacility = new Map(accounts.map((row) => [row.facilityId, Number(row.total)]));
 
   return rows.map((row) => {
     const sourceTotal = Number(row.sourceTotal ?? 0);
@@ -57,7 +78,9 @@ export async function facilitySummaries(): Promise<FacilitySummary[]> {
       type10: Number(row.type10 ?? 0),
       mappedTotal,
       pendingTotal: Math.max(0, sourceTotal - mappedTotal),
-      agentCount: agentByFacility.get(row.facilityId) ?? 0,
+      agentCount: agentByFacility.get(row.facilityId)?.total ?? 0,
+      agentMismatchCount: agentByFacility.get(row.facilityId)?.mismatched ?? 0,
+      accountCount: accountByFacility.get(row.facilityId) ?? 0,
       lastMappedAt: row.lastMappedAt ? new Date(row.lastMappedAt) : null,
     };
   });

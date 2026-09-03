@@ -83,6 +83,7 @@ export default async function AdminPage() {
                   <th>01 / 10</th>
                   <th>จับคู่แล้ว</th>
                   <th>คงค้าง</th>
+                  <th>ไอดี</th>
                   <th>Agent</th>
                   <th>จับคู่ล่าสุด</th>
                 </tr>
@@ -104,7 +105,24 @@ export default async function AdminPage() {
                         <span className="badge-ok">0</span>
                       )}
                     </td>
-                    <td className="tabular-nums">{row.agentCount}</td>
+                    <td className="tabular-nums">
+                      {row.accountCount === 0 ? (
+                        <span className="badge-danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">0</span>
+                      ) : (
+                        row.accountCount
+                      )}
+                    </td>
+                    <td className="tabular-nums">
+                      {row.agentCount}
+                      {row.agentMismatchCount > 0 ? (
+                        <span
+                          className="badge-danger ml-1"
+                          title={`${row.agentMismatchCount} เครื่องรายงาน office.offid ไม่ตรงกับรหัส ${row.facilityCode} จึงถูกปฏิเสธทุกคำขอ`}
+                        >
+                          ไม่ตรง {row.agentMismatchCount}
+                        </span>
+                      ) : null}
+                    </td>
                     <td>{formatBangkok(row.lastMappedAt)}</td>
                   </tr>
                 ))}
