@@ -1,76 +1,133 @@
 @import "tailwindcss";
 
 /*
- * Compact, dense UI for data work: the mapping and search screens must show many
- * rows without scrolling (docs/SPEC.md).
+ * Design tokens and the primitive classes built on them.
  *
- * Component classes are declared with `@utility` so they can be composed with
- * `@apply` and still respect Tailwind v4's cascade layers.
+ * Two rules hold this together:
+ *
+ * 1. Every colour is named for its role, not its hue. Components reference
+ *    `--color-primary-600` or `--color-danger`, never a hex value, so the whole
+ *    application re-skins from this file alone.
+ * 2. The neutral ramp deliberately overwrites Tailwind's `slate` instead of
+ *    adding a parallel scale. Every `slate-*` class already in the codebase
+ *    adopts the house neutrals without touching the markup that uses them.
+ *
+ * The UI is dense on purpose: the mapping and search screens have to show many
+ * rows without scrolling (docs/SPEC.md), so the body size is 13px and the
+ * caption size 11px. Hierarchy therefore comes from weight and colour far more
+ * than from size, and the `type-*` utilities below are the only sanctioned way
+ * to set it.
  */
 @theme {
-  /*
-   * Palette lifted from the PHP system this replaces (15.Drug_Master_Platform,
-   * assets/app.css): navy ink on cool paper with a single orange accent. The
-   * neutral ramp deliberately overrides Tailwind's `slate` rather than adding a
-   * parallel scale, so every existing slate-* class adopts the house colours
-   * without touching the components that use them.
-   */
   --font-sans: var(--font-body), "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif;
   --font-display: var(--font-display-face), Manrope, "IBM Plex Sans Thai", system-ui, sans-serif;
 
-  /* Warm paper rather than cool grey: it lets the coral read as the one loud
-     thing on the page instead of competing with a blue-tinted ground. */
-  --color-paper: #f4f2ef;
-  --color-ink: #1b1a19;
+  /* ---- Neutrals -------------------------------------------------------- */
+  /* A near-neutral ramp with the faintest cool cast. Warmer than Tailwind's
+     slate, so Thai text at 13px does not read as blue-grey on white. */
+  --color-slate-50: #f7f8fa;
+  --color-slate-100: #eef1f4;
+  --color-slate-200: #e2e7ec;
+  --color-slate-300: #cbd3db;
+  --color-slate-400: #94a1ad;
+  --color-slate-500: #6b7885;
+  --color-slate-600: #566470;
+  --color-slate-700: #3d4954;
+  --color-slate-800: #29323b;
+  --color-slate-900: #161c22;
 
-  --color-slate-50: #f4f6f7;
-  --color-slate-100: #e7ecef;
-  --color-slate-200: #dce3e7;
-  --color-slate-300: #c6d0d7;
-  --color-slate-400: #9aa6af;
-  --color-slate-500: #76838d;
-  --color-slate-600: #73808b;
-  --color-slate-700: #45596e;
-  --color-slate-800: #33475c;
-  --color-slate-900: #26384b;
+  /* ---- Semantic surfaces ---------------------------------------------- */
+  --color-canvas: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-surface-subtle: var(--color-slate-50);
+  --color-border: #e3e8ed;
+  --color-border-strong: var(--color-slate-300);
+  --color-ink: var(--color-slate-900);
+  --color-text: var(--color-slate-900);
+  --color-text-secondary: var(--color-slate-600);
+  --color-text-muted: var(--color-slate-500);
 
-  --color-brand-50: #fff1ed;
-  --color-brand-100: #ffddd4;
-  --color-brand-500: #ff7655;
-  --color-brand-600: #ff4d24;
-  --color-brand-700: #e63d17;
+  /* ---- Primary ---------------------------------------------------------- */
+  /* Clinical blue. This is the one saturated colour in ordinary use: primary
+     actions and the active navigation item. Anything merely decorative uses a
+     neutral instead, which is what keeps the screens calm. */
+  --color-primary-50: #eef6fc;
+  --color-primary-100: #d6e9f7;
+  --color-primary-200: #aed3ef;
+  --color-primary-300: #78b6e3;
+  --color-primary-500: #1a7ac4;
+  --color-primary-600: #12639f;
+  --color-primary-700: #0e4f80;
+  --color-primary-900: #0a3757;
 
-  --color-ok: #168b62;
-  --color-ok-soft: #e4f4ee;
-  --color-warn: #b26a00;
-  --color-warn-soft: #fdf1dd;
-  --color-danger: #c53a31;
-  --color-danger-soft: #fbe9e7;
+  /* ---- Status ----------------------------------------------------------- */
+  /* Each of these carries one meaning across the whole application:
+     success = done or ready, warning = needs a look, danger = destructive or
+     failed, info = neutral context. Nothing else may use them. */
+  --color-success: #0f7b52;
+  --color-success-soft: #e6f4ee;
+  --color-success-border: #b9e0d0;
+  --color-warning: #9a6200;
+  --color-warning-soft: #fdf3e2;
+  --color-warning-border: #f0dcb4;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdeceb;
+  --color-danger-border: #f4c9c5;
+  --color-info: #12639f;
+  --color-info-soft: #eef6fc;
+  --color-info-border: #aed3ef;
 
-  /* Accents for cards that mean different things. Used as a soft tint with a
-     saturated figure on top, never as a background for body text. */
-  --color-accent-mint: #0f9d76;
-  --color-accent-mint-soft: #e6f6f1;
-  --color-accent-sky: #2a7bd4;
-  --color-accent-sky-soft: #e6f0fb;
-  --color-accent-violet: #6d5bd0;
-  --color-accent-violet-soft: #efecfb;
-  --color-accent-amber: #c4820b;
-  --color-accent-amber-soft: #fdf3dd;
+  /* Aliases so older markup and the status ramp share one definition. */
+  --color-ok: var(--color-success);
+  --color-ok-soft: var(--color-success-soft);
+  --color-warn: var(--color-warning);
+  --color-warn-soft: var(--color-warning-soft);
+  --color-brand-50: var(--color-primary-50);
+  --color-brand-100: var(--color-primary-100);
+  --color-brand-200: var(--color-primary-200);
+  --color-brand-500: var(--color-primary-500);
+  --color-brand-600: var(--color-primary-600);
+  --color-brand-700: var(--color-primary-700);
+  --color-paper: var(--color-canvas);
 
-  --radius-md: 10px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  /* Reserved for the dashboard's statistic tiles, where four figures have to be
+     told apart at a glance. Used as a pale tint with a saturated figure on top. */
+  --color-accent-mint: #0f7b52;
+  --color-accent-mint-soft: #e9f5f0;
+  --color-accent-sky: #12639f;
+  --color-accent-sky-soft: #eaf3fa;
+  --color-accent-violet: #5b53bd;
+  --color-accent-violet-soft: #eeedfa;
+  --color-accent-amber: #9a6200;
+  --color-accent-amber-soft: #fbf2e3;
 
-  --shadow-panel: 0 1px 2px rgba(27, 26, 25, 0.04), 0 12px 32px -12px rgba(27, 26, 25, 0.12);
-  --shadow-lift: 0 2px 4px rgba(27, 26, 25, 0.05), 0 18px 40px -16px rgba(27, 26, 25, 0.18);
+  /* ---- Shape ------------------------------------------------------------ */
+  /* Two radii carry almost everything: 8px for controls, 12px for containers.
+     Fully round is reserved for pills and avatars so it stays meaningful. */
+  /* Tailwind's `rounded-full` is a static utility, so the token it would have
+     read does not exist; badges and pills reference this one directly. */
+  --radius-full: 9999px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
+  /* Light and close to the surface. A heavy drop shadow is the fastest way to
+     make an interface look like a template. */
+  --shadow-panel: 0 1px 2px rgba(16, 24, 32, 0.04);
+  --shadow-raised: 0 1px 2px rgba(16, 24, 32, 0.05), 0 4px 12px -4px rgba(16, 24, 32, 0.1);
+  --shadow-overlay: 0 8px 24px -6px rgba(16, 24, 32, 0.18), 0 20px 48px -12px rgba(16, 24, 32, 0.16);
+
+  /* ---- Type scale ------------------------------------------------------- */
   --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.25rem;
+  --text-sm--line-height: 1.3125rem;
   --text-xxs: 0.6875rem;
   --text-xxs--line-height: 1.05rem;
-}
 
+  /* ---- Motion ----------------------------------------------------------- */
+  /* Short enough to feel immediate on a workstation that is not fast. */
+  --ease-out-soft: cubic-bezier(0.2, 0, 0, 1);
+}
 
 @layer base {
   :root {
@@ -82,143 +139,358 @@
   }
 
   body {
-    background-color: var(--color-paper);
-    color: var(--color-slate-900);
+    background-color: var(--color-canvas);
+    color: var(--color-text);
     font-size: var(--text-sm);
     line-height: var(--text-sm--line-height);
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Never removed, only replaced: keyboard users need to see where they are. */
   :focus-visible {
-    outline: 2px solid var(--color-brand-600);
+    outline: 2px solid var(--color-primary-500);
     outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Respect the operating system's reduced-motion setting rather than assuming
+     everyone wants the transitions. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
-@utility card {
-  border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--color-slate-200) 70%, transparent);
-  background-color: white;
-  box-shadow: var(--shadow-panel);
-  transition: box-shadow 180ms ease, transform 180ms ease;
-}
+/* ===========================================================================
+   Typography
 
-/* A card that responds to the pointer reads as something you can act on.
-   Reserved for cards that are actually interactive. */
-@utility card-interactive {
-  @apply card;
-  &:hover {
-    box-shadow: var(--shadow-lift);
-    transform: translateY(-2px);
-  }
-}
+   Six named roles plus the inherited default. Body copy needs no class: `body`
+   already sets 13px, so a `type-body` utility would only be a second way to say
+   the same thing. Hierarchy is carried by weight and colour, because the size
+   range is deliberately narrow.
 
-/* Tinted statistic tile. The figure carries the colour; the ground stays pale
-   so Thai text on it keeps its contrast. */
-@utility tile {
-  border-radius: var(--radius-lg);
-  padding: --spacing(3);
-  transition: transform 180ms ease;
-  &:hover {
-    transform: translateY(-2px);
-  }
-}
+   page title   type-page-title   22px / 700 / display face
+   section      type-section-title 15px / 600
+   card title   type-card-title   13px / 600
+   body         (inherited)       13px / 400
+   secondary    type-secondary    13px / 400 / muted
+   caption      type-caption      11px / 400 / muted
+   help         type-help         11px / 400 / muted, under a control
+   form label   label             11px / 600
+   eyebrow      eyebrow           10px / 700 / tracked, uppercase
+   table text   set by data-table
+   =========================================================================== */
 
-/* Manrope 800 with tight tracking is the old system's page-title signature. */
-@utility page-title {
+@utility type-page-title {
   font-family: var(--font-display);
-  font-size: 1.875rem;
-  line-height: 1.15;
-  font-weight: 800;
-  letter-spacing: -0.045em;
-  color: var(--color-slate-900);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+@utility type-section-title {
+  font-size: 0.9375rem;
+  line-height: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+@utility type-card-title {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+@utility type-secondary {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  color: var(--color-text-secondary);
+}
+
+@utility type-caption {
+  font-size: var(--text-xxs);
+  line-height: 1.15rem;
+  color: var(--color-text-muted);
+}
+
+@utility type-help {
+  font-size: var(--text-xxs);
+  line-height: 1.15rem;
+  color: var(--color-text-muted);
 }
 
 @utility eyebrow {
   font-family: var(--font-display);
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.17em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-slate-500);
+  color: var(--color-text-muted);
+}
+
+/* ===========================================================================
+   Surfaces
+   =========================================================================== */
+
+@utility card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+}
+
+@utility card-interactive {
+  @apply card;
+  transition: box-shadow 160ms var(--ease-out-soft), border-color 160ms var(--ease-out-soft);
+  &:hover {
+    box-shadow: var(--shadow-raised);
+    border-color: var(--color-border-strong);
+  }
 }
 
 @utility card-pad {
-  padding: --spacing(3);
+  padding: --spacing(3.5);
   @media (width >= 40rem) {
     padding: --spacing(4);
   }
 }
+
+@utility tile {
+  border-radius: var(--radius-lg);
+  padding: --spacing(3.5);
+}
+
+/* ===========================================================================
+   Buttons
+   One height per size across the whole application, so a row of buttons lines
+   up wherever it appears.
+   =========================================================================== */
 
 @utility btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: --spacing(1.5);
-  border-radius: var(--radius-full);
+  height: --spacing(9);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   padding-inline: --spacing(3.5);
-  padding-block: --spacing(1.5);
   font-size: var(--text-sm);
-  line-height: var(--text-sm--line-height);
-  font-weight: 700;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background-color 120ms var(--ease-out-soft),
+    border-color 120ms var(--ease-out-soft),
+    color 120ms var(--ease-out-soft),
+    box-shadow 120ms var(--ease-out-soft);
   cursor: pointer;
-  &:active:not(:disabled) {
-    transform: scale(0.97);
+
+  & > svg {
+    flex-shrink: 0;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 }
 
 @utility btn-sm {
+  height: --spacing(7.5);
   padding-inline: --spacing(2.5);
-  padding-block: --spacing(1);
   font-size: var(--text-xxs);
-  line-height: var(--text-xxs--line-height);
+  gap: --spacing(1);
+}
+
+@utility btn-lg {
+  height: --spacing(10);
+  padding-inline: --spacing(5);
 }
 
 @utility btn-primary {
   @apply btn;
-  background-color: var(--color-brand-600);
+  background-color: var(--color-primary-600);
   color: white;
   &:hover:not(:disabled) {
-    background-color: var(--color-brand-700);
+    background-color: var(--color-primary-700);
+  }
+  &:active:not(:disabled) {
+    background-color: var(--color-primary-900);
   }
 }
 
 @utility btn-secondary {
   @apply btn;
-  border: 1px solid var(--color-slate-300);
-  background-color: white;
+  border-color: var(--color-border-strong);
+  background-color: var(--color-surface);
   color: var(--color-slate-700);
   &:hover:not(:disabled) {
-    background-color: var(--color-slate-50);
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text);
+  }
+  &:active:not(:disabled) {
+    background-color: var(--color-slate-100);
   }
 }
 
+@utility btn-outline {
+  @apply btn;
+  border-color: var(--color-primary-200);
+  background-color: transparent;
+  color: var(--color-primary-700);
+  &:hover:not(:disabled) {
+    background-color: var(--color-primary-50);
+    border-color: var(--color-primary-300);
+  }
+}
+
+@utility btn-ghost {
+  @apply btn;
+  background-color: transparent;
+  color: var(--color-slate-600);
+  &:hover:not(:disabled) {
+    background-color: var(--color-slate-100);
+    color: var(--color-text);
+  }
+}
+
+@utility btn-destructive {
+  @apply btn;
+  background-color: var(--color-danger);
+  color: white;
+  &:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--color-danger) 85%, black);
+  }
+}
+
+/* The quieter destructive: used where a solid red button would overstate the
+   action. */
 @utility btn-danger {
   @apply btn;
-  border: 1px solid color-mix(in oklab, var(--color-danger) 30%, transparent);
+  border-color: var(--color-danger-border);
   background-color: var(--color-danger-soft);
   color: var(--color-danger);
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-danger-soft) 70%, white);
+    border-color: var(--color-danger);
+  }
 }
+
+@utility btn-success {
+  @apply btn;
+  background-color: var(--color-success);
+  color: white;
+  &:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--color-success) 85%, black);
+  }
+}
+
+@utility btn-icon {
+  padding-inline: 0;
+  width: --spacing(9);
+  gap: 0;
+}
+
+@utility btn-icon-sm {
+  padding-inline: 0;
+  width: --spacing(7.5);
+  gap: 0;
+}
+
+/* ===========================================================================
+   Forms
+   =========================================================================== */
 
 @utility field {
   width: 100%;
+  height: --spacing(9);
   border-radius: var(--radius-md);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-  border: 1px solid var(--color-slate-300);
-  background-color: white;
+  border: 1px solid var(--color-border-strong);
+  background-color: var(--color-surface);
   padding-inline: --spacing(2.5);
-  padding-block: --spacing(1.5);
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
+  color: var(--color-text);
+  transition: border-color 120ms var(--ease-out-soft), box-shadow 120ms var(--ease-out-soft);
+
   &::placeholder {
     color: var(--color-slate-400);
   }
-  &:focus {
-    border-color: var(--color-brand-500);
-    outline: none;
-    box-shadow: 0 0 0 2px var(--color-brand-100);
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: var(--color-slate-400);
   }
+
+  &:focus {
+    border-color: var(--color-primary-500);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-500) 16%, transparent);
+  }
+
+  &:disabled {
+    background-color: var(--color-surface-subtle);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+}
+
+/* Textareas and file inputs are not one line tall. */
+@utility field-multiline {
+  @apply field;
+  height: auto;
+  padding-block: --spacing(2);
+  min-height: --spacing(20);
+  resize: vertical;
+}
+
+@utility field-file {
+  @apply field;
+  height: auto;
+  padding-block: --spacing(1.5);
+  &::file-selector-button {
+    margin-inline-end: --spacing(2.5);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-subtle);
+    padding: --spacing(1) --spacing(2);
+    font-family: inherit;
+    font-size: var(--text-xxs);
+    font-weight: 600;
+    color: var(--color-slate-700);
+    cursor: pointer;
+  }
+}
+
+@utility field-invalid {
+  border-color: var(--color-danger);
+  &:focus {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent);
+  }
+}
+
+/* Native select needs the arrow drawn in, because resetting the border removes
+   the platform one on some engines. */
+@utility field-select {
+  @apply field;
+  appearance: none;
+  padding-inline-end: --spacing(7);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236b7885' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right --spacing(2.5) center;
+  background-size: 1rem 1rem;
 }
 
 @utility label {
@@ -226,94 +498,236 @@
   margin-bottom: --spacing(1);
   font-size: var(--text-xxs);
   line-height: var(--text-xxs--line-height);
-  font-weight: 500;
-  color: var(--color-slate-600);
+  font-weight: 600;
+  color: var(--color-slate-700);
 }
+
+@utility check-control {
+  width: --spacing(4);
+  height: --spacing(4);
+  flex-shrink: 0;
+  accent-color: var(--color-primary-600);
+  cursor: pointer;
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* ===========================================================================
+   Badges
+   =========================================================================== */
 
 @utility badge {
   display: inline-flex;
   align-items: center;
   gap: --spacing(1);
   border-radius: var(--radius-full);
+  border: 1px solid transparent;
   padding-inline: --spacing(2);
   padding-block: --spacing(0.5);
   font-size: var(--text-xxs);
-  line-height: var(--text-xxs--line-height);
-  font-weight: 500;
+  line-height: 1rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 @utility badge-ok {
   @apply badge;
-  background-color: var(--color-ok-soft);
-  color: var(--color-ok);
+  background-color: var(--color-success-soft);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
 }
 
 @utility badge-warn {
   @apply badge;
-  background-color: var(--color-warn-soft);
-  color: var(--color-warn);
+  background-color: var(--color-warning-soft);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning);
 }
 
 @utility badge-danger {
   @apply badge;
   background-color: var(--color-danger-soft);
+  border-color: var(--color-danger-border);
   color: var(--color-danger);
+}
+
+@utility badge-info {
+  @apply badge;
+  background-color: var(--color-info-soft);
+  border-color: var(--color-info-border);
+  color: var(--color-info);
 }
 
 @utility badge-muted {
   @apply badge;
-  background-color: var(--color-slate-100);
-  color: var(--color-slate-600);
+  background-color: var(--color-surface-subtle);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
 }
+
+/* ===========================================================================
+   Data tables
+   Horizontal rules only. A grid of boxes makes a dense table unreadable.
+   =========================================================================== */
 
 @utility data-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
 
   & th {
     padding: --spacing(2) --spacing(2.5);
     text-align: left;
-    font-size: 0.625rem;
+    font-size: var(--text-xxs);
     line-height: 1rem;
-    font-weight: 700;
-    letter-spacing: 0.09em;
-    color: var(--color-slate-500);
-    background-color: var(--color-slate-50);
-    border-bottom: 1px solid var(--color-slate-100);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
   }
 
   & td {
-    padding: --spacing(2) --spacing(2.5);
-    border-bottom: 1px solid var(--color-slate-100);
+    padding: --spacing(2.5);
+    border-bottom: 1px solid var(--color-border);
     vertical-align: top;
   }
 
+  & tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
   & tbody tr {
-    transition: background-color 120ms ease;
+    transition: background-color 100ms var(--ease-out-soft);
   }
 
   & tbody tr:hover {
-    background-color: color-mix(in srgb, var(--color-brand-50) 60%, white);
+    background-color: var(--color-surface-subtle);
   }
 }
 
-/* The capsule used for the selected item in the rail. */
+/* Numbers and codes line up under one another so a column can be scanned. */
+@utility cell-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@utility cell-code {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+@utility row-selected {
+  background-color: var(--color-primary-50);
+  box-shadow: inset 2px 0 0 var(--color-primary-600);
+}
+
+/* ===========================================================================
+   Navigation
+   =========================================================================== */
+
 @utility nav-pill {
   display: flex;
   align-items: center;
-  gap: --spacing(2);
+  gap: --spacing(2.5);
   height: --spacing(9);
-  padding-inline: --spacing(3);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xxs);
-  line-height: var(--text-xxs--line-height);
-  font-weight: 700;
-  transition: background-color 140ms ease, color 140ms ease;
+  padding-inline: --spacing(2.5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1;
+  font-weight: 500;
+  color: var(--color-slate-600);
+  transition: background-color 120ms var(--ease-out-soft), color 120ms var(--ease-out-soft);
+
+  &:hover {
+    background-color: var(--color-slate-100);
+    color: var(--color-text);
+  }
+}
+
+@utility nav-pill-active {
+  @apply nav-pill;
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+  font-weight: 600;
+
+  &:hover {
+    background-color: var(--color-primary-50);
+    color: var(--color-primary-700);
+  }
+}
+
+/* ===========================================================================
+   Feedback
+   =========================================================================== */
+
+@utility skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-slate-100) 25%,
+    var(--color-slate-200) 37%,
+    var(--color-slate-100) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Native <dialog> gives Esc, the top layer and focus containment for free; only
+   the appearance is ours. */
+@utility modal-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-overlay);
+  padding: 0;
+  color: var(--color-text);
+  max-height: min(85dvh, 44rem);
+
+  &::backdrop {
+    background-color: rgba(16, 24, 32, 0.45);
+    animation: overlay-in 140ms var(--ease-out-soft);
+  }
+
+  &[open] {
+    animation: panel-in 160ms var(--ease-out-soft);
+  }
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
 }

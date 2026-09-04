@@ -2,6 +2,10 @@
 
 import { type FormEvent, useState } from "react";
 import type { InstallerLink } from "@/modules/agent/installer-link";
+import { Button, ExternalButtonLink } from "@/components/ui/button";
+import { Alert, Badge } from "@/components/ui/badge";
+import { Field, TextInput } from "@/components/ui/form";
+import { IconExternal, IconTrash } from "@/components/ui/icons";
 
 const SOURCE_LABEL: Record<InstallerLink["source"], string> = {
   database: "ตั้งค่าในระบบ",
@@ -69,24 +73,24 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
   }
 
   return (
-    <form onSubmit={save} className="space-y-2.5">
-      <p className="text-xxs text-slate-500">
-        ลิงก์นี้จะกลายเป็นปุ่ม <strong>ดาวน์โหลดตัวติดตั้ง Agent</strong> ในหน้า “เชื่อมต่อ JHCIS” ของทุกสถานบริการ
+    <form onSubmit={save} className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={link.url ? "success" : "warning"} dot>
+          {link.url ? "พร้อมให้ดาวน์โหลด" : "ยังไม่มีลิงก์"}
+        </Badge>
+        <Badge>{SOURCE_LABEL[link.source]}</Badge>
+        {link.updatedAt ? <span className="type-caption">แก้ไขล่าสุด {new Date(link.updatedAt).toLocaleString("th-TH")}</span> : null}
+      </div>
+
+      <p className="type-help">
         วางลิงก์แชร์ของ Google Drive ได้เลย ระบบจะแปลงเป็นแบบดาวน์โหลดตรงให้เอง
       </p>
 
-      <p className="flex flex-wrap items-center gap-1.5 text-xxs">
-        <span className={link.url ? "badge-ok" : "badge-warn"}>{link.url ? "พร้อมให้ดาวน์โหลด" : "ยังไม่มีลิงก์"}</span>
-        <span className="badge-muted">{SOURCE_LABEL[link.source]}</span>
-        {link.updatedAt ? <span className="text-slate-500">แก้ไขล่าสุด {new Date(link.updatedAt).toLocaleString("th-TH")}</span> : null}
-      </p>
-
       <div className="grid gap-2.5 sm:grid-cols-[1fr_8rem]">
-        <div>
-          <label className="label" htmlFor="installer-url">ลิงก์ไฟล์ติดตั้ง (HTTPS)</label>
-          <input
-            className="field font-mono"
+        <Field label="ลิงก์ไฟล์ติดตั้ง (HTTPS)" htmlFor="installer-url" required>
+          <TextInput
             id="installer-url"
+            mono
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="https://drive.google.com/file/d/…/view"
@@ -94,44 +98,46 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
             maxLength={500}
             inputMode="url"
           />
-        </div>
-        <div>
-          <label className="label" htmlFor="installer-version">เวอร์ชัน</label>
-          <input
-            className="field font-mono"
+        </Field>
+        <Field label="เวอร์ชัน" htmlFor="installer-version">
+          <TextInput
             id="installer-version"
+            mono
             value={version}
             onChange={(event) => setVersion(event.target.value)}
-            placeholder="1.0.0"
+            placeholder="1.2.1"
             maxLength={32}
           />
-        </div>
+        </Field>
       </div>
 
-      <p className="rounded-md bg-warn-soft px-2.5 py-2 text-xxs text-warn">
-        Google Drive ยังขึ้นหน้าเตือน “ไม่สามารถสแกนไวรัสได้” สำหรับไฟล์ใหญ่กว่า ~25 MB และตัวติดตั้งใหญ่กว่านั้น
-        ผู้ใช้จะต้องกดยืนยันอีกครั้ง หากต้องการให้กดครั้งเดียวจบ ให้ฝากไฟล์เป็น asset ของ GitHub Release แทน
-      </p>
+      <Alert tone="warning" title="ไฟล์ใหญ่กว่า ~25 MB บน Google Drive จะขึ้นหน้าเตือนก่อนดาวน์โหลด">
+        ตัวติดตั้งใหญ่กว่านั้น ผู้ใช้จึงต้องกดยืนยันอีกครั้ง หากต้องการให้กดครั้งเดียวจบ ให้ฝากไฟล์เป็น asset ของ GitHub Release แทน
+      </Alert>
 
-      {message ? (
-        <p className={`rounded-md px-2.5 py-2 text-xxs ${message.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"}`} role="status">
-          {message.text}
-        </p>
-      ) : null}
+      {message ? <Alert tone={message.ok ? "success" : "danger"}>{message.text}</Alert> : null}
 
       <div className="flex flex-wrap gap-2">
-        <button className="btn-primary btn-sm" disabled={busy !== null}>
-          {busy === "save" ? "กำลังบันทึก…" : "บันทึกลิงก์"}
-        </button>
+        <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
+          บันทึกลิงก์
+        </Button>
         {link.url ? (
-          <a className="btn-secondary btn-sm" href={link.url} target="_blank" rel="noreferrer noopener">
+          <ExternalButtonLink href={link.url} size="sm" icon={<IconExternal size={13} />}>
             ทดลองเปิดลิงก์
-          </a>
+          </ExternalButtonLink>
         ) : null}
         {link.source === "database" ? (
-          <button type="button" className="btn-danger btn-sm ml-auto" disabled={busy !== null} onClick={() => void clear()}>
-            {busy === "clear" ? "กำลังลบ…" : "ลบลิงก์"}
-          </button>
+          <Button
+            size="sm"
+            variant="danger"
+            className="ml-auto"
+            icon={<IconTrash size={13} />}
+            loading={busy === "clear"}
+            disabled={busy !== null}
+            onClick={() => void clear()}
+          >
+            ลบลิงก์
+          </Button>
         ) : null}
       </div>
     </form>

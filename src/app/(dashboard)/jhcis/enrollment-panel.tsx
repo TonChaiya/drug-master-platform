@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
+import { Button, ExternalButtonLink } from "@/components/ui/button";
+import { Alert } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { IconDownload, IconLink, IconPlug, IconRefresh } from "@/components/ui/icons";
 
 interface Enrollment {
   protocolUrl: string;
@@ -15,6 +19,13 @@ interface Enrollment {
 /** How long to keep watching for the agent to appear, and how often to look. */
 const WAIT_MS = 90_000;
 const POLL_MS = 4_000;
+
+const STEPS = [
+  "ดาวน์โหลดและติดตั้ง Agent จากปุ่มด้านบน",
+  "กด “เชื่อมต่อ Agent บนเครื่องนี้” แล้วอนุญาตเมื่อเบราว์เซอร์ถาม",
+  "กรอก IP / พอร์ต / รหัสผ่าน JHCIS ในหน้าต่าง Agent แล้วกดทดสอบ",
+  "Agent จะอ่าน office.offid และเชื่อมได้ต่อเมื่อตรงกับรหัสสถานบริการนี้",
+];
 
 export function EnrollmentPanel({
   installer,
@@ -111,91 +122,107 @@ export function EnrollmentPanel({
   }
 
   return (
-    <section className="card card-pad space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold">ลงทะเบียน Agent ที่เครื่องในสถานบริการ</h2>
-        <p className="mt-0.5 text-xxs text-slate-500">
-          ติดตั้ง Agent บนเครื่องที่อยู่ในวง LAN เดียวกับ JHCIS แล้วเปิดลิงก์ลงทะเบียนบนเครื่องนั้น
-          รหัสฐานข้อมูล JHCIS กรอกที่เครื่องเท่านั้น ไม่ถูกส่งขึ้นระบบกลาง
-        </p>
-      </div>
+    <Card>
+      <CardHeader
+        icon={<IconPlug size={16} />}
+        title="ลงทะเบียน Agent ที่เครื่องในสถานบริการ"
+        description="ติดตั้ง Agent บนเครื่องที่อยู่ในวง LAN เดียวกับ JHCIS แล้วเปิดลิงก์ลงทะเบียนบนเครื่องนั้น รหัสฐานข้อมูล JHCIS กรอกที่เครื่องเท่านั้น ไม่ถูกส่งขึ้นระบบกลาง"
+        actions={
+          installer.url ? (
+            <ExternalButtonLink href={installer.url} variant="outline" icon={<IconDownload size={15} />}>
+              ดาวน์โหลดตัวติดตั้ง{installer.version ? ` ${installer.version}` : ""}
+            </ExternalButtonLink>
+          ) : null
+        }
+      />
 
-      {installer.url ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand-100 bg-brand-50 p-2.5">
-          <a className="btn-primary btn-sm" href={installer.url} target="_blank" rel="noreferrer noopener">
-            ดาวน์โหลดตัวติดตั้ง Agent{installer.version ? ` ${installer.version}` : ""}
-          </a>
-          <span className="text-xxs text-slate-600">
-            ติดตั้งบนเครื่องที่ต่อ JHCIS ได้ ไม่ต้องใช้สิทธิ์ผู้ดูแลเครื่อง โปรแกรมจะอยู่ใน System Tray
-          </span>
-        </div>
-      ) : (
-        <p className="rounded-md bg-warn-soft px-2.5 py-2 text-xxs text-warn">
-          ยังไม่มีลิงก์ตัวติดตั้ง — ผู้ดูแลระบบส่วนกลางตั้งค่าได้ที่หน้า “ผู้ดูแลระบบ” หัวข้อ “ตัวติดตั้ง Agent”
-        </p>
-      )}
+      <CardBody className="space-y-3.5">
+        {installer.url ? null : (
+          <Alert tone="warning" title="ยังไม่มีลิงก์ตัวติดตั้ง">
+            ผู้ดูแลระบบส่วนกลางตั้งค่าได้ที่หน้า “จัดการระบบ” หัวข้อ “ตัวติดตั้ง Agent”
+          </Alert>
+        )}
 
-      <ol className="space-y-1.5 text-xxs text-slate-600">
-        <li>1. ดาวน์โหลดและติดตั้ง Agent จากปุ่มด้านบน</li>
-        <li>2. กด “สร้างลิงก์ลงทะเบียน” ด้านล่าง แล้วเปิดลิงก์บนเครื่องที่ติดตั้ง Agent</li>
-        <li>3. กรอก IP/พอร์ต/รหัสผ่าน JHCIS ในหน้าต่าง Agent แล้วกดทดสอบ</li>
-        <li>4. Agent จะอ่าน office.offid และเชื่อมได้ต่อเมื่อตรงกับรหัสสถานบริการนี้</li>
-      </ol>
+        <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {STEPS.map((step, index) => (
+            <li key={step} className="flex gap-2 rounded-lg bg-surface-subtle p-2.5">
+              <span
+                aria-hidden
+                className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-100 text-xxs font-bold text-primary-700"
+              >
+                {index + 1}
+              </span>
+              <span className="type-help">{step}</span>
+            </li>
+          ))}
+        </ol>
 
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" className="btn-primary btn-sm" disabled={busy !== null || waiting} onClick={() => void createLink()}>
-          {busy === "enroll" ? "กำลังส่งไปยัง Agent…" : waiting ? "รอ Agent ตอบกลับ…" : "เชื่อมต่อ Agent บนเครื่องนี้"}
-        </button>
-        <button type="button" className="btn-secondary btn-sm" disabled={busy !== null} onClick={() => void sendCommand("test_connection")}>
-          ทดสอบการเชื่อมต่อ
-        </button>
-        <button type="button" className="btn-secondary btn-sm" disabled={busy !== null} onClick={() => void sendCommand("sync_now")}>
-          ดึงรายการยาตอนนี้
-        </button>
-      </div>
-
-      {enrollment ? (
-        <div className="rounded-md border border-brand-100 bg-brand-50 p-2.5">
-          <p className="text-xxs font-medium text-brand-700">
-            {waiting
-              ? "กำลังรอ Agent บนเครื่องนี้ลงทะเบียน… หากเบราว์เซอร์ถามว่าจะเปิด TMT Drug Master Agent หรือไม่ ให้กดอนุญาต"
-              : "ส่งลิงก์ให้ Agent แล้ว"}
-          </p>
-          <p className="mt-1 text-xxs text-slate-600">
-            ลิงก์นี้ใช้ได้ครั้งเดียว หมดอายุ {new Date(enrollment.expiresAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok" })}
-          </p>
-          <button
-            type="button"
-            className="btn-secondary btn-sm mt-2"
-            onClick={() => {
-              openAgent(enrollment.protocolUrl);
-              setWaiting(true);
-            }}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            icon={<IconLink size={15} />}
+            loading={busy === "enroll" || waiting}
+            disabled={busy !== null}
+            onClick={() => void createLink()}
           >
-            เปิด Agent อีกครั้ง
-          </button>
-          <p className="mt-2 text-xxs text-slate-500">
-            ถ้าไม่มีอะไรเกิดขึ้น แปลว่าเครื่องนี้ยังไม่ได้ติดตั้ง Agent หรือยังไม่ได้เปิดโปรแกรม — คัดลอกค่าด้านล่างไปกรอกในหน้าตั้งค่าของ Agent แทนได้
-          </p>
-          <a className="mt-1.5 inline-block break-all text-xxs text-brand-700 underline" href={enrollment.protocolUrl}>
-            {enrollment.protocolUrl}
-          </a>
-          <dl className="mt-2 grid gap-1 text-xxs text-slate-600 sm:grid-cols-3">
-            <div>
-              <dt className="text-slate-500">Server URL</dt>
-              <dd className="break-all font-mono">{enrollment.serverUrl}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">รหัสสถานบริการ</dt>
-              <dd className="font-mono">{enrollment.facilityCode}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-500">Enrollment token</dt>
-              <dd className="break-all font-mono">{enrollment.enrollmentToken}</dd>
-            </div>
-          </dl>
+            {waiting ? "รอ Agent ตอบกลับ…" : "เชื่อมต่อ Agent บนเครื่องนี้"}
+          </Button>
+          <Button loading={busy === "test_connection"} disabled={busy !== null} onClick={() => void sendCommand("test_connection")}>
+            ทดสอบการเชื่อมต่อ
+          </Button>
+          <Button
+            icon={<IconRefresh size={15} />}
+            loading={busy === "sync_now"}
+            disabled={busy !== null}
+            onClick={() => void sendCommand("sync_now")}
+          >
+            ดึงรายการยาตอนนี้
+          </Button>
         </div>
-      ) : null}
-    </section>
+
+        {enrollment ? (
+          <div className="rounded-lg border border-primary-200 bg-primary-50 p-3">
+            <p className="text-xxs font-semibold text-primary-700">
+              {waiting
+                ? "กำลังรอ Agent บนเครื่องนี้ลงทะเบียน — หากเบราว์เซอร์ถามว่าจะเปิด TMT Drug Master Agent หรือไม่ ให้กดอนุญาต"
+                : "ส่งลิงก์ให้ Agent แล้ว"}
+            </p>
+            <p className="type-help mt-1">
+              ลิงก์นี้ใช้ได้ครั้งเดียว หมดอายุ{" "}
+              {new Date(enrollment.expiresAt).toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok" })}
+            </p>
+
+            <Button
+              size="sm"
+              className="mt-2.5"
+              icon={<IconLink size={13} />}
+              onClick={() => {
+                openAgent(enrollment.protocolUrl);
+                setWaiting(true);
+              }}
+            >
+              เปิด Agent อีกครั้ง
+            </Button>
+
+            <p className="type-help mt-3">
+              ถ้าไม่มีอะไรเกิดขึ้น แปลว่าเครื่องนี้ยังไม่ได้ติดตั้ง Agent หรือยังไม่ได้เปิดโปรแกรม —
+              คัดลอกค่าด้านล่างไปกรอกในหน้าตั้งค่าของ Agent แทนได้
+            </p>
+            <dl className="mt-2 grid gap-2 sm:grid-cols-3">
+              {[
+                { label: "Server URL", value: enrollment.serverUrl },
+                { label: "รหัสสถานบริการ", value: enrollment.facilityCode },
+                { label: "Enrollment token", value: enrollment.enrollmentToken },
+              ].map((item) => (
+                <div key={item.label} className="min-w-0 rounded-md border border-primary-200 bg-surface p-2">
+                  <dt className="type-caption">{item.label}</dt>
+                  <dd className="mt-0.5 break-all font-mono text-xxs text-slate-700">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }

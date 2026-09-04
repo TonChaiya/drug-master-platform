@@ -4,6 +4,12 @@ import { standardCounts } from "@/modules/standards/search";
 import { listStandardImports } from "@/modules/standards/ttmt-import";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readSyncProgress } from "@/modules/standards/sync";
+import { Badge, StatusBadge } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/states";
+import { Table, TableMessage, TableScroll } from "@/components/ui/table";
+import { IconStandards } from "@/components/ui/icons";
 import { StandardsPanel } from "./standards-panel";
 
 export const dynamic = "force-dynamic";
@@ -16,26 +22,29 @@ export default async function StandardsPage() {
     redirect("/login");
   }
 
-  const [counts, imports] = await Promise.all([standardCounts(), listStandardImports(10)]);
+  const [counts, imports, progress] = await Promise.all([standardCounts(), listStandardImports(10), readSyncProgress()]);
 
   return (
-    <div className="space-y-3">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="page-title">มาตรฐาน TMT / TTMT</h1>
-        <p className="text-xxs text-slate-500">
-          เปิดใช้งานอยู่ — TMT {counts.tmt.toLocaleString("th-TH")} · TTMT {counts.ttmt.toLocaleString("th-TH")}
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="คลังมาตรฐานที่ใช้ร่วมกันทุกสถานบริการ"
+        title="มาตรฐาน TMT / TTMT"
+        description="รหัสมาตรฐานที่เปิดใช้งานอยู่ ใช้เป็นคำตอบของการจับคู่รายการยาทุกสถานบริการ"
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge tone="info">TMT {counts.tmt.toLocaleString("th-TH")}</Badge>
+            <Badge tone="info">TTMT {counts.ttmt.toLocaleString("th-TH")}</Badge>
+          </div>
+        }
+      />
 
-      <StandardsPanel initialProgress={await readSyncProgress()} isAdmin={user.role === "admin"} />
+      <StandardsPanel initialProgress={progress} isAdmin={user.role === "admin"} />
 
-      <section className="card card-pad">
-        <h2 className="mb-2 text-sm font-semibold">ประวัตินำเข้า MasterTTMT</h2>
-        {imports.length === 0 ? (
-          <p className="text-xxs text-slate-500">ยังไม่มีประวัติการนำเข้า</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
+      <Card>
+        <CardHeader title="ประวัตินำเข้า MasterTTMT" description="สิบครั้งล่าสุด" />
+        <CardBody flush className="pt-3">
+          <TableScroll>
+            <Table>
               <thead>
                 <tr>
                   <th>ชนิด</th>
@@ -46,24 +55,35 @@ export default async function StandardsPage() {
                 </tr>
               </thead>
               <tbody>
-                {imports.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-mono">{row.kind}</td>
-                    <td className="font-mono">{row.version}</td>
-                    <td className="tabular-nums">{row.rowCount.toLocaleString("th-TH")}</td>
-                    <td>{formatBangkok(row.startedAt)}</td>
-                    <td>
-                      <span className={row.status === "succeeded" ? "badge-ok" : row.status === "failed" ? "badge-danger" : "badge-warn"}>
-                        {row.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {imports.length === 0 ? (
+                  <TableMessage colSpan={5}>
+                    <EmptyState
+                      compact
+                      icon={<IconStandards size={18} />}
+                      title="ยังไม่มีประวัติการนำเข้า"
+                      description="ประวัติจะปรากฏที่นี่หลังผู้ดูแลระบบนำเข้าไฟล์ MasterTTMT ครั้งแรก"
+                    />
+                  </TableMessage>
+                ) : (
+                  imports.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <Badge>{row.kind}</Badge>
+                      </td>
+                      <td className="cell-code">{row.version}</td>
+                      <td className="cell-num">{row.rowCount.toLocaleString("th-TH")}</td>
+                      <td className="whitespace-nowrap">{formatBangkok(row.startedAt)}</td>
+                      <td>
+                        <StatusBadge status={row.status} />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+            </Table>
+          </TableScroll>
+        </CardBody>
+      </Card>
     </div>
   );
 }

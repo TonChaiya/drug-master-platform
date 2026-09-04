@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { IconSpinner } from "@/components/ui/icons";
 
 export interface FacilityOption {
   id: string;
@@ -12,6 +13,10 @@ export interface FacilityOption {
 /**
  * Admin-only. Selecting a facility is an explicit, audited context switch — it
  * never changes who the session belongs to.
+ *
+ * It sits in the topbar rather than on a settings page because it decides what
+ * every figure on every screen below it refers to, and that has to stay visible
+ * while working.
  */
 export function FacilitySwitcher({ options, selectedId }: { options: FacilityOption[]; selectedId: string | null }) {
   const router = useRouter();
@@ -33,25 +38,34 @@ export function FacilitySwitcher({ options, selectedId }: { options: FacilityOpt
   }
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex min-w-0 items-center gap-2">
       <label className="sr-only" htmlFor="facility-switcher">
         สถานบริการที่กำลังปฏิบัติงาน
       </label>
-      <select
-        id="facility-switcher"
-        className="max-w-64 rounded-full border border-slate-200/70 bg-white px-3 py-1.5 text-xxs font-medium shadow-sm outline-none transition-shadow focus:ring-2 focus:ring-brand-100"
-        value={selectedId ?? ""}
-        disabled={pending}
-        onChange={(event) => void select(event.target.value)}
-      >
-        <option value="">— เลือกสถานบริการ —</option>
-        {options.map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.code} · {option.name}
-          </option>
-        ))}
-      </select>
-      {error ? <span className="text-xxs text-danger">{error}</span> : null}
+      <div className="relative min-w-0">
+        <select
+          id="facility-switcher"
+          className="field-select h-8 max-w-64 text-xxs font-medium"
+          value={selectedId ?? ""}
+          disabled={pending}
+          onChange={(event) => void select(event.target.value)}
+        >
+          <option value="">— เลือกสถานบริการ —</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.code} · {option.name}
+            </option>
+          ))}
+        </select>
+        {pending ? (
+          <IconSpinner size={14} className="absolute right-7 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />
+        ) : null}
+      </div>
+      {error ? (
+        <span role="alert" className="text-xxs text-danger">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

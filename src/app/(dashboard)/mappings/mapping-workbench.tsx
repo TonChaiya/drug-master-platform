@@ -3,6 +3,13 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
 import { StandardSearch, type StandardRow } from "@/components/standard-search";
+import { Button } from "@/components/ui/button";
+import { Alert, Badge } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Field, FilterBar, SearchInput, SelectInput } from "@/components/ui/form";
+import { EmptyState, ErrorState } from "@/components/ui/states";
+import { Pagination, Table, TableMessage, TableScroll, TableSkeleton } from "@/components/ui/table";
+import { IconClose, IconLink, IconPill, IconRefresh, IconSearch } from "@/components/ui/icons";
 
 interface WorklistRow {
   sourceDrugId: string;
@@ -33,6 +40,7 @@ interface Worklist {
 }
 
 const EMPTY: Worklist = { rows: [], total: 0, page: 1, pageCount: 1 };
+const COLUMNS = 7;
 
 export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
   const { push } = useToast();
@@ -41,7 +49,8 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
   const [drugType, setDrugType] = useState<"all" | "01" | "10">("all");
   const [page, setPage] = useState(1);
   const [worklist, setWorklist] = useState<Worklist>(EMPTY);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [selected, setSelected] = useState<WorklistRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const chooserRef = useRef<HTMLDivElement | null>(null);
@@ -64,10 +73,14 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
       if (requestIdRef.current !== requestId) return;
       const result = (await response.json()) as { ok?: boolean } & Partial<Worklist>;
       if (!response.ok || !result.ok) {
+        setFailed(true);
         push("error", "โหลดรายการยาไม่สำเร็จ");
         return;
       }
+      setFailed(false);
       setWorklist({ rows: result.rows ?? [], total: result.total ?? 0, page: result.page ?? 1, pageCount: result.pageCount ?? 1 });
+    } catch {
+      if (requestIdRef.current === requestId) setFailed(true);
     } finally {
       if (requestIdRef.current === requestId) setLoading(false);
     }
@@ -119,208 +132,259 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
     }
   }
 
+  function resetFilters() {
+    setQuery("");
+    setStatus("pending");
+    setDrugType("all");
+    setPage(1);
+  }
+
+  const filtered = query.trim().length > 0 || status !== "pending" || drugType !== "all";
+
   return (
-    <div className="space-y-3">
-      <section className="card card-pad">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-48 flex-1">
-            <label className="label" htmlFor="worklist-query">ค้นหารายการยา (รหัส / ชื่อ)</label>
-            <input
-              id="worklist-query"
-              className="field"
-              value={query}
-              autoComplete="off"
-              onChange={(event) => {
-                setPage(1);
-                setQuery(event.target.value);
-              }}
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="worklist-status">สถานะ</label>
-            <select
-              id="worklist-status"
-              className="field w-32"
-              value={status}
-              onChange={(event) => {
-                setPage(1);
-                setStatus(event.target.value as typeof status);
-              }}
-            >
-              <option value="pending">คงค้าง</option>
-              <option value="mapped">จับคู่แล้ว</option>
-              <option value="all">ทั้งหมด</option>
-            </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="worklist-type">ประเภท</label>
-            <select
-              id="worklist-type"
-              className="field w-28"
-              value={drugType}
-              onChange={(event) => {
-                setPage(1);
-                setDrugType(event.target.value as typeof drugType);
-              }}
-            >
-              <option value="all">ทั้งหมด</option>
-              <option value="01">01 (TMT)</option>
-              <option value="10">10 (TTMT)</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            className="btn-secondary btn-sm mb-0.5"
-            onClick={() => {
-              setQuery("");
-              setStatus("pending");
-              setDrugType("all");
-              setPage(1);
-            }}
+    <div className="space-y-3.5">
+      <Card>
+        <CardBody>
+          <FilterBar
+            actions={
+              <>
+                <Button size="sm" icon={<IconClose size={13} />} disabled={!filtered} onClick={resetFilters}>
+                  ล้างตัวกรอง
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={<IconRefresh size={13} />}
+                  loading={busy === "reconcile"}
+                  disabled={!hasCatalog || busy !== null}
+                  onClick={() => void reconcile()}
+                >
+                  จับคู่อัตโนมัติจาก Drug Catalog
+                </Button>
+              </>
+            }
           >
-            ล้างตัวกรอง
-          </button>
-          <button type="button" className="btn-primary btn-sm mb-0.5" disabled={!hasCatalog || busy !== null} onClick={() => void reconcile()}>
-            {busy === "reconcile" ? "กำลังจับคู่…" : "จับคู่อัตโนมัติจาก Drug Catalog"}
-          </button>
-        </div>
-        {!hasCatalog ? (
-          <p className="mt-2 text-xxs text-warn">ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้ จึงยังจับคู่อัตโนมัติไม่ได้</p>
-        ) : null}
-      </section>
+            <Field label="ค้นหารายการยา" htmlFor="worklist-query" className="min-w-52 flex-1">
+              <SearchInput
+                id="worklist-query"
+                placeholder="รหัสยา หรือชื่อยา"
+                value={query}
+                autoComplete="off"
+                onChange={(event) => {
+                  setPage(1);
+                  setQuery(event.target.value);
+                }}
+              />
+            </Field>
+            <Field label="สถานะ" htmlFor="worklist-status">
+              <SelectInput
+                id="worklist-status"
+                className="w-32"
+                value={status}
+                onChange={(event) => {
+                  setPage(1);
+                  setStatus(event.target.value as typeof status);
+                }}
+              >
+                <option value="pending">คงค้าง</option>
+                <option value="mapped">จับคู่แล้ว</option>
+                <option value="all">ทั้งหมด</option>
+              </SelectInput>
+            </Field>
+            <Field label="ประเภท" htmlFor="worklist-type">
+              <SelectInput
+                id="worklist-type"
+                className="w-32"
+                value={drugType}
+                onChange={(event) => {
+                  setPage(1);
+                  setDrugType(event.target.value as typeof drugType);
+                }}
+              >
+                <option value="all">ทั้งหมด</option>
+                <option value="01">01 (TMT)</option>
+                <option value="10">10 (TTMT)</option>
+              </SelectInput>
+            </Field>
+          </FilterBar>
 
-      <section className="card card-pad">
-        <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold">รายการยาจาก JHCIS</h2>
-          <p className="text-xxs text-slate-500" role="status" aria-live="polite">
-            {loading ? "กำลังโหลด…" : `${worklist.total.toLocaleString("th-TH")} รายการ · หน้า ${worklist.page}/${worklist.pageCount}`}
-          </p>
-        </div>
+          {!hasCatalog ? (
+            <Alert tone="warning" className="mt-3" title="ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้">
+              การจับคู่อัตโนมัติอ้างอิงไฟล์ Drug Catalog เท่านั้น จึงยังใช้งานไม่ได้ — จับคู่ทีละรายการด้วยตนเองได้ตามปกติ
+            </Alert>
+          ) : null}
+        </CardBody>
+      </Card>
 
-        {worklist.rows.length === 0 && !loading ? (
-          <p className="text-xxs text-slate-500">ไม่พบรายการตามตัวกรองนี้</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>รหัสยา JHCIS</th>
-                  <th>ชื่อยาใน JHCIS</th>
-                  <th>ชนิด</th>
-                  <th>จับคู่กับมาตรฐาน (จาก TMT API)</th>
-                  <th>FLAG</th>
-                  <th>ที่มา</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {worklist.rows.map((row) => (
-                  <Fragment key={row.sourceDrugId}>
-                    <tr className={selected?.sourceDrugId === row.sourceDrugId ? "bg-brand-50" : undefined}>
-                    <td className="font-mono">{row.drugcode}</td>
-                    <td className="max-w-56">
-                      <div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>
-                      {row.druggenericname ? <div className="text-xxs text-slate-500">{row.druggenericname}</div> : null}
-                    </td>
-                    <td>
-                      <span className="badge-muted">{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</span>
-                    </td>
-                    {/* Both sides of the pairing, so it can be judged by reading
-                        across the row instead of opening each one. */}
-                    <td className="max-w-80">
-                      {row.standardCode ? (
-                        <div className="border-l-2 border-brand-200 pl-2">
-                          {/* Generic name and strength lead: they are what says
-                              the pairing is right. The brand follows. */}
-                          <div className="flex flex-wrap items-baseline gap-x-1.5">
-                            <span className="font-mono text-xxs text-slate-500">{row.standardCode}</span>
-                            <span className="font-semibold text-ink">
-                              {row.activeIngredient ?? "—"}
-                              {row.strength ? <span> · {row.strength}</span> : null}
-                            </span>
-                          </div>
-                          {row.tradeName ? <div className="text-xxs text-slate-600">{row.tradeName}</div> : null}
-                          {row.dosageForm || row.manufacturer ? (
-                            <div className="text-xxs text-slate-400">
-                              {row.dosageForm}
-                              {row.dosageForm && row.manufacturer ? " · " : ""}
-                              {/* The manufacturer separates two products that are
-                                  otherwise identical, so it carries weight. */}
-                              {row.manufacturer ? <span className="font-semibold text-ink">{row.manufacturer}</span> : null}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="badge-danger">ยังไม่จับคู่</span>
-                      )}
-                    </td>
-                    <td>{row.updateFlag ? <span className="badge-muted">{row.updateFlag}</span> : "—"}</td>
-                    <td className="text-xxs text-slate-500">{row.mappingSource ?? "—"}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-secondary btn-sm"
-                        disabled={busy !== null}
-                        onClick={() => setSelected(selected?.sourceDrugId === row.sourceDrugId ? null : row)}
-                      >
-                        {selected?.sourceDrugId === row.sourceDrugId ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}
-                      </button>
-                    </td>
-                    </tr>
+      <Card>
+        <CardHeader
+          title="รายการยาจาก JHCIS"
+          description="เทียบรายการฝั่งซ้ายกับมาตรฐานฝั่งขวาเพื่อตรวจว่าจับคู่ถูกต้อง"
+          actions={
+            <span className="type-caption tabular-nums" role="status" aria-live="polite">
+              {loading ? "กำลังโหลด…" : `${worklist.total.toLocaleString("th-TH")} รายการ`}
+            </span>
+          }
+        />
 
-                    {selected?.sourceDrugId === row.sourceDrugId ? (
-                      <tr key={`${row.sourceDrugId}-chooser`} className="bg-brand-50/40">
-                        <td colSpan={7} className="p-0">
-                          <div ref={chooserRef} className="border-y-2 border-brand-600 bg-white p-3">
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <h3 className="text-sm font-semibold">
-                                เลือกมาตรฐานให้ <span className="font-mono">{row.drugcode}</span> —{" "}
-                                {row.drugname ?? row.drugnamethai ?? ""}
-                              </h3>
-                              <button type="button" className="btn-secondary btn-sm" onClick={() => setSelected(null)}>
-                                ปิด
-                              </button>
-                            </div>
-                            <p className="mt-0.5 text-xxs text-slate-500">
-                              drugtype {row.drugtype} ใช้คลัง {row.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น
-                              และเลือกได้เฉพาะรายการที่เปิดใช้งาน รหัส TMT เดิมใน JHCIS ไม่ถูกใช้เป็นคำตอบโดยตรง
-                            </p>
-                            <div className="mt-2">
-                              <StandardSearch
-                                standardType={row.drugtype === "10" ? "TTMT" : "TMT"}
-                                lockType
-                                selectedCode={row.standardCode}
-                                onSelect={(standard) => void saveMapping(row, standard)}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <CardBody flush className="pt-3">
+          {failed ? (
+            <ErrorState
+              title="โหลดรายการยาไม่สำเร็จ"
+              description="ระบบดึงรายการยาจากฐานข้อมูลไม่ได้ในขณะนี้ ตัวกรองที่เลือกไว้ยังคงอยู่"
+              onRetry={() => void load()}
+            />
+          ) : (
+            <TableScroll>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>รหัสยา JHCIS</th>
+                    <th>ชื่อยาใน JHCIS</th>
+                    <th>ชนิด</th>
+                    <th>จับคู่กับมาตรฐาน (จาก TMT API)</th>
+                    <th>FLAG</th>
+                    <th>ที่มา</th>
+                    <th className="w-0" />
+                  </tr>
+                </thead>
 
-        {worklist.pageCount > 1 ? (
-          <div className="mt-2 flex items-center gap-1.5">
-            <button type="button" className="btn-secondary btn-sm" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
-              ← ก่อนหน้า
-            </button>
-            <button
-              type="button"
-              className="btn-secondary btn-sm"
-              disabled={page >= worklist.pageCount}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              ถัดไป →
-            </button>
-          </div>
-        ) : null}
-      </section>
+                {loading && worklist.rows.length === 0 ? (
+                  <TableSkeleton rows={8} columns={COLUMNS} />
+                ) : (
+                  <tbody>
+                    {worklist.rows.length === 0 ? (
+                      <TableMessage colSpan={COLUMNS}>
+                        <EmptyState
+                          compact
+                          icon={filtered ? <IconSearch size={18} /> : <IconPill size={18} />}
+                          title={filtered ? "ไม่พบรายการตามตัวกรองนี้" : "ยังไม่มีรายการยาที่คงค้าง"}
+                          description={
+                            filtered
+                              ? "ลองลดเงื่อนไขลง หรือเปลี่ยนสถานะเป็น “ทั้งหมด” เพื่อดูรายการที่จับคู่แล้ว"
+                              : "รายการยาจะปรากฏที่นี่หลังจาก Agent ดึงข้อมูลจาก JHCIS เข้ามา"
+                          }
+                          action={
+                            filtered ? (
+                              <Button size="sm" icon={<IconClose size={13} />} onClick={resetFilters}>
+                                ล้างตัวกรอง
+                              </Button>
+                            ) : null
+                          }
+                        />
+                      </TableMessage>
+                    ) : (
+                      worklist.rows.map((row) => {
+                        const open = selected?.sourceDrugId === row.sourceDrugId;
+                        return (
+                          <Fragment key={row.sourceDrugId}>
+                            <tr className={open ? "row-selected" : undefined}>
+                              <td className="cell-code">{row.drugcode}</td>
+                              <td className="max-w-56">
+                                <div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>
+                                {row.druggenericname ? <div className="type-help">{row.druggenericname}</div> : null}
+                              </td>
+                              <td>
+                                <Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge>
+                              </td>
 
+                              {/* Both sides of the pairing, so it can be judged by
+                                  reading across the row instead of opening each one. */}
+                              <td className="max-w-80">
+                                {row.standardCode ? (
+                                  <div className="border-l-2 border-primary-200 pl-2.5">
+                                    {/* Generic name and strength lead: they are what
+                                        says the pairing is right. The brand follows. */}
+                                    <div className="flex flex-wrap items-baseline gap-x-1.5">
+                                      <span className="cell-code text-xxs text-slate-500">{row.standardCode}</span>
+                                      <span className="font-semibold text-ink">
+                                        {row.activeIngredient ?? "—"}
+                                        {row.strength ? <span> · {row.strength}</span> : null}
+                                      </span>
+                                    </div>
+                                    {row.tradeName ? <div className="text-xxs text-slate-600">{row.tradeName}</div> : null}
+                                    {row.dosageForm || row.manufacturer ? (
+                                      <div className="text-xxs text-slate-500">
+                                        {row.dosageForm}
+                                        {row.dosageForm && row.manufacturer ? " · " : ""}
+                                        {/* The manufacturer separates two products that
+                                            are otherwise identical, so it carries weight. */}
+                                        {row.manufacturer ? <span className="font-semibold text-ink">{row.manufacturer}</span> : null}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <Badge tone="warning" dot>
+                                    ยังไม่จับคู่
+                                  </Badge>
+                                )}
+                              </td>
+                              <td>{row.updateFlag ? <Badge>{row.updateFlag}</Badge> : <span className="type-caption">—</span>}</td>
+                              <td className="type-caption">{row.mappingSource ?? "—"}</td>
+                              <td>
+                                <Button
+                                  size="sm"
+                                  variant={open ? "secondary" : row.standardCode ? "ghost" : "outline"}
+                                  icon={open ? <IconClose size={13} /> : <IconLink size={13} />}
+                                  disabled={busy !== null && busy !== row.sourceDrugId}
+                                  loading={busy === row.sourceDrugId}
+                                  onClick={() => setSelected(open ? null : row)}
+                                >
+                                  {open ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}
+                                </Button>
+                              </td>
+                            </tr>
+
+                            {open ? (
+                              <tr key={`${row.sourceDrugId}-chooser`} className="hover:bg-transparent">
+                                <td colSpan={COLUMNS} className="border-b-0 bg-primary-50/40 p-0">
+                                  <div ref={chooserRef} className="border-y border-primary-200 bg-surface p-3.5">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <h3 className="type-card-title">
+                                          เลือกมาตรฐานให้ <span className="cell-code">{row.drugcode}</span> —{" "}
+                                          {row.drugname ?? row.drugnamethai ?? ""}
+                                        </h3>
+                                        <p className="type-help mt-0.5">
+                                          drugtype {row.drugtype} ใช้คลัง {row.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น
+                                          และเลือกได้เฉพาะรายการที่เปิดใช้งาน รหัส TMT เดิมใน JHCIS ไม่ถูกใช้เป็นคำตอบโดยตรง
+                                        </p>
+                                      </div>
+                                      <Button size="sm" icon={<IconClose size={13} />} onClick={() => setSelected(null)}>
+                                        ปิด
+                                      </Button>
+                                    </div>
+                                    <div className="mt-3">
+                                      <StandardSearch
+                                        standardType={row.drugtype === "10" ? "TTMT" : "TMT"}
+                                        lockType
+                                        selectedCode={row.standardCode}
+                                        onSelect={(standard) => void saveMapping(row, standard)}
+                                      />
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                )}
+              </Table>
+            </TableScroll>
+          )}
+        </CardBody>
+
+        <Pagination
+          page={worklist.page}
+          pageCount={worklist.pageCount}
+          total={worklist.total}
+          disabled={loading}
+          onPageChange={setPage}
+        />
+      </Card>
     </div>
   );
 }

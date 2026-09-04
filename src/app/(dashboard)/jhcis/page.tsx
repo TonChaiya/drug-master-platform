@@ -4,24 +4,15 @@ import { requireUser } from "@/modules/auth/session";
 import { readInstallerLink } from "@/modules/agent/installer-link";
 import { listInstallations, recentCommands, recentSyncSessions } from "@/modules/agent/queries";
 import { formatBangkok } from "@/modules/facilities/queries";
+import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/states";
+import { Table, TableMessage, TableScroll } from "@/components/ui/table";
+import { IconLink, IconMonitor, IconRefresh } from "@/components/ui/icons";
 import { EnrollmentPanel } from "./enrollment-panel";
 
 export const dynamic = "force-dynamic";
-
-const SESSION_STATUS: Record<string, string> = {
-  receiving: "badge-warn",
-  complete: "badge-ok",
-  failed: "badge-danger",
-  aborted: "badge-muted",
-};
-
-const COMMAND_STATUS: Record<string, string> = {
-  pending: "badge-warn",
-  claimed: "badge-warn",
-  succeeded: "badge-ok",
-  failed: "badge-danger",
-  expired: "badge-muted",
-};
 
 export default async function JhcisPage() {
   let user;
@@ -32,18 +23,12 @@ export default async function JhcisPage() {
   }
 
   const facility = await resolveEffectiveFacility(user);
-  if (!facility) {
-    return (
-      <section className="card card-pad">
-        <h1 className="page-title">เชื่อมต่อ JHCIS</h1>
-        <p className="mt-1 text-xxs text-slate-500">เลือกสถานบริการก่อนจึงจะจัดการ Agent ได้</p>
-      </section>
-    );
-  }
+  if (!facility) return <NoFacilityNotice title="เชื่อมต่อ JHCIS" isAdmin={user.role === "admin"} />;
 
+  const isAdmin = user.role === "admin";
   const [installations, sessions, commands, installer] = await Promise.all([
     // A user sees the machines they registered; an admin sees the facility's.
-    listInstallations(facility.id, user.role === "admin" ? undefined : user.id),
+    listInstallations(facility.id, isAdmin ? undefined : user.id),
     recentSyncSessions(facility.id),
     recentCommands(facility.id),
     readInstallerLink(),
@@ -54,50 +39,45 @@ export default async function JhcisPage() {
   const mismatched = installations.filter((row) => row.lastMismatchAt !== null);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow={`${facility.code} · ${facility.name}`}
+        title="เชื่อมต่อ JHCIS"
+        description="Agent เปิดเฉพาะขาออก HTTPS ไม่มีการเปิดพอร์ต MySQL ออกอินเทอร์เน็ต และรหัสฐานข้อมูลอยู่ที่เครื่องปลายทางเท่านั้น"
+      />
+
       {mismatched.length > 0 ? (
-        <section className="card card-pad border-danger/30 bg-danger-soft" role="alert">
-          <h2 className="font-display text-sm font-extrabold text-danger">ไอดีไม่ตรงกับสถานบริการ</h2>
-          <p className="mt-1 text-xxs text-danger">
-            โปรดกลับไปที่สถานบริการและไอดีของท่านให้ถูกต้อง — Agent จะไม่ทำงานจนกว่ารหัสสถานบริการจะตรงกัน
-          </p>
-          <ul className="mt-2 space-y-1 text-xxs text-danger">
+        <Alert tone="danger" title="รหัสสถานบริการไม่ตรงกัน">
+          <p>Agent จะไม่ส่งข้อมูลจนกว่า office.offid ใน JHCIS จะตรงกับรหัสสถานบริการของไอดีที่ใช้อยู่</p>
+          <ul className="mt-1.5 space-y-1">
             {mismatched.map((row) => (
               <li key={row.installationId}>
-                เครื่อง <strong>{row.machineLabel}</strong> รายงาน office.offid{" "}
-                <code className="font-mono">{row.lastMismatchOfficeId ?? "—"}</code> แต่ไอดีที่ท่านใช้อยู่ผูกกับสถานบริการ{" "}
+                เครื่อง <strong>{row.machineLabel}</strong> รายงาน <code className="font-mono">{row.lastMismatchOfficeId ?? "—"}</code> แต่ไอดีนี้ผูกกับ{" "}
                 <code className="font-mono">{facility.code}</code> · ล่าสุด {formatBangkok(row.lastMismatchAt)}
               </li>
             ))}
           </ul>
-        </section>
+        </Alert>
       ) : null}
-
-      <header>
-        <h1 className="page-title">เชื่อมต่อ JHCIS</h1>
-        <p className="text-xxs text-slate-500">
-          {facility.code} · {facility.name} — Agent เปิดเฉพาะขาออก HTTPS ไม่มีการเปิดพอร์ต MySQL ออกอินเทอร์เน็ต
-        </p>
-      </header>
 
       <EnrollmentPanel
         installationCount={installations.length}
         installer={{ url: installer.url, version: installer.version }}
       />
 
-      <section className="card card-pad">
-        <h2 className="mb-2 text-sm font-semibold">
-          {user.role === "admin" ? "เครื่องที่ลงทะเบียนแล้ว (ทุกไอดีของสถานบริการนี้)" : "เครื่องที่ไอดีนี้ลงทะเบียน"}
-        </h2>
-        {installations.length === 0 ? (
-          <p className="text-xxs text-slate-500">
-            {user.role === "admin"
-              ? "ยังไม่มีเครื่องใดลงทะเบียนกับสถานบริการนี้"
-              : "ไอดีนี้ยังไม่ได้ลงทะเบียนเครื่องใด — เครื่องที่ไอดีอื่นลงทะเบียนไว้จะไม่แสดงที่นี่"}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
+      <Card>
+        <CardHeader
+          icon={<IconMonitor size={16} />}
+          title={isAdmin ? "เครื่องที่ลงทะเบียนแล้ว" : "เครื่องที่ไอดีนี้ลงทะเบียน"}
+          description={
+            isAdmin
+              ? "ทุกไอดีของสถานบริการนี้"
+              : "เครื่องที่ไอดีอื่นลงทะเบียนไว้จะไม่แสดงที่นี่"
+          }
+        />
+        <CardBody flush className="pt-3">
+          <TableScroll>
+            <Table>
               <thead>
                 <tr>
                   <th>เครื่อง</th>
@@ -110,75 +90,90 @@ export default async function JhcisPage() {
                 </tr>
               </thead>
               <tbody>
-                {installations.map((row) => (
-                  <tr key={row.installationId}>
-                    <td>
-                      <div className="font-medium">{row.machineLabel}</div>
-                      <div className="font-mono text-xxs text-slate-400">{row.installationId}</div>
-                    </td>
-                    <td className="font-mono text-xxs">{row.macAddress ?? "—"}</td>
-                    <td className="font-mono">
-                      {row.declaredOfficeId ?? "—"}
-                      {row.lastMismatchAt ? (
-                        <span className="badge-danger ml-1">ไม่ตรง: {row.lastMismatchOfficeId ?? "?"}</span>
-                      ) : null}
-                    </td>
-                    <td className="font-mono">{row.agentVersion ?? "—"}</td>
-                    <td className="tabular-nums">{row.activeCredentials}</td>
-                    <td>{formatBangkok(row.lastSeenAt)}</td>
-                    <td>
-                      <span className={row.status === "active" ? "badge-ok" : "badge-muted"}>{row.status}</span>
-                    </td>
-                  </tr>
-                ))}
+                {installations.length === 0 ? (
+                  <TableMessage colSpan={7}>
+                    <EmptyState
+                      compact
+                      icon={<IconMonitor size={18} />}
+                      title={isAdmin ? "ยังไม่มีเครื่องใดลงทะเบียนกับสถานบริการนี้" : "ไอดีนี้ยังไม่ได้ลงทะเบียนเครื่องใด"}
+                      description="ติดตั้ง Agent บนเครื่องที่อยู่ในวง LAN เดียวกับ JHCIS แล้วกด “เชื่อมต่อ Agent บนเครื่องนี้” ด้านบน"
+                    />
+                  </TableMessage>
+                ) : (
+                  installations.map((row) => (
+                    <tr key={row.installationId}>
+                      <td>
+                        <div className="font-medium">{row.machineLabel}</div>
+                        <div className="cell-code text-xxs text-slate-500">{row.installationId}</div>
+                      </td>
+                      <td className="cell-code text-xxs">{row.macAddress ?? "—"}</td>
+                      <td>
+                        <span className="cell-code">{row.declaredOfficeId ?? "—"}</span>
+                        {row.lastMismatchAt ? (
+                          <Badge tone="danger" className="ml-1.5">
+                            ไม่ตรง: {row.lastMismatchOfficeId ?? "?"}
+                          </Badge>
+                        ) : null}
+                      </td>
+                      <td className="cell-code">{row.agentVersion ?? "—"}</td>
+                      <td className="cell-num">{row.activeCredentials}</td>
+                      <td className="whitespace-nowrap">{formatBangkok(row.lastSeenAt)}</td>
+                      <td>
+                        <StatusBadge status={row.status} />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+            </Table>
+          </TableScroll>
+        </CardBody>
+      </Card>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <section className="card card-pad">
-          <h2 className="mb-2 text-sm font-semibold">รอบดึงข้อมูลล่าสุด</h2>
-          {sessions.length === 0 ? (
-            <p className="text-xxs text-slate-500">ยังไม่มีรอบการดึงข้อมูล</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        <Card>
+          <CardHeader icon={<IconRefresh size={16} />} title="รอบดึงข้อมูลล่าสุด" description="จำนวนที่ Agent แจ้งไว้ เทียบกับที่ระบบรับจริง" />
+          <CardBody flush className="pt-3">
+            <TableScroll>
+              <Table>
                 <thead>
                   <tr>
                     <th>เริ่ม</th>
-                    <th>คาด/รับ</th>
+                    <th>คาด / รับ</th>
                     <th>office</th>
                     <th>สถานะ</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sessions.map((row) => (
-                    <tr key={row.id}>
-                      <td>{formatBangkok(row.startedAt)}</td>
-                      <td className="tabular-nums">
-                        {row.expectedRows.toLocaleString("th-TH")} / {row.receivedRows.toLocaleString("th-TH")}
-                      </td>
-                      <td className="font-mono">{row.declaredOfficeId}</td>
-                      <td>
-                        <span className={SESSION_STATUS[row.status] ?? "badge-muted"}>{row.status}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {sessions.length === 0 ? (
+                    <TableMessage colSpan={4}>
+                      <EmptyState compact title="ยังไม่มีรอบการดึงข้อมูล" description="กด “ดึงรายการยาตอนนี้” ด้านบนเพื่อเริ่มรอบแรก" />
+                    </TableMessage>
+                  ) : (
+                    sessions.map((row) => (
+                      <tr key={row.id}>
+                        <td className="whitespace-nowrap">{formatBangkok(row.startedAt)}</td>
+                        <td className="cell-num">
+                          {row.expectedRows.toLocaleString("th-TH")} / {row.receivedRows.toLocaleString("th-TH")}
+                        </td>
+                        <td className="cell-code">{row.declaredOfficeId}</td>
+                        <td>
+                          <StatusBadge status={row.status} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+              </Table>
+            </TableScroll>
+          </CardBody>
+        </Card>
 
-        <section className="card card-pad">
-          <h2 className="mb-2 text-sm font-semibold">คำสั่งที่ส่งไปยัง Agent</h2>
-          {commands.length === 0 ? (
-            <p className="text-xxs text-slate-500">ยังไม่มีคำสั่ง</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
+        <Card>
+          <CardHeader icon={<IconLink size={16} />} title="คำสั่งที่ส่งไปยัง Agent" description="Agent รับคำสั่งเมื่อ poll ครั้งถัดไป" />
+          <CardBody flush className="pt-3">
+            <TableScroll>
+              <Table>
                 <thead>
                   <tr>
                     <th>คำสั่ง</th>
@@ -188,23 +183,29 @@ export default async function JhcisPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commands.map((row) => (
-                    <tr key={row.id}>
-                      <td className="font-mono">{row.commandType}</td>
-                      <td>{formatBangkok(row.createdAt)}</td>
-                      <td className="max-w-56 truncate" title={row.resultMessage ?? ""}>
-                        {row.resultMessage ?? "—"}
-                      </td>
-                      <td>
-                        <span className={COMMAND_STATUS[row.status] ?? "badge-muted"}>{row.status}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {commands.length === 0 ? (
+                    <TableMessage colSpan={4}>
+                      <EmptyState compact title="ยังไม่มีคำสั่ง" description="คำสั่งทดสอบการเชื่อมต่อและสั่งดึงข้อมูลจะปรากฏที่นี่" />
+                    </TableMessage>
+                  ) : (
+                    commands.map((row) => (
+                      <tr key={row.id}>
+                        <td className="cell-code">{row.commandType}</td>
+                        <td className="whitespace-nowrap">{formatBangkok(row.createdAt)}</td>
+                        <td className="max-w-56 truncate" title={row.resultMessage ?? ""}>
+                          {row.resultMessage ?? "—"}
+                        </td>
+                        <td>
+                          <StatusBadge status={row.status} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+              </Table>
+            </TableScroll>
+          </CardBody>
+        </Card>
       </div>
     </div>
   );

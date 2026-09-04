@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
 import { requireUser } from "@/modules/auth/session";
 import { ExportPanel } from "./export-panel";
@@ -14,23 +15,15 @@ export default async function ExportsPage() {
   }
 
   const facility = await resolveEffectiveFacility(user);
-  if (!facility) {
-    return (
-      <section className="card card-pad">
-        <h1 className="page-title">ส่งออก DrugCat</h1>
-        <p className="mt-1 text-xxs text-slate-500">เลือกสถานบริการก่อนจึงจะส่งออกได้</p>
-      </section>
-    );
-  }
+  if (!facility) return <NoFacilityNotice title="ส่งออก DrugCat" isAdmin={user.role === "admin"} />;
 
   return (
-    <div className="space-y-3">
-      <header>
-        <h1 className="page-title">ส่งออก DrugCat</h1>
-        <p className="text-xxs text-slate-500">
-          {facility.code} · {facility.name} — ส่งออกเฉพาะสถานบริการที่กำลังปฏิบัติงานอยู่เท่านั้น
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow={`${facility.code} · ${facility.name}`}
+        title="ส่งออก DrugCat"
+        description="สร้างไฟล์ .xls ตามฟอร์ม 22 คอลัมน์ของ สกส. ส่งออกเฉพาะสถานบริการที่กำลังปฏิบัติงานอยู่เท่านั้น"
+      />
       <ExportPanel />
     </div>
   );

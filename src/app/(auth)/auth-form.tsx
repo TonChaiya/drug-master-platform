@@ -3,8 +3,19 @@
 import { type FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/badge";
+import { Field, TextInput } from "@/components/ui/form";
+import { IconCheckCircle, IconDatabase, IconExport, IconMappings } from "@/components/ui/icons";
 
 type Mode = "login" | "signup";
+
+/** What the system does, stated once, on the only page a stranger ever sees. */
+const CAPABILITIES = [
+  { icon: <IconDatabase size={15} />, text: "ดึงรายการยาที่เปิดใช้งานจาก JHCIS ของแต่ละสถานบริการ" },
+  { icon: <IconMappings size={15} />, text: "จับคู่กับรหัสมาตรฐาน TMT และ TTMT ทีละรายการหรืออัตโนมัติ" },
+  { icon: <IconExport size={15} />, text: "ส่งออกไฟล์ DrugCat ตามฟอร์ม 22 คอลัมน์ พร้อมร่องรอยตรวจสอบ" },
+];
 
 export function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
@@ -72,118 +83,151 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.1fr_.9fr]">
-      {/* The PHP system's split sign-in: editorial panel left, form right. */}
-      <section aria-hidden className="relative hidden overflow-hidden bg-slate-900 px-[8vw] py-16 text-white lg:flex lg:flex-col lg:justify-center">
-        <span className="absolute left-12 top-10 grid size-13 place-items-center rounded-md bg-brand-600 font-display text-sm font-extrabold">TM</span>
-        <span className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-brand-600/90" />
-        <span className="pointer-events-none absolute -bottom-32 left-24 size-80 rounded-full bg-white/5" />
-        <p className="eyebrow relative z-10 text-white/60">Thai Medicines Terminology</p>
-        <h1 className="relative z-10 mt-4 font-display text-6xl font-extrabold leading-[0.92] tracking-[-0.06em] xl:text-7xl">
-          จับคู่ข้อมูลยา
+    <main className="grid min-h-dvh lg:grid-cols-[1fr_28rem] xl:grid-cols-[1fr_32rem]">
+      {/* Editorial panel left, form right. Decorative, so it is hidden from
+          assistive technology and from anything narrower than a laptop. */}
+      <section aria-hidden className="relative hidden overflow-hidden bg-slate-900 px-[7vw] py-16 text-white lg:flex lg:flex-col lg:justify-center">
+        <span className="pointer-events-none absolute -right-32 -top-32 size-96 rounded-full bg-primary-600/25 blur-3xl" />
+        <span className="pointer-events-none absolute -bottom-40 -left-20 size-96 rounded-full bg-primary-500/10 blur-3xl" />
+
+        <div className="absolute left-[7vw] top-12 flex items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-lg bg-primary-600 font-display text-xxs font-extrabold">TM</span>
+          <span className="font-display text-sm font-bold tracking-tight">Drug Master</span>
+        </div>
+
+        <p className="eyebrow relative z-10 text-white/50">Thai Medicines Terminology</p>
+        <h2 className="relative z-10 mt-4 max-w-xl font-display text-5xl font-extrabold leading-[1.05] tracking-[-0.04em] xl:text-6xl">
+          บัญชียาของสถานบริการ
           <br />
-          <span className="text-brand-600">อย่างมีมาตรฐาน.</span>
-        </h1>
-        <p className="relative z-10 mt-7 max-w-lg text-sm text-white/70">
-          ดึงยาที่ใช้งานจาก JHCIS ตรวจเทียบ Drug Catalog ค้นหา TMT/TTMT และส่งออกในฟอร์มเดิม พร้อมร่องรอยตรวจสอบทุกขั้นตอน
-        </p>
-        <p className="relative z-10 mt-10 border-t border-white/15 pt-4">
-          <strong className="block font-display text-2xl font-extrabold">01 / 10</strong>
-          <span className="text-xxs text-white/50">Drug types in scope</span>
+          <span className="text-primary-300">ให้ตรงมาตรฐาน</span>
+        </h2>
+
+        <ul className="relative z-10 mt-9 max-w-lg space-y-3">
+          {CAPABILITIES.map((item) => (
+            <li key={item.text} className="flex items-start gap-2.5">
+              <span className="mt-px grid size-6 shrink-0 place-items-center rounded-md bg-white/10 text-primary-300">{item.icon}</span>
+              <span className="text-sm leading-relaxed text-white/70">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+
+        <p className="relative z-10 mt-10 max-w-lg border-t border-white/10 pt-4 text-xxs text-white/40">
+          รหัสฐานข้อมูล JHCIS อยู่ที่เครื่องในสถานบริการเท่านั้น ไม่ถูกส่งขึ้นระบบกลาง
         </p>
       </section>
 
-      <section className="grid place-items-center px-3 py-10">
-        <div className="card w-full max-w-md p-6">
-        <p className="eyebrow text-brand-600">Secure workspace</p>
-        <h1 className="page-title mt-1.5">{mode === "login" ? "ยินดีต้อนรับ" : "สมัครสมาชิก"}</h1>
-        <p className="mt-1 text-xxs text-slate-500">
-          {mode === "login" ? "เข้าสู่ระบบเพื่อเริ่มจัดการข้อมูล TMT" : "สมัครเพื่อขอสิทธิ์ใช้งานของสถานบริการ"}
-        </p>
-
-        <form onSubmit={submit} className="mt-4 space-y-2.5">
-          {mode === "signup" ? (
-            <>
-              <div>
-                <label className="label" htmlFor="fullName">ชื่อ-สกุล</label>
-                <input className="field" id="fullName" name="fullName" required minLength={2} maxLength={255} autoComplete="name" />
-              </div>
-              <div>
-                <label className="label" htmlFor="positionName">ตำแหน่ง</label>
-                <input className="field" id="positionName" name="positionName" required minLength={2} maxLength={160} />
-              </div>
-              <div className="grid gap-2.5 sm:grid-cols-[8rem_1fr]">
-                <div>
-                  <label className="label" htmlFor="facilityCode">รหัสสถานบริการ</label>
-                  <input
-                    className="field font-mono"
-                    id="facilityCode"
-                    name="facilityCode"
-                    required
-                    inputMode="numeric"
-                    pattern="[0-9]{5}"
-                    maxLength={5}
-                    onBlur={(event) => void lookupFacility(event.target.value.trim())}
-                  />
-                </div>
-                <div>
-                  <label className="label" htmlFor="facilityName">ชื่อสถานบริการ</label>
-                  <input
-                    className="field"
-                    id="facilityName"
-                    name="facilityName"
-                    required
-                    minLength={2}
-                    maxLength={255}
-                    value={facilityName}
-                    onChange={(event) => setFacilityName(event.target.value)}
-                  />
-                </div>
-                {facilityNote ? <p className="text-xxs text-slate-500 sm:col-span-2">{facilityNote}</p> : null}
-              </div>
-            </>
-          ) : null}
-
-          <div>
-            <label className="label" htmlFor="username">User ID</label>
-            <input className="field" id="username" name="username" required minLength={4} maxLength={80} autoComplete="username" />
+      <section className="grid place-items-center px-4 py-10">
+        <div className="w-full max-w-sm">
+          {/* The mark repeats here because the left panel is hidden on mobile. */}
+          <div className="mb-6 flex items-center gap-2.5 lg:hidden">
+            <span
+              aria-hidden
+              className="grid size-9 place-items-center rounded-lg bg-primary-600 font-display text-xxs font-extrabold text-white"
+            >
+              TM
+            </span>
+            <span className="font-display text-sm font-bold tracking-tight text-slate-900">Drug Master</span>
           </div>
-          <div>
-            <label className="label" htmlFor="password">{mode === "signup" ? "รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" : "รหัสผ่าน"}</label>
-            <input
-              className="field"
-              id="password"
-              name="password"
-              type="password"
+
+          <h1 className="type-page-title">{mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}</h1>
+          <p className="type-help mt-1.5">
+            {mode === "login" ? "ใช้ไอดีของสถานบริการที่ได้รับอนุมัติแล้ว" : "สมัครเพื่อขอสิทธิ์ใช้งานของสถานบริการ"}
+          </p>
+
+          <form onSubmit={submit} className="mt-6 space-y-3">
+            {mode === "signup" ? (
+              <>
+                <Field label="ชื่อ-สกุล" htmlFor="fullName" required>
+                  <TextInput id="fullName" name="fullName" required minLength={2} maxLength={255} autoComplete="name" />
+                </Field>
+                <Field label="ตำแหน่ง" htmlFor="positionName" required>
+                  <TextInput id="positionName" name="positionName" required minLength={2} maxLength={160} />
+                </Field>
+                <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+                  <Field label="รหัสสถานบริการ" htmlFor="facilityCode" required>
+                    <TextInput
+                      id="facilityCode"
+                      name="facilityCode"
+                      mono
+                      required
+                      inputMode="numeric"
+                      pattern="[0-9]{5}"
+                      maxLength={5}
+                      onBlur={(event) => void lookupFacility(event.target.value.trim())}
+                    />
+                  </Field>
+                  <Field label="ชื่อสถานบริการ" htmlFor="facilityName" required>
+                    <TextInput
+                      id="facilityName"
+                      name="facilityName"
+                      required
+                      minLength={2}
+                      maxLength={255}
+                      value={facilityName}
+                      onChange={(event) => setFacilityName(event.target.value)}
+                    />
+                  </Field>
+                </div>
+                {facilityNote ? (
+                  <Alert tone="info">{facilityNote}</Alert>
+                ) : null}
+              </>
+            ) : null}
+
+            <Field label="User ID" htmlFor="username" required>
+              <TextInput id="username" name="username" required minLength={4} maxLength={80} autoComplete="username" />
+            </Field>
+            <Field
+              label="รหัสผ่าน"
+              htmlFor="password"
+              help={mode === "signup" ? "อย่างน้อย 6 ตัวอักษร" : undefined}
               required
-              minLength={mode === "signup" ? 6 : undefined}
-              maxLength={128}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-            />
-          </div>
+            >
+              <TextInput
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={mode === "signup" ? 6 : undefined}
+                maxLength={128}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+              />
+            </Field>
 
-          {message ? (
-            <p className={`rounded-md px-2.5 py-2 text-xxs ${ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"}`} role="alert">
-              {message}
-            </p>
-          ) : null}
+            {message ? (
+              <Alert tone={ok ? "success" : "danger"} title={ok ? "สมัครสมาชิกสำเร็จ" : undefined}>
+                {message}
+              </Alert>
+            ) : null}
 
-          <button className="btn-primary w-full" disabled={busy}>
-            {busy ? "กำลังดำเนินการ…" : mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
-          </button>
-        </form>
+            <Button
+              type="submit"
+              variant="primary"
+              fullWidth
+              loading={busy}
+              icon={ok && mode === "signup" ? <IconCheckCircle size={15} /> : undefined}
+            >
+              {mode === "login" ? "เข้าสู่ระบบ" : "สมัครสมาชิก"}
+            </Button>
+          </form>
 
-        <p className="mt-3 text-center text-xxs text-slate-500">
-          {mode === "login" ? (
-            <>
-              ยังไม่มีบัญชี? <Link className="text-brand-700 underline" href="/signup">สมัครสมาชิก</Link>
-            </>
-          ) : (
-            <>
-              มีบัญชีแล้ว? <Link className="text-brand-700 underline" href="/login">เข้าสู่ระบบ</Link>
-            </>
-          )}
-        </p>
+          <p className="type-help mt-5 text-center">
+            {mode === "login" ? (
+              <>
+                ยังไม่มีบัญชี?{" "}
+                <Link className="rounded font-semibold text-primary-700 underline underline-offset-2" href="/signup">
+                  สมัครสมาชิก
+                </Link>
+              </>
+            ) : (
+              <>
+                มีบัญชีแล้ว?{" "}
+                <Link className="rounded font-semibold text-primary-700 underline underline-offset-2" href="/login">
+                  เข้าสู่ระบบ
+                </Link>
+              </>
+            )}
+          </p>
         </div>
       </section>
     </main>

@@ -3,6 +3,11 @@
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { useToast } from "@/components/toast";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Field, FileInput, TextInput } from "@/components/ui/form";
+import { IconUpload } from "@/components/ui/icons";
 
 export function CatalogImportPanel() {
   const router = useRouter();
@@ -43,41 +48,38 @@ export function CatalogImportPanel() {
   }
 
   return (
-    <section className="card card-pad">
-      <h2 className="text-sm font-semibold">นำเข้าไฟล์ Drug Catalog ล่าสุด</h2>
-      <p className="mt-0.5 text-xxs text-slate-500">
-        ระบบตรวจชนิดไฟล์จากลายเซ็นจริง ไม่ใช่นามสกุล และตรวจหัวตาราง 22 คอลัมน์ตามลำดับก่อนรับข้อมูล
-        ไฟล์ที่เนื้อหาซ้ำกับที่เคยนำเข้าจะถูกปฏิเสธ
-      </p>
+    <Card>
+      <CardHeader
+        title="นำเข้าไฟล์ Drug Catalog ล่าสุด"
+        description="ระบบตรวจชนิดไฟล์จากลายเซ็นจริงไม่ใช่นามสกุล และตรวจหัวตาราง 22 คอลัมน์ตามลำดับก่อนรับข้อมูล"
+      />
+      <CardBody>
+        <form className="flex flex-wrap items-end gap-2.5" onSubmit={submit}>
+          <Field label="ไฟล์ (.xls / .xlsx)" htmlFor="catalogFile" className="min-w-56 flex-1">
+            <FileInput id="catalogFile" name="file" accept=".xls,.xlsx" required />
+          </Field>
+          <Field label="เวอร์ชัน (ถ้ามี)" htmlFor="sourceVersion">
+            <TextInput id="sourceVersion" name="sourceVersion" maxLength={120} className="w-36" />
+          </Field>
+          <Field label="วันที่ของไฟล์" htmlFor="sourceDate">
+            <TextInput id="sourceDate" name="sourceDate" type="date" className="w-40" />
+          </Field>
+          <Button type="submit" variant="primary" icon={<IconUpload size={15} />} loading={busy}>
+            นำเข้า
+          </Button>
+        </form>
 
-      <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={submit}>
-        <div className="min-w-56 flex-1">
-          <label className="label" htmlFor="catalogFile">ไฟล์ (.xls / .xlsx)</label>
-          <input className="field" id="catalogFile" name="file" type="file" accept=".xls,.xlsx" required />
-        </div>
-        <div>
-          <label className="label" htmlFor="sourceVersion">เวอร์ชัน (ถ้ามี)</label>
-          <input className="field w-36" id="sourceVersion" name="sourceVersion" maxLength={120} />
-        </div>
-        <div>
-          <label className="label" htmlFor="sourceDate">วันที่ของไฟล์</label>
-          <input className="field" id="sourceDate" name="sourceDate" type="date" />
-        </div>
-        <button className="btn-primary btn-sm" disabled={busy}>
-          {busy ? "กำลังนำเข้า…" : "นำเข้า"}
-        </button>
-      </form>
-
-      {problems.length > 0 ? (
-        <div className="mt-3 rounded-md border border-danger/30 bg-danger-soft p-2.5">
-          <h3 className="text-xxs font-semibold text-danger">รายละเอียดที่ต้องแก้ ({problems.length})</h3>
-          <ul className="mt-1 list-inside list-disc space-y-0.5 text-xxs text-danger">
-            {problems.slice(0, 20).map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </section>
+        {problems.length > 0 ? (
+          <Alert tone="danger" className="mt-3" title={`ไฟล์ยังนำเข้าไม่ได้ — รายละเอียดที่ต้องแก้ (${problems.length})`}>
+            <ul className="mt-1 list-inside list-disc space-y-0.5">
+              {problems.slice(0, 20).map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+            {problems.length > 20 ? <p className="mt-1 font-medium">และอีก {problems.length - 20} รายการ</p> : null}
+          </Alert>
+        ) : null}
+      </CardBody>
+    </Card>
   );
 }

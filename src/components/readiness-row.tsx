@@ -1,31 +1,41 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { IconChevronRight } from "@/components/ui/icons";
 import type { ReadinessItem } from "@/modules/facilities/queries";
 
 /**
- * The three-source readiness row from docs/SPEC.md: green when ready,
- * red with a direct action when not.
+ * The three-source readiness row from docs/SPEC.md.
+ *
+ * Each card answers one question — is this source in place — and carries the
+ * link that fixes it when the answer is no. That link is the point: telling
+ * someone a prerequisite is missing without saying where to go is what makes a
+ * dashboard feel like a report rather than a place to work.
  */
 export function ReadinessRow({ items }: { items: ReadinessItem[] }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-3">
       {items.map((item) => (
-        <li key={item.key} className="card-interactive card-pad flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className={`size-2.5 shrink-0 rounded-full ring-4 ${item.ready ? "bg-ok ring-ok-soft" : "bg-danger ring-danger-soft"}`}
-              />
-              <strong className="text-sm">{item.label}</strong>
-              <span className={item.ready ? "badge-ok" : "badge-danger"}>{item.ready ? "พร้อม" : "ยังไม่พร้อม"}</span>
-            </div>
-            <p className="mt-1 truncate text-xxs text-slate-500" title={item.detail}>
-              {item.detail}
-            </p>
+        <li key={item.key} className="card-interactive p-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <strong className="type-card-title truncate">{item.label}</strong>
+            <ButtonLink
+              href={item.href}
+              size="sm"
+              variant={item.ready ? "ghost" : "outline"}
+              iconAfter={<IconChevronRight size={13} />}
+              className="-mr-1.5 shrink-0"
+            >
+              {item.actionLabel}
+            </ButtonLink>
           </div>
-          <Link href={item.href} className="btn-secondary btn-sm shrink-0">
-            {item.actionLabel} →
-          </Link>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge tone={item.ready ? "success" : "danger"} dot>
+              {item.ready ? "พร้อม" : "ยังไม่พร้อม"}
+            </Badge>
+            <span className="type-help min-w-0 truncate" title={item.detail}>
+              {item.detail}
+            </span>
+          </div>
         </li>
       ))}
     </ul>

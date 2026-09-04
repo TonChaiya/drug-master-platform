@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
 import { requireUser } from "@/modules/auth/session";
 import { latestImport } from "@/modules/catalog/service";
@@ -15,25 +16,17 @@ export default async function MappingsPage() {
   }
 
   const facility = await resolveEffectiveFacility(user);
-  if (!facility) {
-    return (
-      <section className="card card-pad">
-        <h1 className="page-title">จับคู่รายการยา</h1>
-        <p className="mt-1 text-xxs text-slate-500">เลือกสถานบริการก่อนจึงจะจับคู่ได้</p>
-      </section>
-    );
-  }
+  if (!facility) return <NoFacilityNotice title="จับคู่รายการยา" isAdmin={user.role === "admin"} />;
 
   const snapshot = await latestImport(facility.id);
 
   return (
-    <div className="space-y-3">
-      <header>
-        <h1 className="page-title">จับคู่รายการยา</h1>
-        <p className="text-xxs text-slate-500">
-          {facility.code} · {facility.name} — บันทึกสำเร็จแล้วพร้อมส่งออกทันที ไม่มีขั้นตอนอนุมัติ
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow={`${facility.code} · ${facility.name}`}
+        title="จับคู่รายการยา"
+        description="จับคู่รหัสยาของ JHCIS กับรหัส TMT/TTMT บันทึกแล้วพร้อมส่งออกทันที ไม่มีขั้นตอนอนุมัติ"
+      />
       <MappingWorkbench hasCatalog={Boolean(snapshot)} />
     </div>
   );

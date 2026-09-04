@@ -4,6 +4,12 @@ import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, fa
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
+import { Alert, Badge } from "@/components/ui/badge";
+import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/states";
+import { Table, TableMessage, TableScroll } from "@/components/ui/table";
+import { IconDownload, IconLink, IconShield } from "@/components/ui/icons";
 import { AgentInstallerPanel } from "./agent-installer-panel";
 import { FacilityAdminPanel } from "./facility-admin-panel";
 import { TmtApiPanel } from "./tmt-api-panel";
@@ -48,32 +54,36 @@ export default async function AdminPage() {
   ].filter((problem): problem is string => problem !== null);
 
   return (
-    <div className="space-y-3">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="page-title">ผู้ดูแลระบบ</h1>
-        <p className="text-xxs text-slate-500">
-          รออนุมัติ {pending.toLocaleString("th-TH")} บัญชี · สถานบริการที่เปิดใช้งาน {summaries.length.toLocaleString("th-TH")} แห่ง
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="ส่วนกลาง"
+        title="จัดการระบบ"
+        description="ตั้งค่าที่มีผลกับทุกสถานบริการ และจัดการบัญชีผู้ใช้"
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge tone={pending > 0 ? "warning" : "neutral"} dot={pending > 0}>
+              รออนุมัติ {pending.toLocaleString("th-TH")} บัญชี
+            </Badge>
+            <Badge>สถานบริการ {summaries.length.toLocaleString("th-TH")} แห่ง</Badge>
+          </div>
+        }
+      />
 
       {integrityProblems.length > 0 ? (
-        <section className="card card-pad border-danger/30 bg-danger-soft">
-          <h2 className="text-xxs font-semibold text-danger">พบข้อมูลที่ขัดกับกฎสิทธิ์</h2>
-          <ul className="mt-1 list-inside list-disc space-y-0.5 text-xxs text-danger">
+        <Alert tone="danger" title="พบข้อมูลที่ขัดกับกฎสิทธิ์">
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
             {integrityProblems.map((problem) => (
               <li key={problem}>{problem}</li>
             ))}
           </ul>
-        </section>
+        </Alert>
       ) : null}
 
-      <section className="card card-pad">
-        <h2 className="mb-2 text-sm font-semibold">ภาพรวมรายสถานบริการ</h2>
-        {summaries.length === 0 ? (
-          <p className="text-xxs text-slate-500">ยังไม่มีสถานบริการที่เปิดใช้งาน</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
+      <Card>
+        <CardHeader title="ภาพรวมรายสถานบริการ" description="ตัวเลขทั้งหมดนับจากข้อมูลจริงในฐานข้อมูล" />
+        <CardBody flush className="pt-3">
+          <TableScroll>
+            <Table>
               <thead>
                 <tr>
                   <th>รหัส</th>
@@ -88,85 +98,112 @@ export default async function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {summaries.map((row) => (
-                  <tr key={row.facilityId}>
-                    <td className="font-mono">{row.facilityCode}</td>
-                    <td>{row.facilityName}</td>
-                    <td className="tabular-nums">{row.sourceTotal.toLocaleString("th-TH")}</td>
-                    <td className="tabular-nums text-xxs text-slate-500">
-                      {row.type01.toLocaleString("th-TH")} / {row.type10.toLocaleString("th-TH")}
-                    </td>
-                    <td className="tabular-nums">{row.mappedTotal.toLocaleString("th-TH")}</td>
-                    <td className="tabular-nums">
-                      {row.pendingTotal > 0 ? (
-                        <span className="badge-warn">{row.pendingTotal.toLocaleString("th-TH")}</span>
-                      ) : (
-                        <span className="badge-ok">0</span>
-                      )}
-                    </td>
-                    <td className="tabular-nums">
-                      {row.accountCount === 0 ? (
-                        <span className="badge-danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">0</span>
-                      ) : (
-                        row.accountCount
-                      )}
-                    </td>
-                    <td className="tabular-nums">
-                      {row.agentCount}
-                      {row.agentMismatchCount > 0 ? (
-                        <span
-                          className="badge-danger ml-1"
-                          title={`${row.agentMismatchCount} เครื่องรายงาน office.offid ไม่ตรงกับรหัส ${row.facilityCode} จึงถูกปฏิเสธทุกคำขอ`}
-                        >
-                          ไม่ตรง {row.agentMismatchCount}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>{formatBangkok(row.lastMappedAt)}</td>
-                  </tr>
-                ))}
+                {summaries.length === 0 ? (
+                  <TableMessage colSpan={9}>
+                    <EmptyState
+                      compact
+                      icon={<IconShield size={18} />}
+                      title="ยังไม่มีสถานบริการที่เปิดใช้งาน"
+                      description="สถานบริการถูกสร้างขึ้นเมื่อบัญชีแรกของรหัสนั้นสมัครสมาชิก"
+                    />
+                  </TableMessage>
+                ) : (
+                  summaries.map((row) => (
+                    <tr key={row.facilityId}>
+                      <td className="cell-code">{row.facilityCode}</td>
+                      <td className="font-medium">{row.facilityName}</td>
+                      <td className="cell-num">{row.sourceTotal.toLocaleString("th-TH")}</td>
+                      <td className="cell-num text-slate-500">
+                        {row.type01.toLocaleString("th-TH")} / {row.type10.toLocaleString("th-TH")}
+                      </td>
+                      <td className="cell-num">{row.mappedTotal.toLocaleString("th-TH")}</td>
+                      <td className="cell-num">
+                        {row.pendingTotal > 0 ? (
+                          <Badge tone="warning">{row.pendingTotal.toLocaleString("th-TH")}</Badge>
+                        ) : (
+                          <Badge tone="success">0</Badge>
+                        )}
+                      </td>
+                      <td className="cell-num">
+                        {row.accountCount === 0 ? (
+                          <Badge tone="danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">
+                            0
+                          </Badge>
+                        ) : (
+                          row.accountCount
+                        )}
+                      </td>
+                      <td className="cell-num">
+                        {row.agentCount}
+                        {row.agentMismatchCount > 0 ? (
+                          <Badge
+                            tone="danger"
+                            className="ml-1.5"
+                            title={`${row.agentMismatchCount} เครื่องรายงาน office.offid ไม่ตรงกับรหัส ${row.facilityCode} จึงถูกปฏิเสธทุกคำขอ`}
+                          >
+                            ไม่ตรง {row.agentMismatchCount}
+                          </Badge>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap">{formatBangkok(row.lastMappedAt)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+            </Table>
+          </TableScroll>
+        </CardBody>
+      </Card>
 
-      <section className="card card-pad">
-        <h2 className="mb-1 font-display text-base font-extrabold tracking-tight">จัดการสถานบริการ</h2>
-        <p className="mb-3 text-xxs text-slate-500">
-          เลือกสถานบริการหนึ่งแห่ง แล้วแก้ไขชื่อ/รหัส หรือล้างข้อมูลของแห่งนั้นได้ในที่เดียว
-        </p>
-        <FacilityAdminPanel
-          facilities={summaries.map((row) => ({
-            facilityId: row.facilityId,
-            facilityCode: row.facilityCode,
-            facilityName: row.facilityName,
-            sourceTotal: row.sourceTotal,
-            mappedTotal: row.mappedTotal,
-            agentCount: row.agentCount,
-            accountCount: row.accountCount,
-          }))}
+      <Card>
+        <CardHeader
+          title="จัดการสถานบริการ"
+          description="เลือกสถานบริการหนึ่งแห่ง แล้วแก้ไขชื่อหรือรหัส หรือล้างข้อมูลของแห่งนั้นได้ในที่เดียว"
         />
-      </section>
+        <CardBody>
+          <FacilityAdminPanel
+            facilities={summaries.map((row) => ({
+              facilityId: row.facilityId,
+              facilityCode: row.facilityCode,
+              facilityName: row.facilityName,
+              sourceTotal: row.sourceTotal,
+              mappedTotal: row.mappedTotal,
+              agentCount: row.agentCount,
+              accountCount: row.accountCount,
+            }))}
+          />
+        </CardBody>
+      </Card>
 
-      <section className="card card-pad">
-        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">ตัวติดตั้ง Agent</h2>
-        <AgentInstallerPanel initial={installerLink} />
-      </section>
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            icon={<IconDownload size={16} />}
+            title="ตัวติดตั้ง Agent"
+            description="ลิงก์ที่ปุ่มดาวน์โหลดในหน้า “เชื่อมต่อ JHCIS” ของทุกสถานบริการชี้ไป"
+          />
+          <CardBody>
+            <AgentInstallerPanel initial={installerLink} />
+          </CardBody>
+        </Card>
 
-      <section className="card card-pad">
-        <h2 className="mb-2 font-display text-base font-extrabold tracking-tight">TMT API</h2>
-        <TmtApiPanel initial={tmtStatus} />
-      </section>
+        <Card>
+          <CardHeader icon={<IconLink size={16} />} title="TMT API" description="บัญชีที่ใช้ดึงคลังมาตรฐานจาก สมสท" />
+          <CardBody>
+            <TmtApiPanel initial={tmtStatus} />
+          </CardBody>
+        </Card>
+      </div>
 
-      <section className="card card-pad">
-        <h2 className="mb-2 text-sm font-semibold">บัญชีผู้ใช้</h2>
-        <p className="mb-2 text-xxs text-slate-500">
-          บัญชีที่สมัครใหม่เป็น <span className="badge-warn">pending</span> เสมอ ต้องเปิดใช้งานก่อนจึงจะเข้าสู่ระบบได้
-          การปิดใช้งานจะยกเลิก session ที่เปิดค้างอยู่ทันที
-        </p>
-        <UserTable users={rows} currentUserId={user.id} />
-      </section>
+      <Card>
+        <CardHeader
+          title="บัญชีผู้ใช้"
+          description="บัญชีที่สมัครใหม่เป็นสถานะรอดำเนินการเสมอ ต้องเปิดใช้งานก่อนจึงจะเข้าสู่ระบบได้ และการปิดใช้งานจะยกเลิก session ที่เปิดค้างอยู่ทันที"
+        />
+        <CardBody flush className="pt-3">
+          <UserTable users={rows} currentUserId={user.id} />
+        </CardBody>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Field, SelectInput, TextInput } from "@/components/ui/form";
+import { EmptyState, ErrorState } from "@/components/ui/states";
+import { StickyHead, Table, TableMessage, TableScroll, TableSkeleton } from "@/components/ui/table";
+import { IconCheck, IconClose, IconSearch } from "@/components/ui/icons";
 
 export interface StandardRow {
   standardCode: string;
@@ -38,8 +44,11 @@ export interface StandardSearchProps {
 
 /**
  * Five independent filters, debounced, with stale responses discarded. Clearing
- * never reloads the page and never moves the scroll position
- * (docs/SPEC.md).
+ * never reloads the page and never moves the scroll position (docs/SPEC.md).
+ *
+ * The generic name and strength lead each result rather than the brand: those
+ * are what decide whether a pairing is correct, and the brand is what makes two
+ * otherwise identical products look different.
  */
 export function StandardSearch({ standardType = "TMT", lockType = false, onSelect, selectedCode }: StandardSearchProps) {
   // Locked mode has no local type: derive it from the prop instead of mirroring
@@ -99,91 +108,127 @@ export function StandardSearch({ standardType = "TMT", lockType = false, onSelec
     return () => clearTimeout(timer);
   }, [runSearch]);
 
+  const columns = onSelect ? 7 : 6;
+  const hasFilters = activeFilters.length > 0;
+
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-end gap-2">
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-end gap-2.5">
         {!lockType ? (
-          <div>
-            <label className="label" htmlFor="standard-type">คลัง</label>
-            <select
+          <Field label="คลัง" htmlFor="standard-type">
+            <SelectInput
               id="standard-type"
-              className="field w-28"
+              className="w-28"
               value={type}
               onChange={(event) => setChosenType(event.target.value === "TTMT" ? "TTMT" : "TMT")}
             >
               <option value="TMT">TMT</option>
               <option value="TTMT">TTMT</option>
-            </select>
-          </div>
+            </SelectInput>
+          </Field>
         ) : (
-          <span className="badge-muted mb-1.5">คลัง {type}</span>
+          <Badge tone="info" className="mb-2">
+            คลัง {type}
+          </Badge>
         )}
 
         {FILTERS.map((filter) => (
-          <div key={filter.key} className="min-w-36 flex-1">
-            <label className="label" htmlFor={`filter-${filter.key}`}>{filter.label}</label>
-            <input
+          <Field key={filter.key} label={filter.label} htmlFor={`filter-${filter.key}`} className="min-w-36 flex-1">
+            <TextInput
               id={`filter-${filter.key}`}
-              className="field"
               value={filters[filter.key]}
               autoComplete="off"
+              mono={filter.key === "code" || filter.key === "registrationNumber"}
               onChange={(event) => setFilters((current) => ({ ...current, [filter.key]: event.target.value }))}
             />
-          </div>
+          </Field>
         ))}
 
-        <button type="button" className="btn-secondary btn-sm mb-0.5" onClick={() => setFilters(EMPTY)}>
+        <Button size="sm" className="mb-1" icon={<IconClose size={13} />} disabled={!hasFilters} onClick={() => setFilters(EMPTY)}>
           ล้างตัวกรอง
-        </button>
+        </Button>
       </div>
 
-      <p className="text-xxs text-slate-500" role="status" aria-live="polite">
+      <p className="type-caption" role="status" aria-live="polite">
         {status === "idle" && "พิมพ์อย่างน้อย 2 ตัวอักษรในช่องใดช่องหนึ่งเพื่อค้นหา"}
         {status === "short" && "ต้องพิมพ์อย่างน้อย 2 ตัวอักษรในทุกช่องที่กรอก"}
         {status === "loading" && "กำลังค้นหา…"}
         {status === "empty" && "ไม่พบรายการที่ตรงกับตัวกรอง"}
-        {status === "error" && "ค้นหาไม่สำเร็จ กรุณาลองใหม่"}
+        {status === "error" && "ค้นหาไม่สำเร็จ"}
         {status === "ready" && `พบ ${rows.length.toLocaleString("th-TH")} รายการ (แสดงเฉพาะรายการที่เปิดใช้งาน)`}
       </p>
 
-      {rows.length > 0 ? (
-        <div className="max-h-96 overflow-auto rounded-md border border-slate-200">
-          <table className="data-table">
-            <thead className="sticky top-0 bg-white">
+      {status === "error" ? (
+        <div className="rounded-lg border border-border">
+          <ErrorState
+            compact
+            title="ค้นหามาตรฐานไม่สำเร็จ"
+            description="ระบบติดต่อคลังมาตรฐานไม่ได้ในขณะนี้ ตัวกรองที่กรอกไว้ยังคงอยู่"
+            onRetry={() => void runSearch()}
+          />
+        </div>
+      ) : status === "loading" || rows.length > 0 || status === "empty" ? (
+        <TableScroll className="rounded-lg border border-border" maxHeight="24rem">
+          <Table>
+            <StickyHead>
               <tr>
                 <th>รหัส</th>
-                <th>ชื่อการค้า</th>
                 <th>ชื่อสามัญ</th>
                 <th>ความแรง / รูปแบบ</th>
+                <th>ชื่อการค้า</th>
                 <th>ผู้ผลิต</th>
                 <th>ISED</th>
-                {onSelect ? <th /> : null}
+                {onSelect ? <th className="w-0" /> : null}
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.standardCode} className={selectedCode === row.standardCode ? "bg-brand-50" : undefined}>
-                  <td className="font-mono">{row.standardCode}</td>
-                  <td>{row.tradeName ?? "—"}</td>
-                  <td className="max-w-64">{row.activeIngredient ?? "—"}</td>
-                  <td>
-                    {row.strength ?? "—"}
-                    <div className="text-xxs text-slate-400">{row.dosageForm ?? ""}</div>
-                  </td>
-                  <td className="max-w-48">{row.manufacturer ?? "—"}</td>
-                  <td>{row.exportIsed ?? <span className="badge-warn">ไม่มี</span>}</td>
-                  {onSelect ? (
-                    <td>
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => onSelect(row)}>
-                        เลือก
-                      </button>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            </StickyHead>
+
+            {status === "loading" && rows.length === 0 ? (
+              <TableSkeleton rows={5} columns={columns} />
+            ) : (
+              <tbody>
+                {rows.length === 0 ? (
+                  <TableMessage colSpan={columns}>
+                    <EmptyState
+                      compact
+                      icon={<IconSearch size={18} />}
+                      title="ไม่พบรายการที่ตรงกับตัวกรอง"
+                      description="ลองค้นด้วยชื่อสามัญแทนชื่อการค้า หรือลดจำนวนช่องที่กรอกลง"
+                    />
+                  </TableMessage>
+                ) : (
+                  rows.map((row) => {
+                    const chosen = selectedCode === row.standardCode;
+                    return (
+                      <tr key={row.standardCode} className={chosen ? "row-selected" : undefined}>
+                        <td className="cell-code">{row.standardCode}</td>
+                        <td className="max-w-64 font-medium text-ink">{row.activeIngredient ?? "—"}</td>
+                        <td>
+                          {row.strength ?? "—"}
+                          {row.dosageForm ? <div className="type-help">{row.dosageForm}</div> : null}
+                        </td>
+                        <td className="max-w-48 text-slate-600">{row.tradeName ?? "—"}</td>
+                        <td className="max-w-48 font-medium text-ink">{row.manufacturer ?? "—"}</td>
+                        <td>{row.exportIsed ?? <Badge tone="warning">ไม่มี</Badge>}</td>
+                        {onSelect ? (
+                          <td>
+                            <Button
+                              size="sm"
+                              variant={chosen ? "secondary" : "primary"}
+                              icon={chosen ? <IconCheck size={13} /> : undefined}
+                              onClick={() => onSelect(row)}
+                            >
+                              {chosen ? "เลือกอยู่" : "เลือก"}
+                            </Button>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            )}
+          </Table>
+        </TableScroll>
       ) : null}
     </div>
   );

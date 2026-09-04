@@ -2,6 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Choice, Field, SelectInput, TextInput } from "@/components/ui/form";
+import { SectionHeading } from "@/components/ui/page-header";
+import { EmptyState } from "@/components/ui/states";
+import { IconShield, IconTrash } from "@/components/ui/icons";
 
 export interface AdminFacility {
   facilityId: string;
@@ -49,6 +56,7 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
   const [code, setCode] = useState("");
   const [scope, setScope] = useState<Scope>("mappings");
   const [confirmCode, setConfirmCode] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState<"save" | "clear" | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -121,6 +129,7 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
         ok: true,
         text: parts.length > 0 ? `ล้างแล้ว: ${parts.join(" · ")}` : "ไม่มีข้อมูลในขอบเขตที่เลือกให้ลบ",
       });
+      setConfirmOpen(false);
       setConfirmCode("");
       router.refresh();
     } finally {
@@ -128,46 +137,55 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
     }
   }
 
-  if (facilities.length === 0) return <p className="text-xxs text-slate-500">ยังไม่มีสถานบริการที่เปิดใช้งาน</p>;
+  if (facilities.length === 0) {
+    return (
+      <EmptyState
+        compact
+        icon={<IconShield size={18} />}
+        title="ยังไม่มีสถานบริการที่เปิดใช้งาน"
+        description="สถานบริการถูกสร้างขึ้นเมื่อบัญชีแรกของรหัสนั้นสมัครสมาชิก"
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="label" htmlFor="admin-facility">เลือกสถานบริการ</label>
-        <select id="admin-facility" className="field" value={facilityId} onChange={(event) => select(event.target.value)}>
+      <Field label="เลือกสถานบริการ" htmlFor="admin-facility" className="max-w-md">
+        <SelectInput id="admin-facility" value={facilityId} onChange={(event) => select(event.target.value)}>
           <option value="">— เลือกสถานบริการ —</option>
           {facilities.map((row) => (
             <option key={row.facilityId} value={row.facilityId}>
               {row.facilityCode} · {row.facilityName}
             </option>
           ))}
-        </select>
-      </div>
+        </SelectInput>
+      </Field>
 
       {selected ? (
         <>
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             {[
               { label: "ยาจาก JHCIS", value: selected.sourceTotal },
               { label: "จับคู่แล้ว", value: selected.mappedTotal },
               { label: "ไอดี", value: selected.accountCount },
               { label: "Agent", value: selected.agentCount },
             ].map((tile) => (
-              <div key={tile.label} className="rounded-md bg-slate-50 px-2.5 py-2">
-                <dt className="text-xxs text-slate-500">{tile.label}</dt>
-                <dd className="font-display text-base font-extrabold tabular-nums">{tile.value.toLocaleString("th-TH")}</dd>
+              <div key={tile.label} className="rounded-lg bg-surface-subtle px-3 py-2.5">
+                <dt className="type-caption">{tile.label}</dt>
+                <dd className="mt-0.5 font-display text-base font-bold tabular-nums text-slate-900">
+                  {tile.value.toLocaleString("th-TH")}
+                </dd>
               </div>
             ))}
           </dl>
 
-          <form onSubmit={save} className="space-y-2.5 border-t border-slate-200 pt-3">
-            <h3 className="text-xxs font-bold text-slate-700">แก้ไขชื่อและรหัส</h3>
+          <form onSubmit={save} className="space-y-3 border-t border-border pt-4">
+            <SectionHeading title="แก้ไขชื่อและรหัส" />
             <div className="grid gap-2.5 sm:grid-cols-[8rem_1fr]">
-              <div>
-                <label className="label" htmlFor="admin-code">รหัส 5 หลัก</label>
-                <input
-                  className="field font-mono"
+              <Field label="รหัส 5 หลัก" htmlFor="admin-code" required>
+                <TextInput
                   id="admin-code"
+                  mono
                   value={code}
                   onChange={(event) => setCode(event.target.value.trim())}
                   inputMode="numeric"
@@ -175,11 +193,9 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
                   maxLength={5}
                   required
                 />
-              </div>
-              <div>
-                <label className="label" htmlFor="admin-name">ชื่อสถานบริการ</label>
-                <input
-                  className="field"
+              </Field>
+              <Field label="ชื่อสถานบริการ" htmlFor="admin-name" required>
+                <TextInput
                   id="admin-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -187,83 +203,108 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
                   maxLength={255}
                   required
                 />
-              </div>
+              </Field>
             </div>
 
             {codeChanged ? (
-              <p className="rounded-md bg-warn-soft px-2.5 py-2 text-xxs text-warn">
+              <Alert tone="warning" title="การเปลี่ยนรหัสจะหยุด Agent ที่ลงทะเบียนไว้">
                 กำลังเปลี่ยนรหัสจาก <strong className="font-mono">{selected.facilityCode}</strong> เป็น{" "}
                 <strong className="font-mono">{code || "—"}</strong> — Agent อ่าน <code className="font-mono">office.offid</code> จาก JHCIS
                 และจะหยุดส่งข้อมูลจนกว่าค่าใน JHCIS จะตรงกับรหัสใหม่
                 {selected.agentCount > 0 ? ` ขณะนี้มี Agent ${selected.agentCount.toLocaleString("th-TH")} เครื่องลงทะเบียนอยู่` : ""}
-              </p>
+              </Alert>
             ) : null}
 
-            <button className="btn-primary btn-sm" disabled={busy !== null}>
-              {busy === "save" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}
-            </button>
+            <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
+              บันทึกการแก้ไข
+            </Button>
           </form>
 
-          <div className="space-y-2.5 border-t border-slate-200 pt-3">
-            <h3 className="text-xxs font-bold text-danger">ล้างข้อมูลของสถานบริการนี้</h3>
-            <p className="text-xxs text-slate-500">
-              ลบเฉพาะข้อมูลของ <strong>{selected.facilityCode}</strong> เท่านั้น คลังมาตรฐาน TMT/TTMT ที่ใช้ร่วมกัน
-              สถานบริการอื่น และบัญชีผู้ใช้ ไม่ถูกแตะต้อง
-            </p>
+          <div className="space-y-3 border-t border-border pt-4">
+            <SectionHeading
+              title={<span className="text-danger">ล้างข้อมูลของสถานบริการนี้</span>}
+              description={
+                <>
+                  ลบเฉพาะข้อมูลของ <strong>{selected.facilityCode}</strong> เท่านั้น คลังมาตรฐาน TMT/TTMT ที่ใช้ร่วมกัน
+                  สถานบริการอื่น และบัญชีผู้ใช้ ไม่ถูกแตะต้อง
+                </>
+              }
+            />
 
-            <fieldset className="space-y-1">
+            <fieldset className="space-y-0.5">
+              <legend className="sr-only">ขอบเขตข้อมูลที่จะล้าง</legend>
               {SCOPES.map((option) => (
-                <label key={option.value} className="flex items-start gap-2 rounded-md px-1 py-1 text-xxs hover:bg-slate-50">
-                  <input
-                    type="radio"
-                    name="scope"
-                    className="mt-0.5"
-                    checked={scope === option.value}
-                    onChange={() => {
-                      setScope(option.value);
-                      setMessage(null);
-                    }}
-                  />
-                  <span>
-                    <span className={option.value === "all" ? "font-bold text-danger" : "font-medium text-slate-700"}>{option.label}</span>
-                    <span className="block text-slate-500">{option.detail}</span>
-                  </span>
-                </label>
+                <Choice
+                  key={option.value}
+                  type="radio"
+                  name="scope"
+                  id={`scope-${option.value}`}
+                  label={option.label}
+                  description={option.detail}
+                  emphasis={option.value === "all" ? "danger" : undefined}
+                  checked={scope === option.value}
+                  onChange={() => {
+                    setScope(option.value);
+                    setMessage(null);
+                  }}
+                />
               ))}
             </fieldset>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <label className="label" htmlFor="admin-confirm">พิมพ์รหัส {selected.facilityCode} เพื่อยืนยัน</label>
-                <input
-                  id="admin-confirm"
-                  className="field w-32 font-mono"
-                  value={confirmCode}
-                  onChange={(event) => setConfirmCode(event.target.value)}
-                  inputMode="numeric"
-                  pattern="[0-9]{5}"
-                  maxLength={5}
-                  autoComplete="off"
-                />
-              </div>
-              <button
-                type="button"
-                className="btn-danger btn-sm mb-0.5"
-                disabled={busy !== null || confirmCode !== selected.facilityCode}
-                onClick={() => void clear()}
-              >
-                {busy === "clear" ? "กำลังล้าง…" : `ล้าง: ${chosenScope?.label ?? ""}`}
-              </button>
-            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<IconTrash size={13} />}
+              disabled={busy !== null}
+              onClick={() => {
+                setConfirmCode("");
+                setConfirmOpen(true);
+              }}
+            >
+              ล้าง: {chosenScope?.label ?? ""}
+            </Button>
           </div>
         </>
       ) : null}
 
-      {message ? (
-        <p className={`rounded-md px-2.5 py-2 text-xxs ${message.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"}`} role="status">
-          {message.text}
-        </p>
-      ) : null}
+      {message ? <Alert tone={message.ok ? "success" : "danger"}>{message.text}</Alert> : null}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => void clear()}
+        tone="destructive"
+        title="ยืนยันการล้างข้อมูล"
+        description={selected ? `${selected.facilityCode} · ${selected.facilityName}` : undefined}
+        confirmLabel="ล้างข้อมูล"
+        busy={busy === "clear"}
+        confirmDisabled={confirmCode !== selected?.facilityCode}
+      >
+        <Alert tone="danger" title={chosenScope?.label}>
+          {chosenScope?.detail}
+        </Alert>
+        <Field
+          className="mt-3"
+          label={
+            <>
+              พิมพ์รหัส <span className="font-mono">{selected?.facilityCode}</span> เพื่อยืนยัน
+            </>
+          }
+          htmlFor="admin-confirm"
+        >
+          <TextInput
+            id="admin-confirm"
+            mono
+            className="w-36"
+            value={confirmCode}
+            onChange={(event) => setConfirmCode(event.target.value)}
+            inputMode="numeric"
+            pattern="[0-9]{5}"
+            maxLength={5}
+            autoComplete="off"
+          />
+        </Field>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Alert, Badge } from "@/components/ui/badge";
+import { Field, TextInput } from "@/components/ui/form";
+import { IconLink, IconTrash } from "@/components/ui/icons";
 
 export interface TmtCredentialStatus {
   configured: boolean;
@@ -49,7 +53,7 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
       }
       setStatus(result.status);
       setPassword("");
-      setMessage({ ok: true, text: "บันทึก credential แล้ว กด ‘ทดสอบการเชื่อมต่อ’ เพื่อยืนยัน" });
+      setMessage({ ok: true, text: "บันทึก credential แล้ว กด “ทดสอบการเชื่อมต่อ” เพื่อยืนยัน" });
     } finally {
       setBusy(null);
     }
@@ -90,38 +94,45 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-xxs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={status.configured ? "success" : "danger"} dot>
+          {status.configured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}
+        </Badge>
+        <Badge>{SOURCE_LABEL[status.source]}</Badge>
+        {status.updatedAt ? (
+          <span className="type-caption">แก้ไขล่าสุด {new Date(status.updatedAt).toLocaleString("th-TH")}</span>
+        ) : null}
+      </div>
+
+      <p className="type-help">
         รหัสผ่านถูกเข้ารหัสก่อนบันทึกและไม่ถูกส่งกลับมาแสดงอีก การเปลี่ยนค่าจึงต้องกรอกรหัสผ่านใหม่ทุกครั้ง
         หากไม่ได้บันทึกไว้ที่นี่ ระบบจะใช้ค่าจากตัวแปรแวดล้อม <code className="font-mono">TMT_API_*</code> แทน
       </p>
 
-      <p className="flex flex-wrap items-center gap-1.5 text-xxs">
-        <span className={status.configured ? "badge-ok" : "badge-danger"}>{status.configured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า"}</span>
-        <span className="badge-muted">{SOURCE_LABEL[status.source]}</span>
-        {status.updatedAt ? <span className="text-slate-500">แก้ไขล่าสุด {new Date(status.updatedAt).toLocaleString("th-TH")}</span> : null}
-      </p>
-
       <form onSubmit={save} className="grid gap-2.5 sm:grid-cols-2">
-        <div className="sm:col-span-2">
-          <label className="label" htmlFor="tmt-base">Base URL</label>
-          <input
-            className="field font-mono"
+        <Field label="Base URL" htmlFor="tmt-base" className="sm:col-span-2" required>
+          <TextInput
             id="tmt-base"
+            mono
             value={baseUrl}
             onChange={(event) => setBaseUrl(event.target.value)}
             required
             maxLength={255}
             inputMode="url"
           />
-        </div>
-        <div>
-          <label className="label" htmlFor="tmt-user">ชื่อผู้ใช้ TMT API</label>
-          <input className="field" id="tmt-user" value={username} onChange={(event) => setUsername(event.target.value)} required maxLength={160} autoComplete="off" />
-        </div>
-        <div>
-          <label className="label" htmlFor="tmt-pass">รหัสผ่าน TMT API</label>
-          <input
-            className="field"
+        </Field>
+        <Field label="ชื่อผู้ใช้ TMT API" htmlFor="tmt-user" required>
+          <TextInput
+            id="tmt-user"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            required
+            maxLength={160}
+            autoComplete="off"
+          />
+        </Field>
+        <Field label="รหัสผ่าน TMT API" htmlFor="tmt-pass" required>
+          <TextInput
             id="tmt-pass"
             type="password"
             value={password}
@@ -131,25 +142,39 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
             autoComplete="new-password"
             placeholder={status.source === "database" ? "กรอกใหม่เพื่อเปลี่ยน" : ""}
           />
-        </div>
+        </Field>
 
         {message ? (
-          <p className={`sm:col-span-2 rounded-md px-2.5 py-2 text-xxs ${message.ok ? "bg-ok-soft text-ok" : "bg-danger-soft text-danger"}`} role="status">
+          <Alert tone={message.ok ? "success" : "danger"} className="sm:col-span-2">
             {message.text}
-          </p>
+          </Alert>
         ) : null}
 
         <div className="flex flex-wrap gap-2 sm:col-span-2">
-          <button className="btn-primary btn-sm" disabled={busy !== null}>
-            {busy === "save" ? "กำลังบันทึก…" : "บันทึก credential"}
-          </button>
-          <button type="button" className="btn-secondary btn-sm" disabled={busy !== null || !status.configured} onClick={() => void test()}>
-            {busy === "test" ? "กำลังทดสอบ…" : "ทดสอบการเชื่อมต่อ"}
-          </button>
+          <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
+            บันทึก credential
+          </Button>
+          <Button
+            size="sm"
+            icon={<IconLink size={13} />}
+            loading={busy === "test"}
+            disabled={busy !== null || !status.configured}
+            onClick={() => void test()}
+          >
+            ทดสอบการเชื่อมต่อ
+          </Button>
           {status.source === "database" ? (
-            <button type="button" className="btn-danger btn-sm ml-auto" disabled={busy !== null} onClick={() => void clear()}>
-              {busy === "clear" ? "กำลังลบ…" : "ลบค่าที่บันทึกไว้"}
-            </button>
+            <Button
+              size="sm"
+              variant="danger"
+              className="ml-auto"
+              icon={<IconTrash size={13} />}
+              loading={busy === "clear"}
+              disabled={busy !== null}
+              onClick={() => void clear()}
+            >
+              ลบค่าที่บันทึกไว้
+            </Button>
           ) : null}
         </div>
       </form>

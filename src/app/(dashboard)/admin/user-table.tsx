@@ -3,6 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/components/toast";
+import { Button } from "@/components/ui/button";
+import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field, TextInput } from "@/components/ui/form";
+import { EmptyState } from "@/components/ui/states";
+import { Table, TableMessage, TableScroll } from "@/components/ui/table";
+import { IconTrash } from "@/components/ui/icons";
 
 export interface AdminUserRow {
   id: string;
@@ -16,17 +23,11 @@ export interface AdminUserRow {
   facilityName: string | null;
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  active: "badge-ok",
-  pending: "badge-warn",
-  disabled: "badge-muted",
-};
-
 export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; currentUserId: string }) {
   const router = useRouter();
   const { push } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<AdminUserRow | null>(null);
   const [typed, setTyped] = useState("");
 
   async function changeStatus(userId: string, status: "active" | "disabled") {
@@ -51,8 +52,8 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
 
   /**
    * Deleting is permanent and cannot be undone from this screen, so it asks for
-   * the username to be typed back — the same shape of confirmation the
-   * facility data panel uses for its own destructive action.
+   * the username to be typed back — the same shape of confirmation the facility
+   * data panel uses for its own destructive action.
    */
   async function remove(user: AdminUserRow) {
     setBusy(user.id);
@@ -68,107 +69,145 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
         return;
       }
       push("ok", `ลบบัญชี ${user.username} แล้ว`);
-      setConfirming(null);
-      setTyped("");
+      closeConfirm();
       router.refresh();
     } finally {
       setBusy(null);
     }
   }
 
-  if (users.length === 0) return <p className="text-xxs text-slate-500">ยังไม่มีบัญชีผู้ใช้</p>;
+  function closeConfirm() {
+    setConfirming(null);
+    setTyped("");
+  }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>ผู้ใช้</th>
-            <th>ตำแหน่ง</th>
-            <th>สถานบริการ</th>
-            <th>บทบาท</th>
-            <th>เข้าใช้ล่าสุด</th>
-            <th>สถานะ</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((user) => (
-            <tr key={user.id}>
-              <td>
-                <div className="font-medium">{user.fullName}</div>
-                <div className="font-mono text-xxs text-slate-400">{user.username}</div>
-              </td>
-              <td>{user.positionName}</td>
-              <td>{user.facilityCode ? `${user.facilityCode} · ${user.facilityName}` : <span className="text-slate-400">ส่วนกลาง</span>}</td>
-              <td>
-                <span className="badge-muted">{user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}</span>
-              </td>
-              <td>{user.lastLoginAt ?? "—"}</td>
-              <td>
-                <span className={STATUS_BADGE[user.status] ?? "badge-muted"}>{user.status}</span>
-              </td>
-              <td>
-                {user.id === currentUserId ? (
-                  <span className="text-xxs text-slate-400">บัญชีคุณเอง</span>
-                ) : confirming === user.id ? (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <input
-                      className="field w-32 font-mono"
-                      value={typed}
-                      onChange={(event) => setTyped(event.target.value)}
-                      placeholder={user.username}
-                      aria-label={`พิมพ์ ${user.username} เพื่อยืนยันการลบ`}
-                      autoComplete="off"
-                    />
-                    <button
-                      type="button"
-                      className="btn-danger btn-sm"
-                      disabled={busy !== null || typed !== user.username}
-                      onClick={() => void remove(user)}
-                    >
-                      {busy === user.id ? "กำลังลบ…" : "ลบถาวร"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn-sm"
-                      onClick={() => {
-                        setConfirming(null);
-                        setTyped("");
-                      }}
-                    >
-                      ยกเลิก
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {user.status === "active" ? (
-                      <button type="button" className="btn-secondary btn-sm" disabled={busy !== null} onClick={() => void changeStatus(user.id, "disabled")}>
-                        ปิดใช้งาน
-                      </button>
-                    ) : (
-                      <button type="button" className="btn-primary btn-sm" disabled={busy !== null} onClick={() => void changeStatus(user.id, "active")}>
-                        เปิดใช้งาน
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn-danger btn-sm"
-                      disabled={busy !== null}
-                      onClick={() => {
-                        setConfirming(user.id);
-                        setTyped("");
-                      }}
-                    >
-                      ลบ
-                    </button>
-                  </div>
-                )}
-              </td>
+    <>
+      <TableScroll>
+        <Table>
+          <thead>
+            <tr>
+              <th>ผู้ใช้</th>
+              <th>ตำแหน่ง</th>
+              <th>สถานบริการ</th>
+              <th>บทบาท</th>
+              <th>เข้าใช้ล่าสุด</th>
+              <th>สถานะ</th>
+              <th className="w-0" />
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <TableMessage colSpan={7}>
+                <EmptyState compact title="ยังไม่มีบัญชีผู้ใช้" description="บัญชีที่สมัครผ่านหน้าสมัครสมาชิกจะปรากฏที่นี่เพื่อรออนุมัติ" />
+              </TableMessage>
+            ) : (
+              users.map((user) => (
+                <tr key={user.id}>
+                  <td>
+                    <div className="font-medium">{user.fullName}</div>
+                    <div className="cell-code text-xxs text-slate-500">{user.username}</div>
+                  </td>
+                  <td>{user.positionName}</td>
+                  <td>
+                    {user.facilityCode ? (
+                      <>
+                        <span className="cell-code">{user.facilityCode}</span>{" "}
+                        <span className="text-slate-600">{user.facilityName}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">ส่วนกลาง</span>
+                    )}
+                  </td>
+                  <td>
+                    <Badge tone={user.role === "admin" ? "info" : "neutral"}>
+                      {user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}
+                    </Badge>
+                  </td>
+                  <td className="whitespace-nowrap">{user.lastLoginAt ?? "—"}</td>
+                  <td>
+                    <StatusBadge status={user.status} />
+                  </td>
+                  <td>
+                    {user.id === currentUserId ? (
+                      <span className="type-caption whitespace-nowrap">บัญชีคุณเอง</span>
+                    ) : (
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {user.status === "active" ? (
+                          <Button
+                            size="sm"
+                            loading={busy === user.id}
+                            disabled={busy !== null}
+                            onClick={() => void changeStatus(user.id, "disabled")}
+                          >
+                            ปิดใช้งาน
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            loading={busy === user.id}
+                            disabled={busy !== null}
+                            onClick={() => void changeStatus(user.id, "active")}
+                          >
+                            เปิดใช้งาน
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          icon={<IconTrash size={13} />}
+                          disabled={busy !== null}
+                          onClick={() => {
+                            setConfirming(user);
+                            setTyped("");
+                          }}
+                        >
+                          ลบ
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </Table>
+      </TableScroll>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onClose={closeConfirm}
+        onConfirm={() => confirming && void remove(confirming)}
+        tone="destructive"
+        title="ลบบัญชีถาวร"
+        description={confirming ? `${confirming.fullName} · ${confirming.positionName}` : undefined}
+        confirmLabel="ลบถาวร"
+        busy={busy !== null}
+        confirmDisabled={typed !== confirming?.username}
+      >
+        <Alert tone="danger" title="การลบนี้ย้อนกลับไม่ได้">
+          บัญชีและ session ที่เปิดค้างอยู่จะถูกลบทันที ข้อมูลของสถานบริการและประวัติการจับคู่ไม่ถูกแตะต้อง
+        </Alert>
+        <Field
+          className="mt-3"
+          label={
+            <>
+              พิมพ์ <span className="font-mono">{confirming?.username}</span> เพื่อยืนยัน
+            </>
+          }
+          htmlFor="confirm-username"
+        >
+          <TextInput
+            id="confirm-username"
+            mono
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            placeholder={confirming?.username}
+            autoComplete="off"
+          />
+        </Field>
+      </ConfirmDialog>
+    </>
   );
 }
