@@ -146,6 +146,32 @@ python -m venv .venv
 
 เวอร์ชันมาจาก `version.py` ไฟล์เดียว `build.ps1` ตรวจว่าไฟล์ที่ build แล้วรายงานเวอร์ชันตรงกันก่อนถือว่าสำเร็จ
 
+#### Gate ของ build
+
+`build.ps1` จะไม่ยอม package ถ้า gate ใด gate หนึ่งแดง ทั้งสี่ตัวมาจากบั๊กที่เคยหลุดออกไปจริง
+
+| Gate | ดักอะไร |
+|---|---|
+| `ruff check --select F` | ชื่อที่ไม่มีอยู่จริงและ import ที่ไม่ได้ใช้ — 1.2.1 หลุดออกไปโดยอ้าง `self` ใน `@staticmethod` ทำให้การลงทะเบียนตายด้วย `NameError` ทุกครั้ง |
+| `tests/test_signature.py` | canonical string และ HMAC ต้องตรงกับที่เซิร์ฟเวอร์คำนวณ |
+| `tests/test_ui_smoke.py` | สร้างหน้าต่างจริงแล้วยิง callback ที่วิ่งเฉพาะบางเส้นทาง รวมถึง copy/paste และ signature ของ `AgentApi.enroll` |
+| packaged self-test | รัน `.exe` ที่ build แล้วจริง ดัก lazy import ที่ PyInstaller เก็บไม่ครบ ซึ่งเห็นได้เฉพาะในไฟล์ที่ package แล้ว |
+
+#### Copy / paste ในหน้าตั้งค่า
+
+ทุกช่องกรอกและทุกค่าที่อ่านอย่างเดียวต้อง copy/paste ได้เสมอ กติกาสองข้อที่ห้ามพลาด
+
+1. **ผูกด้วย keycode ไม่ใช่ keysym** — Tk ผูก Ctrl+C/Ctrl+V เดิมไว้กับ keysym และ keysym เปลี่ยนตาม
+   keyboard layout พอสลับเป็นแป้นไทย Ctrl+C กลายเป็น Ctrl+แ ไม่มี binding ไหนตรง copy/paste จึงเงียบไป
+   `_enable_clipboard` จึงผูก `<Control-KeyPress>` แล้วอ่าน `event.keycode` ซึ่งเป็นปุ่มจริงบนแป้นและไม่ขึ้นกับ layout
+   (`VK_A/VK_C/VK_V/VK_X`) พร้อมรองรับ Shift+Insert และ Ctrl+Insert ที่ไม่เคยขึ้นกับ layout อยู่แล้ว
+2. **ยิง virtual event ใส่ `tk.Entry` ตัวใน ไม่ใช่ `CTkEntry`** — `CTkEntry` เป็น frame ครอบ `tk.Entry`
+   `bind()` ส่งต่อให้ตัวใน แต่ `event_generate()` **ไม่ส่งต่อ** `<<Copy>>` ที่ยิงใส่ตัวครอบจึงตกที่ frame
+   ซึ่งไม่มี class binding แล้วเงียบหายไป ใช้ `getattr(entry, "_entry", entry)` เสมอ
+
+`test_ui_smoke.py` ยืนยันทั้งสองข้อด้วยการยิง `<Control-KeyPress>` ที่มี `keycode` แต่ไม่มี keysym ละติน
+ซึ่งเป็นรูปแบบเดียวกับที่แป้นไทยส่งมา หน้าต่างต้องถูก map และ focus ก่อน Tk จึงจะส่ง event สังเคราะห์ให้
+
 ก่อนเผยแพร่จริงยังต้องมี: code signing certificate · installer (WiX/Inno) ที่หยุด process เดิม
 ถอนเวอร์ชันเก่าที่ product code เดียวกัน และล้าง shortcut/uninstall entry · เก็บ config เฉพาะตอน upgrade
 และให้เลือกเก็บ/ลบอย่างชัดเจนตอน uninstall

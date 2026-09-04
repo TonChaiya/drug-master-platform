@@ -18,7 +18,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from tmt_agent.api import AgentApi
-from tmt_agent.config import AgentConfig, ConfigStore, app_data_dir
+from tmt_agent.config import AgentConfig, ConfigStore, app_data_dir, machine_mac
 from tmt_agent.errors import AgentFailure
 from tmt_agent.jhcis import read_office
 from tmt_agent.protocol_link import parse_enrollment_link, register_protocol_handler
@@ -27,15 +27,40 @@ from tmt_agent.worker import CommandWorker, run_sync
 from version import VERSION
 
 APP_NAME = "TMT Drug Master Agent"
-STATE_COLORS = {"ok": "#087c5b", "error": "#b42318", "busy": "#c58a00", "idle": "#64748b"}
 
-# Same palette as the web app so the two do not look like different products.
-INK = "#26384b"
-PAPER = "#eef2f4"
-LINE = "#dce3e7"
-MUTED = "#73808b"
-ORANGE = "#ff4d24"
-ORANGE_DARK = "#e63d17"
+# The web application's tokens, transcribed. The two are one product and a staff
+# member moves between them in the same minute, so the tray must not look like a
+# different program: same neutrals, same clinical blue, same 8px corners, same
+# meaning attached to each status colour.
+INK = "#161c22"
+MUTED = "#6b7885"
+CANVAS = "#f4f6f8"
+SURFACE = "#ffffff"
+SUBTLE = "#f7f8fa"
+LINE = "#e3e8ed"
+LINE_STRONG = "#cbd3db"
+PRIMARY = "#12639f"
+PRIMARY_HOVER = "#0e4f80"
+PRIMARY_SOFT = "#eef6fc"
+SUCCESS = "#0f7b52"
+SUCCESS_SOFT = "#e6f4ee"
+WARNING = "#9a6200"
+WARNING_SOFT = "#fdf3e2"
+DANGER = "#b42318"
+DANGER_SOFT = "#fdeceb"
+
+STATE_COLORS = {"ok": SUCCESS, "error": DANGER, "busy": WARNING, "idle": MUTED}
+STATE_TINTS = {"ok": SUCCESS_SOFT, "error": DANGER_SOFT, "busy": WARNING_SOFT, "idle": SUBTLE}
+
+FONT = "Segoe UI"
+FONT_MONO = "Consolas"
+
+# Windows virtual-key codes. Tk delivers Ctrl shortcuts as keysyms, and a keysym
+# depends on the active keyboard layout: with Thai selected, Ctrl+C arrives as
+# Ctrl+แ and the built-in <<Copy>> binding never fires, which is why copy and
+# paste stopped working on the machines this runs on. The keycode is the
+# physical key and does not move with the layout.
+VK_A, VK_C, VK_V, VK_X = 65, 67, 86, 88
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -148,6 +173,10 @@ class AgentApp:
         if self.settings_status is not None and self.settings_status.winfo_exists():
             # CustomTkinter names this text_color; ttk's `foreground` raises here.
             self.settings_status.configure(text=self.status_text, text_color=color)
+            dot = getattr(self, "status_dot", None)
+            if dot is not None and dot.winfo_exists():
+                dot.configure(fg_color=color)
+                dot.master.configure(fg_color=STATE_TINTS.get(state, STATE_TINTS["idle"]))
 
     # ------------------------------------------------------------------- ipc
 
@@ -220,6 +249,7 @@ class AgentApp:
                 config.machine_label or socket.gethostname(),
                 snapshot.office_id,
                 VERSION,
+                config.jhcis_host,
             )
             self._persist(
                 config.with_credential(link.server_url, credential.key_id, credential.secret, credential.facility_code)
@@ -270,93 +300,213 @@ class AgentApp:
         """One labelled field. Label above the box, so long Thai labels do not
         squeeze the input on a narrow window."""
         holder = ctk.CTkFrame(parent, fg_color="transparent")
-        holder.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+        holder.grid(row=row, column=0, sticky="ew", pady=(0, 12))
         holder.columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
-            holder, text=label, anchor="w", text_color=MUTED, font=("Segoe UI Semibold", 11)
-        ).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(holder, text=label, anchor="w", text_color=INK, font=(FONT, 11, "bold")).grid(
+            row=0, column=0, sticky="w"
+        )
 
         entry = ctk.CTkEntry(
             holder,
-            height=36,
+            height=34,
             corner_radius=8,
             border_width=1,
-            border_color=LINE,
-            fg_color="#ffffff",
+            border_color=LINE_STRONG,
+            fg_color=SURFACE,
             text_color=INK,
-            show="•" if secret else "",
+            font=(FONT_MONO, 12) if key in {"jhcis_host", "jhcis_port", "server_url"} else (FONT, 12),
+            show="\u2022" if secret else "",
         )
-        entry.grid(row=1, column=0, sticky="ew", pady=(3, 0))
+        entry.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         entry.insert(0, value)
         self._enable_clipboard(entry)
         self.entries[key] = entry
 
         if hint:
-            ctk.CTkLabel(holder, text=hint, anchor="w", text_color=MUTED, font=("Segoe UI", 10)).grid(
-                row=2, column=0, sticky="w", pady=(2, 0)
+            ctk.CTkLabel(holder, text=hint, anchor="w", text_color=MUTED, font=(FONT, 10)).grid(
+                row=2, column=0, sticky="w", pady=(3, 0)
             )
 
     def _card(self, parent, title: str, subtitle: str = ""):
-        card = ctk.CTkFrame(parent, corner_radius=10, fg_color="#ffffff", border_width=1, border_color=LINE)
-        card.pack(fill="x", pady=(0, 12))
+        card = ctk.CTkFrame(parent, corner_radius=12, fg_color=SURFACE, border_width=1, border_color=LINE)
+        card.pack(fill="x", pady=(0, 14))
         card.columnconfigure(0, weight=1)
 
         inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(fill="both", expand=True, padx=16, pady=14)
+        inner.pack(fill="both", expand=True, padx=18, pady=16)
         inner.columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(inner, text=title, anchor="w", text_color=INK, font=("Segoe UI Semibold", 14)).grid(
+        ctk.CTkLabel(inner, text=title, anchor="w", text_color=INK, font=(FONT, 14, "bold")).grid(
             row=0, column=0, sticky="w"
         )
         if subtitle:
             ctk.CTkLabel(
                 inner, text=subtitle, anchor="w", justify="left", text_color=MUTED,
-                font=("Segoe UI", 11), wraplength=560,
-            ).grid(row=1, column=0, sticky="w", pady=(2, 10))
+                font=(FONT, 11), wraplength=560,
+            ).grid(row=1, column=0, sticky="w", pady=(3, 14))
         else:
-            ctk.CTkLabel(inner, text="", height=4).grid(row=1, column=0)
+            ctk.CTkLabel(inner, text="", height=6).grid(row=1, column=0)
         return inner
 
     def _stat(self, parent, column: int, label: str, value: str):
-        tile = ctk.CTkFrame(parent, corner_radius=10, fg_color=PAPER)
+        """
+        One figure in the status card. Clicking it copies the value: these are
+        exactly the strings someone is asked to read out when reporting a
+        problem, and a MAC address read down a phone loses digits.
+        """
+        tile = ctk.CTkFrame(parent, corner_radius=10, fg_color=SUBTLE, border_width=1, border_color=LINE)
         tile.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 8, 0))
         tile.columnconfigure(0, weight=1)
-        ctk.CTkLabel(tile, text=label, text_color=MUTED, font=("Segoe UI", 10), anchor="w").grid(
-            row=0, column=0, sticky="w", padx=12, pady=(10, 0)
+        ctk.CTkLabel(tile, text=label, text_color=MUTED, font=(FONT, 10), anchor="w").grid(
+            row=0, column=0, sticky="w", padx=12, pady=(9, 0)
         )
-        widget = ctk.CTkLabel(tile, text=value, text_color=INK, font=("Segoe UI Semibold", 15), anchor="w")
-        widget.grid(row=1, column=0, sticky="w", padx=12, pady=(0, 10))
+        widget = ctk.CTkLabel(tile, text=value, text_color=INK, font=(FONT_MONO, 13, "bold"), anchor="w")
+        widget.grid(row=1, column=0, sticky="w", padx=12, pady=(0, 9))
+
+        def copy(_event=None) -> None:
+            self._copy(widget.cget("text"), label)
+
+        for target in (tile, widget):
+            target.bind("<Button-1>", copy)
+            target.configure(cursor="hand2")
         return widget
 
-    def _button(self, parent, text: str, command, primary: bool = False):
+    def _readonly_row(self, parent, row: int, label: str, value: str):
+        """A value the user has to hand to someone else, with the button that
+        does it. Dragging a selection out of a greyed-out box is fiddly enough
+        that people retype these instead, and then mistype them."""
+        holder = ctk.CTkFrame(parent, fg_color="transparent")
+        holder.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+        holder.columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(holder, text=label, anchor="w", text_color=INK, font=(FONT, 11, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w"
+        )
+        box = ctk.CTkEntry(
+            holder, height=34, corner_radius=8, border_width=1, border_color=LINE,
+            fg_color=SUBTLE, text_color=MUTED, font=(FONT_MONO, 11),
+        )
+        box.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        box.insert(0, value)
+        self._enable_clipboard(box)
+        # Read-only, but still selectable and copyable. CTkEntry has no readonly
+        # state, so the keystrokes that would edit it are dropped while the ones
+        # carrying Ctrl (copy, select-all) are let through.
+        box.bind("<Key>", lambda event: None if event.state & 0x4 else "break")
+        self._button(holder, "คัดลอก", lambda: self._copy(value, label), size="sm").grid(
+            row=1, column=1, sticky="e", padx=(8, 0), pady=(4, 0)
+        )
+        return box
+
+    def _button(self, parent, text: str, command, primary: bool = False, size: str = "md"):
         return ctk.CTkButton(
             parent,
             text=text,
             command=command,
-            height=36,
+            height=32 if size == "sm" else 36,
             corner_radius=8,
-            font=("Segoe UI Semibold", 12),
-            fg_color=ORANGE if primary else "#ffffff",
-            hover_color=ORANGE_DARK if primary else PAPER,
+            font=(FONT, 11 if size == "sm" else 12, "bold"),
+            fg_color=PRIMARY if primary else SURFACE,
+            hover_color=PRIMARY_HOVER if primary else SUBTLE,
             text_color="#ffffff" if primary else INK,
             border_width=0 if primary else 1,
-            border_color=LINE,
+            border_color=LINE_STRONG,
         )
 
+    # ------------------------------------------------------------- clipboard
+
+    def _copy(self, value: str, what: str = "") -> None:
+        """Copies through Tk's own clipboard, which outlives this window."""
+        value = (value or "").strip()
+        subject = (" " + what) if what else ""
+        if not value or value == "—":
+            self.set_status("ไม่มีค่า" + subject + " ให้คัดลอก", "busy")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(value)
+        self.root.update_idletasks()
+        self.set_status("คัดลอก" + subject + " แล้ว", "ok")
+
     def _enable_clipboard(self, entry) -> None:
+        """
+        Cut, copy, paste and select-all on a field, by mouse and by keyboard.
+
+        Dispatching on event.keycode rather than on the keysym is the whole
+        point. Tk's built-in Ctrl+C and Ctrl+V bindings are keysym-based, and a
+        keysym follows the active keyboard layout: with Thai selected, Ctrl+C
+        arrives as Ctrl+แ, no binding matches, and copy and paste quietly stop
+        working — which is exactly what happened on the machines this runs on.
+        A keycode is the physical key and does not move with the layout.
+
+        Returning "break" stops Tk's own class binding running afterwards and
+        applying the same edit twice.
+        """
+
+        # CTkEntry is a frame wrapping a real tk.Entry. Its bind() forwards to
+        # that inner widget, but event_generate() does not — it fires on the
+        # frame, where no Entry class binding exists, so every <<Copy>> and
+        # <<Paste>> aimed at the wrapper silently did nothing. That is why the
+        # right-click menu never worked either.
+        keyboard = getattr(entry, "_entry", entry)
+
+        def select_all() -> str:
+            entry.select_range(0, "end")
+            entry.icursor("end")
+            return "break"
+
+        def on_control(event):
+            if event.keycode == VK_A:
+                return select_all()
+            if event.keycode == VK_C:
+                keyboard.event_generate("<<Copy>>")
+                return "break"
+            if event.keycode == VK_X:
+                keyboard.event_generate("<<Cut>>")
+                return "break"
+            if event.keycode == VK_V:
+                keyboard.event_generate("<<Paste>>")
+                return "break"
+            return None
+
         menu = tk.Menu(entry, tearoff=False)
-        menu.add_command(label="ตัด", command=lambda: entry.event_generate("<<Cut>>"))
-        menu.add_command(label="คัดลอก", command=lambda: entry.event_generate("<<Copy>>"))
-        menu.add_command(label="วาง", command=lambda: entry.event_generate("<<Paste>>"))
+        menu.add_command(label="ตัด", command=lambda: keyboard.event_generate("<<Cut>>"))
+        menu.add_command(label="คัดลอก", command=lambda: keyboard.event_generate("<<Copy>>"))
+        menu.add_command(label="วาง", command=lambda: keyboard.event_generate("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="เลือกทั้งหมด", command=select_all)
 
         def popup(event) -> str:
             entry.focus_set()
-            menu.tk_popup(event.x_root, event.y_root)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
             return "break"
 
         entry.bind("<Button-3>", popup)
-        entry.bind("<Control-a>", lambda _event: (entry.selection_range(0, tk.END), entry.icursor(tk.END), "break")[-1])
+        entry.bind("<Control-KeyPress>", on_control)
+        # Shift+Insert and Ctrl+Insert never depended on the layout, and are what
+        # long-time Windows users reach for when Ctrl+V misbehaves.
+        entry.bind("<Shift-Insert>", lambda _event: (keyboard.event_generate("<<Paste>>"), "break")[-1])
+        entry.bind("<Control-Insert>", lambda _event: (keyboard.event_generate("<<Copy>>"), "break")[-1])
+
+    def _diagnostics(self) -> str:
+        """Everything a support conversation asks for, in one paste."""
+        return "\n".join(
+            (
+                APP_NAME + " " + VERSION,
+                "สถานะ: " + self.status_text,
+                "สถานบริการ: " + (self.config.facility_code or "—"),
+                "ชื่อเครื่อง: " + (self.config.machine_label or socket.gethostname()),
+                "MAC: " + (machine_mac(self.config.jhcis_host) or "—"),
+                "Installation ID: " + self.config.installation_id,
+                "Server: " + (self.config.server_url or "—"),
+                "JHCIS: " + f"{self.config.jhcis_host}:{self.config.jhcis_port}/{self.config.jhcis_database}",
+                "ลงทะเบียนแล้ว: " + ("ใช่" if self.config.enrolled else "ยังไม่ได้"),
+                "ดึงล่าสุด: " + self.last_sync_text,
+            )
+        )
 
     def _refresh_form(self) -> None:
         if self.settings_window is None or not self.settings_window.winfo_exists():
@@ -387,45 +537,81 @@ class AgentApp:
         window = ctk.CTkToplevel(self.root)
         self.settings_window = window
         window.title(f"{APP_NAME} v{VERSION}")
-        window.geometry("640x720")
-        window.minsize(600, 620)
-        window.configure(fg_color=PAPER)
+        window.geometry("680x780")
+        window.minsize(620, 620)
+        window.configure(fg_color=CANVAS)
         window.protocol("WM_DELETE_WINDOW", window.withdraw)
 
-        shell = ctk.CTkScrollableFrame(window, fg_color=PAPER, corner_radius=0)
-        shell.pack(fill="both", expand=True, padx=18, pady=16)
+        # The action bar is packed before the scroll area and anchored to the
+        # bottom, so Save stays reachable without scrolling to the end of a form
+        # that grows every time a field is added.
+        footer = ctk.CTkFrame(window, fg_color=SURFACE, corner_radius=0, height=60,
+                              border_width=0)
+        footer.pack(side="bottom", fill="x")
+        ctk.CTkFrame(footer, fg_color=LINE, height=1, corner_radius=0).pack(side="top", fill="x")
+        footer_inner = ctk.CTkFrame(footer, fg_color="transparent")
+        footer_inner.pack(fill="x", padx=20, pady=12)
+        self._button(footer_inner, "บันทึกและย่อไป Tray", self.save_and_hide, primary=True).pack(side="right")
+        self._button(footer_inner, "ดึงรายการยาตอนนี้", self.sync_now).pack(side="right", padx=(0, 8))
+        self._button(footer_inner, "เปิด log", self.open_log, size="sm").pack(side="left")
 
+        shell = ctk.CTkScrollableFrame(window, fg_color=CANVAS, corner_radius=0)
+        shell.pack(fill="both", expand=True, padx=20, pady=(18, 0))
+
+        # ----------------------------------------------------------- header
         header = ctk.CTkFrame(shell, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 14))
-        badge = ctk.CTkLabel(
-            header, text="TM", width=38, height=38, corner_radius=8,
-            fg_color=ORANGE, text_color="#ffffff", font=("Segoe UI Black", 13),
-        )
-        badge.pack(side="left")
+        header.pack(fill="x", pady=(0, 16))
+        ctk.CTkLabel(
+            header, text="TM", width=38, height=38, corner_radius=9,
+            fg_color=PRIMARY, text_color="#ffffff", font=(FONT, 13, "bold"),
+        ).pack(side="left")
         titles = ctk.CTkFrame(header, fg_color="transparent")
         titles.pack(side="left", padx=12)
         ctk.CTkLabel(titles, text="TMT Drug Master Agent", anchor="w", text_color=INK,
-                     font=("Segoe UI Black", 17)).pack(anchor="w")
+                     font=(FONT, 16, "bold")).pack(anchor="w")
         ctk.CTkLabel(titles, text=f"เวอร์ชัน {VERSION}", anchor="w", text_color=MUTED,
-                     font=("Segoe UI", 11)).pack(anchor="w")
+                     font=(FONT, 11)).pack(anchor="w")
 
-        # ------------------------------------------------------------ status
+        # ----------------------------------------------------------- status
         status_card = self._card(shell, "สถานะการทำงาน")
-        self.settings_status = ctk.CTkLabel(
-            status_card, text=self.status_text, anchor="w", justify="left",
-            text_color=STATE_COLORS[self.status_state], font=("Segoe UI Semibold", 12), wraplength=540,
+
+        pill = ctk.CTkFrame(status_card, corner_radius=8, fg_color=STATE_TINTS[self.status_state])
+        pill.grid(row=2, column=0, sticky="ew")
+        pill.columnconfigure(1, weight=1)
+        # A frame, not a label: CTkLabel enforces a minimum height for text it
+        # is not carrying, and the dot came out as a tall bar.
+        self.status_dot = ctk.CTkFrame(
+            pill, width=9, height=9, corner_radius=5,
+            fg_color=STATE_COLORS[self.status_state],
         )
-        self.settings_status.grid(row=2, column=0, sticky="w")
+        self.status_dot.grid(row=0, column=0, padx=(12, 9), pady=11)
+        self.status_dot.grid_propagate(False)
+        self.settings_status = ctk.CTkLabel(
+            pill, text=self.status_text, anchor="w", justify="left",
+            text_color=STATE_COLORS[self.status_state], font=(FONT, 12, "bold"), wraplength=470,
+        )
+        self.settings_status.grid(row=0, column=1, sticky="w", pady=11)
 
         stats = ctk.CTkFrame(status_card, fg_color="transparent")
         stats.grid(row=3, column=0, sticky="ew", pady=(12, 0))
-        for column in range(3):
+        for column in range(4):
             stats.columnconfigure(column, weight=1)
         self.stat_facility = self._stat(stats, 0, "สถานบริการ", self.config.facility_code or "—")
         self.stat_machine = self._stat(stats, 1, "ชื่อเครื่อง", self.config.machine_label or socket.gethostname())
-        self.stat_sync = self._stat(stats, 2, "ดึงล่าสุด", self.last_sync_text)
+        self.stat_mac = self._stat(stats, 2, "MAC", machine_mac(self.config.jhcis_host) or "—")
+        self.stat_sync = self._stat(stats, 3, "ดึงล่าสุด", self.last_sync_text)
 
-        # -------------------------------------------------------------- JHCIS
+        ctk.CTkLabel(
+            status_card, text="คลิกที่ช่องด้านบนเพื่อคัดลอกค่านั้น", anchor="w",
+            text_color=MUTED, font=(FONT, 10),
+        ).grid(row=4, column=0, sticky="w", pady=(8, 0))
+
+        self._button(
+            status_card, "คัดลอกข้อมูลสำหรับแจ้งปัญหา",
+            lambda: self._copy(self._diagnostics(), "ข้อมูลแจ้งปัญหา"), size="sm",
+        ).grid(row=5, column=0, sticky="w", pady=(10, 0))
+
+        # ------------------------------------------------------------ JHCIS
         jhcis = self._card(
             shell,
             "ฐานข้อมูล JHCIS ในวง LAN นี้",
@@ -453,7 +639,7 @@ class AgentApp:
         test_row.grid(row=6, column=0, sticky="w")
         self._button(test_row, "ทดสอบการเชื่อมต่อ JHCIS", self.test_connection).pack(side="left")
 
-        # ------------------------------------------------------------- server
+        # ----------------------------------------------------------- server
         server = self._card(
             shell,
             "การเชื่อมต่อระบบกลาง",
@@ -465,31 +651,23 @@ class AgentApp:
             self.config.machine_label or socket.gethostname(),
             hint="เว้นว่างไว้ ระบบจะใช้ชื่อเครื่องจริงของ Windows",
         )
-        ctk.CTkLabel(
-            server, text=f"Installation ID: {self.config.installation_id}", anchor="w",
-            text_color=MUTED, font=("Consolas", 10),
-        ).grid(row=4, column=0, sticky="w", pady=(2, 10))
+        self._readonly_row(server, 4, "Installation ID", self.config.installation_id)
 
         server_row = ctk.CTkFrame(server, fg_color="transparent")
         server_row.grid(row=5, column=0, sticky="w")
         self._button(server_row, "ลงทะเบียนด้วยลิงก์ที่คัดลอกมา", self.enroll_action).pack(side="left")
 
-        # ------------------------------------------------------------ actions
-        actions = ctk.CTkFrame(shell, fg_color="transparent")
-        actions.pack(fill="x", pady=(2, 0))
-        self._button(actions, "บันทึกและย่อไป Tray", self.save_and_hide, primary=True).pack(side="right")
-        self._button(actions, "ดึงรายการยาตอนนี้", self.sync_now).pack(side="right", padx=(0, 8))
-        self._button(actions, "เปิด log", self.open_log).pack(side="left")
-
+        ctk.CTkLabel(shell, text="", height=4).pack()
         self._refresh_dashboard()
 
     def _refresh_dashboard(self) -> None:
-        """Keeps the three tiles in step with the config the worker is using."""
+        """Keeps the tiles in step with the config the worker is using."""
         if self.settings_window is None or not self.settings_window.winfo_exists():
             return
         if getattr(self, "stat_facility", None) is not None:
             self.stat_facility.configure(text=self.config.facility_code or "—")
             self.stat_machine.configure(text=self.config.machine_label or socket.gethostname())
+            self.stat_mac.configure(text=machine_mac(self.config.jhcis_host) or "—")
             self.stat_sync.configure(text=self.last_sync_text)
 
     def config_from_form(self) -> AgentConfig:

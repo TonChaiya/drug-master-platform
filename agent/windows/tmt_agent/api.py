@@ -70,15 +70,28 @@ class AgentApi:
         return _parse(response)
 
     @staticmethod
-    def enroll(server_url: str, token: str, installation_id: str, machine_label: str, office_id: str, agent_version: str) -> IssuedCredential:
-        """Unsigned: the agent has no credential yet, only the one-time token."""
+    def enroll(
+        server_url: str,
+        token: str,
+        installation_id: str,
+        machine_label: str,
+        office_id: str,
+        agent_version: str,
+        jhcis_host: str | None = None,
+    ) -> IssuedCredential:
+        """
+        Unsigned: the agent has no credential yet, only the one-time token.
+
+        Static, so there is no `self` here — the JHCIS host has to be handed in
+        for the MAC lookup to pick the adapter that reaches the LAN.
+        """
         payload = {
             "enrollmentToken": token,
             "installationId": installation_id,
             "machineLabel": machine_label,
             "officeId": office_id,
             "agentVersion": agent_version,
-            "macAddress": machine_mac(self.config.jhcis_host),
+            "macAddress": machine_mac(jhcis_host),
         }
         try:
             response = requests.post(

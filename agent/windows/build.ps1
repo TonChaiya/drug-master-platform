@@ -33,9 +33,17 @@ $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 Invoke-Native $venvPython @("-m", "pip", "install", "--upgrade", "pip") "pip upgrade"
 Invoke-Native $venvPython @("-m", "pip", "install", "-r", "requirements-build.txt") "dependency install"
 
-# Gate the build on the checks. Both defects that shipped last time were
-# reachable from these in under a second, so packaging past a red one would be
-# packaging a known-broken agent.
+# Gate the build on the checks. Every defect that has shipped from here was
+# reachable from one of these in under a second, so packaging past a red one
+# would be packaging a known-broken agent.
+#
+# The static pass comes first and is the cheapest of the three. Version 1.2.1
+# went out with `self` referenced inside a @staticmethod, which made every
+# enrolment fail with a NameError the moment it ran; ruff's F821 names that
+# line without executing anything. The other two gates could not see it because
+# neither exercises the enrolment path.
+Invoke-Native $venvPython @("-m", "ruff", "check", "--select", "F", "app.py", "tmt_agent", "tests") "static analysis"
+Write-Host "OK: static analysis (pyflakes rules)"
 Invoke-Native $venvPython @((Join-Path "tests" "test_signature.py")) "signature vector check"
 Invoke-Native $venvPython @((Join-Path "tests" "test_ui_smoke.py")) "UI smoke check"
 

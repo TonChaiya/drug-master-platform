@@ -85,6 +85,73 @@ try:
     check(agent.stat_facility.cget("text") == "05957", "facility tile did not follow the config")
     check(agent.stat_machine.cget("text") == "WARD-PC", "machine tile did not follow the config")
     check(agent.stat_sync.cget("text") == "03/09 08:40", "last-sync tile did not update")
+
+    # 4. Copy and paste on a field, driven the way Windows actually delivers the
+    #    keystroke. Tk's own Ctrl+C binding is keysym-based, so under the Thai
+    #    layout the keysym is a Thai letter and nothing matches; the agent binds
+    #    <Control-KeyPress> and reads the layout-independent keycode instead.
+    #    Firing an event that carries the keycode but not the Latin keysym is
+    #    the Thai case exactly.
+    field = agent.entries["jhcis_database"]
+    field.delete(0, "end")
+    field.insert(0, "jhcisdb")
+    # Tk will not deliver a generated key event to a widget that is not mapped
+    # and focused, so the window has to be on screen for this part.
+    agent.settings_window.deiconify()
+    agent.settings_window.focus_force()
+    root.update()
+    field.focus_set()
+    root.update()
+    # CTkEntry is a frame around a real tk.Entry, and CTkEntry.bind attaches to
+    # that inner widget — which is also where Windows delivers the keystroke.
+    # Firing at the frame would test nothing.
+    keyboard = field._entry
+    keyboard.focus_force()
+    root.update()
+
+    root.clipboard_clear()
+    keyboard.event_generate("<Control-KeyPress>", keycode=agent_app.VK_A, state=4)
+    keyboard.event_generate("<Control-KeyPress>", keycode=agent_app.VK_C, state=4)
+    root.update()
+    try:
+        copied = root.clipboard_get()
+    except tk.TclError:
+        copied = ""
+    check(copied == "jhcisdb", f"Ctrl+C by keycode did not copy the field: {copied!r}")
+
+    # Paste has to put it back into an empty field the same way.
+    field.delete(0, "end")
+    keyboard.event_generate("<Control-KeyPress>", keycode=agent_app.VK_V, state=4)
+    root.update()
+    check(field.get() == "jhcisdb", f"Ctrl+V by keycode did not paste: {field.get()!r}")
+
+    # Select-all used entry.selection_range, which tk.Entry has and CTkEntry does
+    # not, so this raised AttributeError every time it ran.
+    check(hasattr(field, "select_range"), "CTkEntry lost select_range")
+
+    # 5. The copy helper and the diagnostics block, which is what a user is asked
+    #    to paste when reporting a problem.
+    agent._copy("05957", "รหัส")
+    root.update()
+    check(root.clipboard_get() == "05957", "_copy did not reach the clipboard")
+    report = agent._diagnostics()
+    for expected in ("Installation ID", "MAC", "JHCIS", agent.config.installation_id):
+        check(expected in report, f"diagnostics block is missing {expected}")
+
+    # 6. The app's own enrolment call must match AgentApi.enroll. Version 1.2.1
+    #    shipped with `self` referenced inside that @staticmethod and every
+    #    enrolment died with a NameError; binding the arguments here fails on an
+    #    arity or name drift without touching the network.
+    import inspect
+
+    from tmt_agent.api import AgentApi
+
+    try:
+        inspect.signature(AgentApi.enroll).bind(
+            "https://central.test", "t" * 43, agent.config.installation_id, "WARD-PC", "05957", "1.0.0", "127.0.0.1"
+        )
+    except TypeError as error:
+        check(False, f"AgentApi.enroll does not accept the arguments app.py passes: {error}")
 finally:
     root.destroy()
 
