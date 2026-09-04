@@ -4,10 +4,11 @@ import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, fa
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
+import { facilityCondition, mappedPercent } from "@/modules/admin/condition";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState } from "@/components/ui/states";
+import { EmptyState, ProgressBar } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
 import { IconDownload, IconLink, IconShield } from "@/components/ui/icons";
 import { AgentInstallerPanel } from "./agent-installer-panel";
@@ -48,6 +49,11 @@ export default async function AdminPage() {
     facilityName: row.facilityName,
   }));
 
+  const conditions = summaries.map((row) => facilityCondition(row));
+  const blocked = conditions.filter((condition) => condition.tone === "danger").length;
+  const waiting = conditions.filter((condition) => condition.tone === "warning").length;
+  const ready = conditions.filter((condition) => condition.tone === "success").length;
+
   const integrityProblems = [
     misconfiguredAdmins > 0 ? `มีผู้ดูแลระบบ ${misconfiguredAdmins} บัญชีที่ถูกผูกกับสถานบริการ ซึ่งขัดกับกฎ admin ต้องไม่มี facility` : null,
     facilitylessUsers > 0 ? `มีผู้ใช้ทั่วไป ${facilitylessUsers} บัญชีที่ไม่มีสถานบริการ จึงเข้าใช้งานไม่ได้` : null,
@@ -80,26 +86,45 @@ export default async function AdminPage() {
       ) : null}
 
       <Card>
-        <CardHeader title="ภาพรวมรายสถานบริการ" description="ตัวเลขทั้งหมดนับจากข้อมูลจริงในฐานข้อมูล" />
+        <CardHeader
+          title="ภาพรวมรายสถานบริการ"
+          description="สถานะทางซ้ายสรุปจากตัวเลขในแถวเดียวกัน สถานบริการที่ต้องแก้จะมีคำอธิบายใต้ชื่อ"
+          actions={
+            <div className="flex flex-wrap items-center gap-1.5">
+              {blocked > 0 ? (
+                <Badge tone="danger" dot>
+                  ต้องแก้ด่วน {blocked.toLocaleString("th-TH")}
+                </Badge>
+              ) : null}
+              {waiting > 0 ? (
+                <Badge tone="warning" dot>
+                  รอดำเนินการ {waiting.toLocaleString("th-TH")}
+                </Badge>
+              ) : null}
+              {/* Green on a count of zero would be reassuring about nothing. */}
+              <Badge tone={ready > 0 ? "success" : "neutral"} dot={ready > 0}>
+                พร้อมส่งออก {ready.toLocaleString("th-TH")}
+              </Badge>
+            </div>
+          }
+        />
         <CardBody flush className="pt-3">
           <TableScroll>
             <Table>
               <thead>
                 <tr>
-                  <th>รหัส</th>
-                  <th>ชื่อสถานบริการ</th>
-                  <th>จาก JHCIS</th>
-                  <th>01 / 10</th>
-                  <th>จับคู่แล้ว</th>
-                  <th>คงค้าง</th>
-                  <th>ไอดี</th>
+                  <th>สถานะ</th>
+                  <th>สถานบริการ</th>
+                  <th>รายการยาจาก JHCIS</th>
+                  <th>จับคู่มาตรฐาน</th>
+                  <th>บัญชี</th>
                   <th>Agent</th>
                   <th>จับคู่ล่าสุด</th>
                 </tr>
               </thead>
               <tbody>
                 {summaries.length === 0 ? (
-                  <TableMessage colSpan={9}>
+                  <TableMessage colSpan={7}>
                     <EmptyState
                       compact
                       icon={<IconShield size={18} />}
@@ -108,46 +133,93 @@ export default async function AdminPage() {
                     />
                   </TableMessage>
                 ) : (
-                  summaries.map((row) => (
-                    <tr key={row.facilityId}>
-                      <td className="cell-code">{row.facilityCode}</td>
-                      <td className="font-medium">{row.facilityName}</td>
-                      <td className="cell-num">{row.sourceTotal.toLocaleString("th-TH")}</td>
-                      <td className="cell-num text-slate-500">
-                        {row.type01.toLocaleString("th-TH")} / {row.type10.toLocaleString("th-TH")}
-                      </td>
-                      <td className="cell-num">{row.mappedTotal.toLocaleString("th-TH")}</td>
-                      <td className="cell-num">
-                        {row.pendingTotal > 0 ? (
-                          <Badge tone="warning">{row.pendingTotal.toLocaleString("th-TH")}</Badge>
-                        ) : (
-                          <Badge tone="success">0</Badge>
-                        )}
-                      </td>
-                      <td className="cell-num">
-                        {row.accountCount === 0 ? (
-                          <Badge tone="danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">
-                            0
+                  summaries.map((row) => {
+                    const condition = facilityCondition(row);
+                    const percent = mappedPercent(row);
+                    return (
+                      <tr key={row.facilityId}>
+                        <td>
+                          <Badge tone={condition.tone} dot title={condition.detail}>
+                            {condition.label}
                           </Badge>
-                        ) : (
-                          row.accountCount
-                        )}
-                      </td>
-                      <td className="cell-num">
-                        {row.agentCount}
-                        {row.agentMismatchCount > 0 ? (
-                          <Badge
-                            tone="danger"
-                            className="ml-1.5"
-                            title={`${row.agentMismatchCount} เครื่องรายงาน office.offid ไม่ตรงกับรหัส ${row.facilityCode} จึงถูกปฏิเสธทุกคำขอ`}
-                          >
-                            ไม่ตรง {row.agentMismatchCount}
-                          </Badge>
-                        ) : null}
-                      </td>
-                      <td className="whitespace-nowrap">{formatBangkok(row.lastMappedAt)}</td>
-                    </tr>
-                  ))
+                        </td>
+
+                        <td className="max-w-72">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="cell-code text-slate-500">{row.facilityCode}</span>
+                            <span className="font-medium">{row.facilityName}</span>
+                          </div>
+                          {/* Only on rows that need something done, so the eye
+                              lands on them rather than reading every line. */}
+                          {condition.needsAttention ? (
+                            <p className="type-help mt-0.5">{condition.detail}</p>
+                          ) : null}
+                        </td>
+
+                        <td className="cell-num">
+                          {row.sourceTotal === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <>
+                              <div className="font-medium">{row.sourceTotal.toLocaleString("th-TH")}</div>
+                              <div className="type-help">
+                                01: {row.type01.toLocaleString("th-TH")} · 10: {row.type10.toLocaleString("th-TH")}
+                              </div>
+                            </>
+                          )}
+                        </td>
+
+                        {/* Mapped and outstanding were separate columns of bare
+                            numbers; as a fraction with a bar the same two values
+                            say how far along the facility is. */}
+                        <td className="w-44">
+                          {row.sourceTotal === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <ProgressBar
+                              value={row.mappedTotal}
+                              max={row.sourceTotal}
+                              tone={percent === 100 ? "success" : "warning"}
+                              label={`${row.mappedTotal.toLocaleString("th-TH")} / ${row.sourceTotal.toLocaleString("th-TH")}`}
+                            />
+                          )}
+                        </td>
+
+                        <td className="cell-num">
+                          {row.accountCount === 0 ? (
+                            <Badge tone="danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">
+                              ไม่มี
+                            </Badge>
+                          ) : (
+                            row.accountCount.toLocaleString("th-TH")
+                          )}
+                        </td>
+
+                        <td className="cell-num">
+                          {row.agentCount === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <>
+                              <div>{row.agentCount.toLocaleString("th-TH")}</div>
+                              {row.agentMismatchCount > 0 ? (
+                                <Badge
+                                  tone="danger"
+                                  className="mt-0.5"
+                                  title={`${row.agentMismatchCount} เครื่องรายงาน office.offid ไม่ตรงกับรหัส ${row.facilityCode} จึงถูกปฏิเสธทุกคำขอ`}
+                                >
+                                  ไม่ตรง {row.agentMismatchCount}
+                                </Badge>
+                              ) : null}
+                            </>
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap">
+                          {row.lastMappedAt ? formatBangkok(row.lastMappedAt) : <span className="text-slate-400">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </Table>
