@@ -1,10 +1,27 @@
 import { z } from "zod";
 import { isValidOfficeId } from "@/lib/validation/facility";
 
-const username = z.string().trim().min(4).max(80).regex(/^[A-Za-z0-9._-]+$/);
+/**
+ * The username and password policies, defined once.
+ *
+ * Exported because the admin screen sets both as well, and a second copy of the
+ * rules there would drift from these the first time one of them changed.
+ */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .min(4, "ไอดีต้องยาวอย่างน้อย 4 ตัวอักษร")
+  .max(80, "ไอดียาวเกิน 80 ตัวอักษร")
+  .regex(/^[A-Za-z0-9._-]+$/, "ไอดีใช้ได้เฉพาะอังกฤษ ตัวเลข จุด ขีดกลาง และขีดล่าง");
 
-/** Policy for a password being SET. Enforced on signup and password change. */
-const newPassword = z.string().min(6).max(128);
+/** Policy for a password being SET. Enforced on signup and on any change. */
+export const newPasswordSchema = z
+  .string()
+  .min(6, "รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร")
+  .max(128, "รหัสผ่านยาวเกิน 128 ตัวอักษร");
+
+const username = usernameSchema;
+const newPassword = newPasswordSchema;
 
 /**
  * Login only compares a credential, so it must not re-apply the policy: an

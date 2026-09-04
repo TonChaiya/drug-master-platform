@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   agentCommands,
@@ -18,6 +18,8 @@ import {
   users,
 } from "@/db/schema";
 import { isValidOfficeId, normalizeFacilityName } from "@/lib/validation/facility";
+import { hashPassword } from "@/modules/auth/password";
+import { normalizeUsername } from "@/modules/auth/schemas";
 
 export class AdminActionError extends Error {
   constructor(
@@ -134,6 +136,113 @@ export async function deleteUser(options: { actorUserId: string; targetUserId: s
       },
     });
   });
+}
+
+export interface CredentialUpdateResult {
+  usernameChanged: boolean;
+  passwordChanged: boolean;
+  /** Sessions signed out by the change; the admin's own is never among them. */
+  sessionsRevoked: number;
+}
+
+/**
+ * Sets a username, a password, or both, on any account — the acting admin's own
+ * included.
+ *
+ * Unlike enabling or deleting an account, there is no self-change guard here.
+ * An admin who cannot change their own password would have to ask someone else,
+ * and on a single-admin system there is nobody to ask.
+ *
+ * A password change signs the account out everywhere, because the point of
+ * changing one is usually that the old one is no longer trusted. The one
+ * exception is the session issuing the request: signing the admin out of the
+ * screen they are working on, at the moment they succeed, reads as a failure.
+ */
+export async function updateUserCredentials(options: {
+  actorUserId: string;
+  targetUserId: string;
+  username?: string;
+  password?: string;
+  /** Hash of the acting admin's own session cookie, kept alive. */
+  keepSessionTokenHash?: string | null;
+}): Promise<CredentialUpdateResult> {
+  const username = options.username?.trim();
+  const password = options.password;
+  if (!username && !password) {
+    throw new AdminActionError("ADMIN_NOTHING_TO_DO", "ไม่มีข้อมูลที่จะแก้ไข");
+  }
+
+  const rows = await db
+    .select({ id: users.id, username: users.username, usernameNormalized: users.usernameNormalized, facilityId: users.facilityId })
+    .from(users)
+    .where(eq(users.id, options.targetUserId))
+    .limit(1);
+  const target = rows[0];
+  if (!target) throw new AdminActionError("USER_NOT_FOUND", "ไม่พบบัญชีผู้ใช้");
+
+  const normalized = username ? normalizeUsername(username) : null;
+  const usernameChanged = normalized !== null && normalized !== target.usernameNormalized;
+  const passwordChanged = Boolean(password);
+
+  if (usernameChanged) {
+    const taken = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.usernameNormalized, normalized), ne(users.id, target.id)))
+      .limit(1);
+    if (taken.length > 0) {
+      throw new AdminActionError("USERNAME_TAKEN", `ไอดี ${username} ถูกใช้แล้ว`);
+    }
+  }
+
+  // Hashing is deliberately outside the transaction: Argon2 takes long enough
+  // that holding a write transaction open across it would be wasteful.
+  const passwordHash = password ? await hashPassword(password) : null;
+
+  let sessionsRevoked = 0;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({
+        ...(usernameChanged ? { username: username!, usernameNormalized: normalized! } : {}),
+        ...(passwordHash ? { passwordHash } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, target.id));
+
+    if (passwordHash) {
+      const live = and(eq(sessions.userId, target.id), isNull(sessions.revokedAt));
+      const scope =
+        options.keepSessionTokenHash && options.targetUserId === options.actorUserId
+          ? and(live, ne(sessions.tokenHash, options.keepSessionTokenHash))
+          : live;
+      // Counted before revoking, so the screen can say how many devices were
+      // signed out rather than guessing.
+      sessionsRevoked = (await tx.select({ id: sessions.id }).from(sessions).where(scope)).length;
+      await tx.update(sessions).set({ revokedAt: new Date() }).where(scope);
+    }
+
+    await tx.insert(auditLogs).values({
+      id: randomUUID(),
+      actorUserId: options.actorUserId,
+      effectiveFacilityId: target.facilityId,
+      action: "admin.user_credentials_updated",
+      entityType: "user",
+      entityId: target.id,
+      // The password itself and its hash are never written to the trail; that
+      // a change happened is the auditable fact.
+      beforeJson: { username: target.username },
+      afterJson: {
+        username: usernameChanged ? username : target.username,
+        usernameChanged,
+        passwordChanged,
+        self: options.actorUserId === options.targetUserId,
+      },
+    });
+  });
+
+  return { usernameChanged, passwordChanged, sessionsRevoked };
 }
 
 export interface FacilityUpdateResult {

@@ -5,11 +5,11 @@ import { useState } from "react";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
 import { Field, TextInput } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
-import { IconTrash } from "@/components/ui/icons";
+import { IconEdit, IconTrash } from "@/components/ui/icons";
 
 export interface AdminUserRow {
   id: string;
@@ -23,12 +23,21 @@ export interface AdminUserRow {
   facilityName: string | null;
 }
 
+/** Kept in step with usernameSchema and newPasswordSchema on the server. */
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{4,80}$/;
+const PASSWORD_MIN = 6;
+
 export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; currentUserId: string }) {
   const router = useRouter();
   const { push } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<AdminUserRow | null>(null);
   const [typed, setTyped] = useState("");
+
+  const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
 
   async function changeStatus(userId: string, status: "active" | "disabled") {
     setBusy(userId);
@@ -76,9 +85,71 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
     }
   }
 
+  function openEdit(user: AdminUserRow) {
+    setEditing(user);
+    setUsername(user.username);
+    // Both password boxes start empty: leaving them that way changes only the
+    // username, which is the common case and must not require retyping a
+    // password the admin does not know.
+    setPassword("");
+    setRepeat("");
+  }
+
+  function closeEdit() {
+    setEditing(null);
+    setUsername("");
+    setPassword("");
+    setRepeat("");
+  }
+
   function closeConfirm() {
     setConfirming(null);
     setTyped("");
+  }
+
+  const usernameChanged = editing !== null && username.trim() !== editing.username;
+  const usernameValid = USERNAME_PATTERN.test(username.trim());
+  const passwordValid = password.length === 0 || password.length >= PASSWORD_MIN;
+  const repeatValid = password.length === 0 || repeat === password;
+  const savable =
+    editing !== null && usernameValid && passwordValid && repeatValid && (usernameChanged || password.length > 0);
+  const editingSelf = editing?.id === currentUserId;
+
+  async function saveCredentials() {
+    if (editing === null) return;
+    setBusy(editing.id);
+    try {
+      const response = await fetch("/api/v1/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: editing.id,
+          ...(usernameChanged ? { username: username.trim() } : {}),
+          ...(password.length > 0 ? { password } : {}),
+        }),
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        usernameChanged?: boolean;
+        passwordChanged?: boolean;
+        sessionsRevoked?: number;
+      };
+      if (!response.ok || !result.ok) {
+        push("error", result.message ?? "แก้ไขบัญชีไม่สำเร็จ");
+        return;
+      }
+      const parts = [
+        result.usernameChanged ? `เปลี่ยนไอดีเป็น ${username.trim()}` : null,
+        result.passwordChanged ? "ตั้งรหัสผ่านใหม่แล้ว" : null,
+        result.sessionsRevoked ? `ออกจากระบบอุปกรณ์อื่น ${result.sessionsRevoked} เครื่อง` : null,
+      ].filter((part): part is string => part !== null);
+      push("ok", parts.join(" · "));
+      closeEdit();
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -102,38 +173,55 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
                 <EmptyState compact title="ยังไม่มีบัญชีผู้ใช้" description="บัญชีที่สมัครผ่านหน้าสมัครสมาชิกจะปรากฏที่นี่เพื่อรออนุมัติ" />
               </TableMessage>
             ) : (
-              users.map((user) => (
-                <tr key={user.id}>
-                  <td>
-                    <div className="font-medium">{user.fullName}</div>
-                    <div className="cell-code text-xxs text-slate-500">{user.username}</div>
-                  </td>
-                  <td>{user.positionName}</td>
-                  <td>
-                    {user.facilityCode ? (
-                      <>
-                        <span className="cell-code">{user.facilityCode}</span>{" "}
-                        <span className="text-slate-600">{user.facilityName}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-500">ส่วนกลาง</span>
-                    )}
-                  </td>
-                  <td>
-                    <Badge tone={user.role === "admin" ? "info" : "neutral"}>
-                      {user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}
-                    </Badge>
-                  </td>
-                  <td className="whitespace-nowrap">{user.lastLoginAt ?? "—"}</td>
-                  <td>
-                    <StatusBadge status={user.status} />
-                  </td>
-                  <td>
-                    {user.id === currentUserId ? (
-                      <span className="type-caption whitespace-nowrap">บัญชีคุณเอง</span>
-                    ) : (
+              users.map((user) => {
+                const isSelf = user.id === currentUserId;
+                return (
+                  <tr key={user.id}>
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{user.fullName}</span>
+                        {isSelf ? <Badge tone="info">บัญชีคุณ</Badge> : null}
+                      </div>
+                      <div className="cell-code text-xxs text-slate-500">{user.username}</div>
+                    </td>
+                    <td>{user.positionName}</td>
+                    <td>
+                      {user.facilityCode ? (
+                        <>
+                          <span className="cell-code">{user.facilityCode}</span>{" "}
+                          <span className="text-slate-600">{user.facilityName}</span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500">ส่วนกลาง</span>
+                      )}
+                    </td>
+                    <td>
+                      <Badge tone={user.role === "admin" ? "info" : "neutral"}>
+                        {user.role === "admin" ? "ผู้ดูแลระบบ" : "ผู้ใช้"}
+                      </Badge>
+                    </td>
+                    <td className="whitespace-nowrap">{user.lastLoginAt ?? "—"}</td>
+                    <td>
+                      <StatusBadge status={user.status} />
+                    </td>
+                    <td>
                       <div className="flex flex-wrap justify-end gap-1.5">
-                        {user.status === "active" ? (
+                        {/* Available on every row, this one included: an admin
+                            who cannot change their own password would have to
+                            ask someone else, and there may be nobody to ask. */}
+                        <Button
+                          size="sm"
+                          icon={<IconEdit size={13} />}
+                          disabled={busy !== null}
+                          onClick={() => openEdit(user)}
+                        >
+                          แก้ไขไอดี / รหัส
+                        </Button>
+
+                        {/* Enabling and deleting stay barred on your own row:
+                            both can lock you out, and neither is reversible
+                            from this screen. */}
+                        {isSelf ? null : user.status === "active" ? (
                           <Button
                             size="sm"
                             loading={busy === user.id}
@@ -153,27 +241,120 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
                             เปิดใช้งาน
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon={<IconTrash size={13} />}
-                          disabled={busy !== null}
-                          onClick={() => {
-                            setConfirming(user);
-                            setTyped("");
-                          }}
-                        >
-                          ลบ
-                        </Button>
+
+                        {isSelf ? null : (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={<IconTrash size={13} />}
+                            disabled={busy !== null}
+                            onClick={() => {
+                              setConfirming(user);
+                              setTyped("");
+                            }}
+                          >
+                            ลบ
+                          </Button>
+                        )}
                       </div>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </Table>
       </TableScroll>
+
+      <Dialog
+        open={editing !== null}
+        onClose={closeEdit}
+        busy={busy !== null}
+        title="แก้ไขไอดีและรหัสผ่าน"
+        description={editing ? `${editing.fullName} · ${editing.positionName}` : undefined}
+        footer={
+          <>
+            <Button onClick={closeEdit} disabled={busy !== null}>
+              ยกเลิก
+            </Button>
+            <Button variant="primary" loading={busy !== null} disabled={!savable} onClick={() => void saveCredentials()}>
+              บันทึก
+            </Button>
+          </>
+        }
+      >
+        <Field
+          label="ไอดีเข้าสู่ระบบ"
+          htmlFor="edit-username"
+          help="อังกฤษ ตัวเลข จุด ขีดกลาง ขีดล่าง 4–80 ตัวอักษร"
+          error={username.trim().length > 0 && !usernameValid ? "รูปแบบไอดีไม่ถูกต้อง" : null}
+          required
+        >
+          <TextInput
+            id="edit-username"
+            mono
+            value={username}
+            invalid={username.trim().length > 0 && !usernameValid}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="off"
+            maxLength={80}
+          />
+        </Field>
+
+        <div className="mt-3 border-t border-border pt-3">
+          <Field
+            label="รหัสผ่านใหม่"
+            htmlFor="edit-password"
+            help={`เว้นว่างไว้ถ้าไม่ต้องการเปลี่ยน · อย่างน้อย ${PASSWORD_MIN} ตัวอักษร`}
+            error={!passwordValid ? `รหัสผ่านต้องยาวอย่างน้อย ${PASSWORD_MIN} ตัวอักษร` : null}
+          >
+            <TextInput
+              id="edit-password"
+              type="password"
+              value={password}
+              invalid={!passwordValid}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+              maxLength={128}
+            />
+          </Field>
+
+          {password.length > 0 ? (
+            <Field
+              className="mt-2.5"
+              label="พิมพ์รหัสผ่านใหม่อีกครั้ง"
+              htmlFor="edit-password-repeat"
+              error={!repeatValid ? "รหัสผ่านสองช่องไม่ตรงกัน" : null}
+              required
+            >
+              <TextInput
+                id="edit-password-repeat"
+                type="password"
+                value={repeat}
+                invalid={!repeatValid}
+                onChange={(event) => setRepeat(event.target.value)}
+                autoComplete="new-password"
+                maxLength={128}
+              />
+            </Field>
+          ) : null}
+        </div>
+
+        {password.length > 0 ? (
+          <Alert tone="warning" className="mt-3" title="การตั้งรหัสผ่านใหม่จะบังคับออกจากระบบ">
+            {editingSelf
+              ? "อุปกรณ์อื่นที่ยังค้างอยู่จะถูกออกจากระบบทั้งหมด หน้าจอที่กำลังใช้อยู่นี้จะยังอยู่ต่อ"
+              : `บัญชี ${editing?.username} จะถูกออกจากระบบทุกอุปกรณ์ทันที และต้องใช้รหัสผ่านใหม่เข้าใช้งาน`}
+          </Alert>
+        ) : null}
+
+        {usernameChanged ? (
+          <Alert tone="info" className="mt-2.5" title="ไอดีที่ใช้เข้าสู่ระบบจะเปลี่ยนทันที">
+            ต้องแจ้งเจ้าของบัญชีให้ใช้ <span className="font-mono font-semibold">{username.trim()}</span> แทน{" "}
+            <span className="font-mono">{editing?.username}</span> ในการเข้าสู่ระบบครั้งถัดไป
+          </Alert>
+        ) : null}
+      </Dialog>
 
       <ConfirmDialog
         open={confirming !== null}

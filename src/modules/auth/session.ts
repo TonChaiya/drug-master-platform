@@ -55,6 +55,17 @@ export async function revokeCurrentSession(): Promise<void> {
   await clearSessionCookie();
 }
 
+/**
+ * The hash of the session cookie on this request, or null.
+ *
+ * An admin changing their own password signs out every other device but has to
+ * stay signed in here, and this is what tells the two apart.
+ */
+export async function currentSessionTokenHash(): Promise<string | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? tokenHash(token) : null;
+}
+
 export async function currentUser(): Promise<SessionUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
