@@ -608,6 +608,16 @@
   }
 }
 
+/* The trailing column of row actions. Middle-aligned against a two-line cell
+   and never wrapped: a wrapped button row makes every row a different height,
+   which is what stops a table reading as a table. */
+@utility cell-actions {
+  vertical-align: middle;
+  white-space: nowrap;
+  text-align: right;
+  width: 1%;
+}
+
 /* Numbers and codes line up under one another so a column can be scanned. */
 @utility cell-num {
   font-variant-numeric: tabular-nums;

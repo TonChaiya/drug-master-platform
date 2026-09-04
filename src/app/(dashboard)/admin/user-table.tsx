@@ -1,15 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useToast } from "@/components/toast";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
-import { Field, TextInput } from "@/components/ui/form";
+import { Field, FilterBar, SearchInput, SelectInput, TextInput } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
-import { IconEdit, IconTrash } from "@/components/ui/icons";
+import { IconClose, IconEdit, IconSearch, IconTrash } from "@/components/ui/icons";
 
 export interface AdminUserRow {
   id: string;
@@ -27,10 +27,16 @@ export interface AdminUserRow {
 const USERNAME_PATTERN = /^[A-Za-z0-9._-]{4,80}$/;
 const PASSWORD_MIN = 6;
 
+type StatusFilter = "all" | "pending" | "active" | "disabled";
+
 export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; currentUserId: string }) {
   const router = useRouter();
   const { push } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+
   const [confirming, setConfirming] = useState<AdminUserRow | null>(null);
   const [typed, setTyped] = useState("");
 
@@ -39,20 +45,40 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
 
-  async function changeStatus(userId: string, status: "active" | "disabled") {
+  const pendingCount = useMemo(() => users.filter((user) => user.status === "pending").length, [users]);
+
+  /**
+   * Filtered here rather than on the server: the whole list is already loaded
+   * and is a few hundred rows at most, so a round trip per keystroke would buy
+   * nothing.
+   */
+  const visible = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("en-US");
+    return users.filter((user) => {
+      if (status !== "all" && user.status !== status) return false;
+      if (needle.length === 0) return true;
+      return [user.username, user.fullName, user.positionName, user.facilityCode, user.facilityName]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLocaleLowerCase("en-US").includes(needle));
+    });
+  }, [users, query, status]);
+
+  const filtered = query.trim().length > 0 || status !== "all";
+
+  async function changeStatus(userId: string, next: "active" | "disabled") {
     setBusy(userId);
     try {
       const response = await fetch("/api/v1/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, status }),
+        body: JSON.stringify({ userId, status: next }),
       });
       const result = (await response.json()) as { ok?: boolean; message?: string };
       if (!response.ok || !result.ok) {
         push("error", result.message ?? "เปลี่ยนสถานะไม่สำเร็จ");
         return;
       }
-      push("ok", status === "active" ? "เปิดใช้งานบัญชีแล้ว" : "ปิดใช้งานบัญชีแล้ว");
+      push("ok", next === "active" ? "เปิดใช้งานบัญชีแล้ว" : "ปิดใช้งานบัญชีแล้ว");
       router.refresh();
     } finally {
       setBusy(null);
@@ -154,6 +180,55 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
 
   return (
     <>
+      <div className="px-3.5 pb-3.5 sm:px-4">
+        <FilterBar
+          actions={
+            <span className="type-caption tabular-nums" role="status" aria-live="polite">
+              {filtered
+                ? `แสดง ${visible.length.toLocaleString("th-TH")} จาก ${users.length.toLocaleString("th-TH")} บัญชี`
+                : `ทั้งหมด ${users.length.toLocaleString("th-TH")} บัญชี`}
+              {pendingCount > 0 ? ` · รออนุมัติ ${pendingCount.toLocaleString("th-TH")}` : ""}
+            </span>
+          }
+        >
+          <Field label="ค้นหาบัญชี" htmlFor="user-search" className="min-w-56 flex-1">
+            <SearchInput
+              id="user-search"
+              placeholder="ชื่อ ไอดี ตำแหน่ง หรือสถานบริการ"
+              value={query}
+              autoComplete="off"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </Field>
+          <Field label="สถานะ" htmlFor="user-status-filter">
+            <SelectInput
+              id="user-status-filter"
+              className="w-36"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as StatusFilter)}
+            >
+              <option value="all">ทั้งหมด</option>
+              <option value="pending">รอดำเนินการ</option>
+              <option value="active">ใช้งานอยู่</option>
+              <option value="disabled">ปิดใช้งาน</option>
+            </SelectInput>
+          </Field>
+          {filtered ? (
+            <Button
+              size="sm"
+              className="mb-1"
+              icon={<IconClose size={13} />}
+              onClick={() => {
+                setQuery("");
+                setStatus("all");
+              }}
+            >
+              ล้างตัวกรอง
+            </Button>
+          ) : null}
+        </FilterBar>
+      </div>
+
       <TableScroll>
         <Table>
           <thead>
@@ -164,16 +239,41 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
               <th>บทบาท</th>
               <th>เข้าใช้ล่าสุด</th>
               <th>สถานะ</th>
-              <th className="w-0" />
+              <th className="cell-actions">จัดการ</th>
             </tr>
           </thead>
           <tbody>
-            {users.length === 0 ? (
+            {visible.length === 0 ? (
               <TableMessage colSpan={7}>
-                <EmptyState compact title="ยังไม่มีบัญชีผู้ใช้" description="บัญชีที่สมัครผ่านหน้าสมัครสมาชิกจะปรากฏที่นี่เพื่อรออนุมัติ" />
+                {filtered ? (
+                  <EmptyState
+                    compact
+                    icon={<IconSearch size={18} />}
+                    title="ไม่พบบัญชีที่ตรงกับเงื่อนไข"
+                    description="ลองลดคำค้นลง หรือเปลี่ยนสถานะเป็น “ทั้งหมด”"
+                    action={
+                      <Button
+                        size="sm"
+                        icon={<IconClose size={13} />}
+                        onClick={() => {
+                          setQuery("");
+                          setStatus("all");
+                        }}
+                      >
+                        ล้างตัวกรอง
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <EmptyState
+                    compact
+                    title="ยังไม่มีบัญชีผู้ใช้"
+                    description="บัญชีที่สมัครผ่านหน้าสมัครสมาชิกจะปรากฏที่นี่เพื่อรออนุมัติ"
+                  />
+                )}
               </TableMessage>
             ) : (
-              users.map((user) => {
+              visible.map((user) => {
                 const isSelf = user.id === currentUserId;
                 return (
                   <tr key={user.id}>
@@ -204,18 +304,17 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
                     <td>
                       <StatusBadge status={user.status} />
                     </td>
-                    <td>
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {/* Available on every row, this one included: an admin
-                            who cannot change their own password would have to
-                            ask someone else, and there may be nobody to ask. */}
-                        <Button
-                          size="sm"
-                          icon={<IconEdit size={13} />}
-                          disabled={busy !== null}
-                          onClick={() => openEdit(user)}
-                        >
-                          แก้ไขไอดี / รหัส
+
+                    {/* One line, always. Labels are short because the dialog
+                        that opens says what it does; three long buttons wrapped
+                        onto three lines and left every row a different height. */}
+                    <td className="cell-actions">
+                      <div className="inline-flex items-center gap-1.5">
+                        {/* On every row, this one included: an admin who cannot
+                            change their own password would have to ask someone
+                            else, and there may be nobody to ask. */}
+                        <Button size="sm" icon={<IconEdit size={13} />} disabled={busy !== null} onClick={() => openEdit(user)}>
+                          แก้ไข
                         </Button>
 
                         {/* Enabling and deleting stay barred on your own row:
@@ -243,18 +342,17 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
                         )}
 
                         {isSelf ? null : (
-                          <Button
+                          <IconButton
                             size="sm"
                             variant="danger"
+                            label={`ลบบัญชี ${user.username}`}
                             icon={<IconTrash size={13} />}
                             disabled={busy !== null}
                             onClick={() => {
                               setConfirming(user);
                               setTyped("");
                             }}
-                          >
-                            ลบ
-                          </Button>
+                          />
                         )}
                       </div>
                     </td>

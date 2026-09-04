@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { agentInstallations, drugMappings, facilities, sourceDrugs, users } from "@/db/schema";
 
@@ -103,7 +103,16 @@ export async function listUsers(limit = 200) {
     })
     .from(users)
     .leftJoin(facilities, eq(facilities.id, users.facilityId))
-    .orderBy(sql`FIELD(${users.status}, 'pending', 'active', 'disabled')`, desc(users.createdAt))
+    // Accounts awaiting approval first, because they are the only rows that
+    // need a decision. Then grouped by facility — central accounts have no
+    // facility and sort to the top — and by username inside each group, so a
+    // given row is always in the same place.
+    .orderBy(
+      sql`FIELD(${users.status}, 'pending', 'active', 'disabled')`,
+      sql`${facilities.facilityCode} IS NOT NULL`,
+      facilities.facilityCode,
+      users.username,
+    )
     .limit(limit);
 }
 
