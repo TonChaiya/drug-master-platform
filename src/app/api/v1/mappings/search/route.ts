@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   query: z.string().trim().max(120).optional(),
-  status: z.enum(["all", "mapped", "pending"]).optional(),
+  status: z.enum(["all", "mapped", "pending", "needs_review"]).optional(),
   drugType: z.enum(["all", "01", "10"]).optional(),
   page: z.coerce.number().int().min(1).max(10_000).optional(),
   pageSize: z.coerce.number().int().min(1).max(200).optional(),

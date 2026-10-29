@@ -38,6 +38,15 @@
 
 ชนิดมาตรฐาน: `drugtype 01` ใช้ TMT · `drugtype 10` ใช้ TTMT
 
+**สถานะ Mapping จาก Drug Catalog snapshot ล่าสุด**
+
+- `mapped`: มี mapping ที่ valid/current และไม่ขัดกับ snapshot ล่าสุด
+- `needs_review`: ยา active เคยอยู่ใน catalog แต่หายจาก snapshot ล่าสุด, แถวล่าสุดไม่มี TMT/TTMT หรือ TMT/TTMT เปลี่ยนแต่ mapping ปัจจุบันมาจาก manual
+- `pending`: ยา active ไม่เคยอยู่ใน catalog และยังไม่มี mapping
+- ถ้า TMT/TTMT เปลี่ยน mapping ที่มี source `drug_catalog` ต้องตาม snapshot ล่าสุด แต่ source `manual` ห้ามถูกทับ
+- ยา inactive ที่หายจาก snapshot ล่าสุดเก็บ history ไว้และไม่ขึ้น worklist
+- ห้ามลบ snapshot, mapping หรือ history เดิมอัตโนมัติจากการ reconcile
+
 ## 4. PRODUCTCAT และ SPECPREP
 
 - drugtype `01` → PRODUCTCAT `1` (ยาแผนปัจจุบัน ผลิตภัณฑ์ทางการค้า)
@@ -172,7 +181,8 @@ token cache อยู่ใน memory หรือ encrypted DB **ห้าม�
 - แถวข้อมูลเก็บ 21 payload fields โดยไม่ใช้ `#` เป็น identity
 - reject: หัวตารางผิดลำดับ, `HOSPDRUGCODE` ซ้ำในไฟล์, แถวที่ไม่มี `HOSPDRUGCODE`, ไฟล์ที่ hash ซ้ำกับที่เคยนำเข้า
 - เก็บ SHA-256, ชื่อไฟล์, version/source date, counts, ผู้นำเข้าและเวลา
-- การ import ล่าสุดสร้าง comparison snapshot ใหม่ของ facility
+- การ import ล่าสุดสร้าง verified snapshot ใหม่ของ facility และเป็น reference ปัจจุบัน โดยเก็บ snapshot เก่าทั้งหมด
+- เทียบ `HOSPDRUGCODE` กับ `source_drugs.drugcode`; จำนวนแถวในไฟล์อาจมากกว่า Agent ได้ตามปกติเพราะรวมรายการที่ active และเลิกใช้
 
 ### ชุดข้อมูลที่ส่งออกได้
 

@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditLogs, drugCatalogRows, drugMappings, sourceDrugs, standardProducts } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
+import { decideCatalogReconcile } from "./lifecycle";
 import { MappingRuleError, normalizeSpecPrep, resolveProductCategory, standardTypeForDrugType } from "./product-category";
 import { decideUpdateFlagWithSnapshot } from "./update-flag";
 
@@ -148,7 +149,8 @@ export async function saveManualMapping(input: ManualMappingInput): Promise<{ ma
 export interface ReconcileResult {
   considered: number;
   created: number;
-  skippedAlreadyMapped: number;
+  updated: number;
+  needsReview: number;
   skippedNoStandard: number;
   skippedTypeMismatch: number;
 }
@@ -157,8 +159,8 @@ export interface ReconcileResult {
  * Auto-maps from the facility's latest Drug Catalog snapshot.
  *
  * A row is auto-mapped only when the catalogue's TMTID exists in our standard
- * catalogue, is active, and matches the drug type. Existing mappings are never
- * overwritten — a user's manual decision outranks the file.
+ * catalogue, is active, and matches the drug type. Catalogue-owned mappings
+ * follow the latest snapshot; manual mappings are never overwritten.
  */
 export async function reconcileFromLatestCatalog(facilityId: string, userId: string): Promise<ReconcileResult> {
   const snapshot = await latestImport(facilityId);
@@ -170,16 +172,26 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
     .where(and(eq(sourceDrugs.facilityId, facilityId), eq(sourceDrugs.active, 1)));
 
   const mapped = await db
-    .select({ sourceDrugId: drugMappings.sourceDrugId })
+    .select({
+      id: drugMappings.id,
+      sourceDrugId: drugMappings.sourceDrugId,
+      standardCode: drugMappings.standardCode,
+      source: drugMappings.source,
+    })
     .from(drugMappings)
     .where(eq(drugMappings.facilityId, facilityId));
-  const alreadyMapped = new Set(mapped.map((row) => row.sourceDrugId));
+  const mappingByDrugId = new Map(mapped.map((row) => [row.sourceDrugId, row]));
 
   const catalogRows = await db
     .select({ hospdrugcode: drugCatalogRows.hospdrugcode, tmtid: drugCatalogRows.tmtid, ndc24: drugCatalogRows.ndc24 })
     .from(drugCatalogRows)
     .where(eq(drugCatalogRows.importId, snapshot.id));
   const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row]));
+  const catalogHistory = await db
+    .selectDistinct({ hospdrugcode: drugCatalogRows.hospdrugcode })
+    .from(drugCatalogRows)
+    .where(eq(drugCatalogRows.facilityId, facilityId));
+  const catalogHistoryCodes = new Set(catalogHistory.map((row) => row.hospdrugcode));
 
   const wantedCodes = [...new Set(catalogRows.map((row) => row.tmtid).filter((code): code is string => Boolean(code)))];
   const standards = wantedCodes.length
@@ -190,23 +202,41 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
     : [];
   const standardByCode = new Map(standards.map((row) => [row.standardCode, row]));
 
-  const result: ReconcileResult = { considered: 0, created: 0, skippedAlreadyMapped: 0, skippedNoStandard: 0, skippedTypeMismatch: 0 };
+  const result: ReconcileResult = { considered: 0, created: 0, updated: 0, needsReview: 0, skippedNoStandard: 0, skippedTypeMismatch: 0 };
   const now = new Date();
   const day = today();
   const pending: (typeof drugMappings.$inferInsert)[] = [];
+  const updates: {
+    mappingId: string;
+    sourceDrugId: string;
+    drugcode: string;
+    previousStandardCode: string;
+    standardCode: string;
+    productCat: string;
+    ised: string | null;
+    ndc24: string | null;
+  }[] = [];
 
   for (const drug of drugs) {
     result.considered += 1;
-    if (alreadyMapped.has(drug.id)) {
-      result.skippedAlreadyMapped += 1;
-      continue;
-    }
     const catalogRow = catalogByCode.get(drug.drugcode);
-    if (!catalogRow?.tmtid) {
-      result.skippedNoStandard += 1;
+    const mapping = mappingByDrugId.get(drug.id) ?? null;
+    const decision = decideCatalogReconcile({
+      active: true,
+      mapping: mapping ? { source: mapping.source, standardCode: mapping.standardCode } : null,
+      inLatestCatalog: Boolean(catalogRow),
+      latestCatalogTmtid: catalogRow?.tmtid ?? null,
+      everInCatalog: catalogHistoryCodes.has(drug.drugcode),
+    });
+    if (decision.action === "noop") {
+      if (!catalogRow?.tmtid && !mapping) result.skippedNoStandard += 1;
       continue;
     }
-    const standard = standardByCode.get(catalogRow.tmtid);
+    if (decision.action === "needs_review") {
+      result.needsReview += 1;
+      continue;
+    }
+    const standard = standardByCode.get(decision.standardCode);
     if (!standard) {
       result.skippedNoStandard += 1;
       continue;
@@ -223,35 +253,88 @@ export async function reconcileFromLatestCatalog(facilityId: string, userId: str
       continue;
     }
 
-    pending.push({
-      id: randomUUID(),
-      facilityId,
-      sourceDrugId: drug.id,
-      standardCode: standard.standardCode,
-      productCat: drug.drugtype === "10" ? "3" : "1",
-      specPrep: null,
-      ised: standard.exportIsed,
-      // From the file, like TMTID itself — not from cdrug.drugcode24.
-      ndc24: catalogRow.ndc24,
-      packsize: null,
-      // The code exists in the latest snapshot, so this is an edit, not an add.
-      updateFlag: "E",
-      dateChange: day,
-      dateUpdate: day,
-      dateEffective: day,
-      source: "drug_catalog",
-      catalogImportId: snapshot.id,
-      mappedBy: userId,
-      mappedAt: now,
-      updatedAt: now,
-    });
-    result.created += 1;
+    const productCat = drug.drugtype === "10" ? "3" : "1";
+    if (decision.action === "create") {
+      pending.push({
+        id: randomUUID(),
+        facilityId,
+        sourceDrugId: drug.id,
+        standardCode: standard.standardCode,
+        productCat,
+        specPrep: null,
+        ised: standard.exportIsed,
+        // From the file, like TMTID itself — not from cdrug.drugcode24.
+        ndc24: catalogRow?.ndc24 ?? null,
+        packsize: null,
+        // The code exists in the latest snapshot, so this is an edit, not an add.
+        updateFlag: "E",
+        dateChange: day,
+        dateUpdate: day,
+        dateEffective: day,
+        source: "drug_catalog",
+        catalogImportId: snapshot.id,
+        mappedBy: userId,
+        mappedAt: now,
+        updatedAt: now,
+      });
+      result.created += 1;
+    } else if (mapping) {
+      updates.push({
+        mappingId: mapping.id,
+        sourceDrugId: drug.id,
+        drugcode: drug.drugcode,
+        previousStandardCode: mapping.standardCode,
+        standardCode: standard.standardCode,
+        productCat,
+        ised: standard.exportIsed,
+        ndc24: catalogRow?.ndc24 ?? null,
+      });
+    }
   }
 
-  if (pending.length > 0) {
+  if (pending.length > 0 || updates.length > 0) {
     await db.transaction(async (tx) => {
       for (let start = 0; start < pending.length; start += 500) {
         await tx.insert(drugMappings).values(pending.slice(start, start + 500));
+      }
+      for (const update of updates) {
+        const [updateResult] = await tx
+          .update(drugMappings)
+          .set({
+            standardCode: update.standardCode,
+            productCat: update.productCat,
+            specPrep: null,
+            ised: update.ised,
+            ndc24: update.ndc24,
+            packsize: null,
+            updateFlag: "E",
+            dateChange: day,
+            dateUpdate: day,
+            dateEffective: day,
+            catalogImportId: snapshot.id,
+            mappedBy: userId,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(drugMappings.id, update.mappingId),
+              eq(drugMappings.facilityId, facilityId),
+              eq(drugMappings.source, "drug_catalog"),
+              eq(drugMappings.standardCode, update.previousStandardCode),
+            ),
+          );
+        if (updateResult.affectedRows !== 1) continue;
+        result.updated += 1;
+        await tx.insert(auditLogs).values({
+          id: randomUUID(),
+          actorUserId: userId,
+          effectiveFacilityId: facilityId,
+          action: "mapping.catalog_updated",
+          entityType: "drug_mapping",
+          entityId: update.mappingId,
+          beforeJson: { sourceDrugId: update.sourceDrugId, standardCode: update.previousStandardCode, source: "drug_catalog" },
+          afterJson: { drugcode: update.drugcode, standardCode: update.standardCode, catalogImportId: snapshot.id },
+        });
       }
       await tx.insert(auditLogs).values({
         id: randomUUID(),

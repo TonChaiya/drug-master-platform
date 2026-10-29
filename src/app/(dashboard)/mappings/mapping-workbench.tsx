@@ -30,6 +30,9 @@ interface WorklistRow {
   dosageForm: string | null;
   updateFlag: string | null;
   mappingSource: string | null;
+  status: "pending" | "needs_review" | "mapped";
+  statusReason: string | null;
+  latestCatalogTmtid: string | null;
 }
 
 interface Worklist {
@@ -40,12 +43,12 @@ interface Worklist {
 }
 
 const EMPTY: Worklist = { rows: [], total: 0, page: 1, pageCount: 1 };
-const COLUMNS = 7;
+const COLUMNS = 8;
 
 export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
   const { push } = useToast();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<"all" | "pending" | "mapped">("pending");
+  const [status, setStatus] = useState<"all" | "pending" | "needs_review" | "mapped">("pending");
   const [drugType, setDrugType] = useState<"all" | "01" | "10">("all");
   const [page, setPage] = useState(1);
   const [worklist, setWorklist] = useState<Worklist>(EMPTY);
@@ -95,14 +98,23 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
     setBusy("reconcile");
     try {
       const response = await fetch("/api/v1/mappings/reconcile", { method: "POST" });
-      const result = (await response.json()) as { ok?: boolean; message?: string; created?: number; skippedNoStandard?: number; skippedTypeMismatch?: number };
+      const result = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        created?: number;
+        updated?: number;
+        needsReview?: number;
+        skippedNoStandard?: number;
+        skippedTypeMismatch?: number;
+      };
       if (!response.ok || !result.ok) {
         push("error", result.message ?? "จับคู่อัตโนมัติไม่สำเร็จ");
         return;
       }
       push(
         "ok",
-        `จับคู่อัตโนมัติ ${result.created?.toLocaleString("th-TH")} รายการ · ` +
+        `สร้าง ${result.created?.toLocaleString("th-TH")} · อัปเดต ${result.updated?.toLocaleString("th-TH")} · ` +
+          `ต้องตรวจสอบ ${result.needsReview?.toLocaleString("th-TH")} · ` +
           `ไม่พบมาตรฐาน ${result.skippedNoStandard?.toLocaleString("th-TH")} · ชนิดไม่ตรง ${result.skippedTypeMismatch?.toLocaleString("th-TH")}`,
       );
       await load();
@@ -187,6 +199,7 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                 }}
               >
                 <option value="pending">คงค้าง</option>
+                <option value="needs_review">ต้องตรวจสอบ</option>
                 <option value="mapped">จับคู่แล้ว</option>
                 <option value="all">ทั้งหมด</option>
               </SelectInput>
@@ -245,6 +258,7 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                     <th>จับคู่กับมาตรฐาน (จาก TMT API)</th>
                     <th>FLAG</th>
                     <th>ที่มา</th>
+                    <th>สถานะ</th>
                     <th className="w-0" />
                   </tr>
                 </thead>
@@ -321,6 +335,12 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                               </td>
                               <td>{row.updateFlag ? <Badge>{row.updateFlag}</Badge> : <span className="type-caption">—</span>}</td>
                               <td className="type-caption">{row.mappingSource ?? "—"}</td>
+                              <td className="max-w-56">
+                                <Badge tone={row.status === "needs_review" ? "warning" : row.status === "mapped" ? "success" : "neutral"} dot>
+                                  {row.status === "needs_review" ? "ต้องตรวจสอบ" : row.status === "mapped" ? "จับคู่แล้ว" : "คงค้าง"}
+                                </Badge>
+                                {row.statusReason ? <div className="type-help mt-1">{row.statusReason}</div> : null}
+                              </td>
                               <td>
                                 <Button
                                   size="sm"
