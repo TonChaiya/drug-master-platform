@@ -255,6 +255,16 @@ ALTER TABLE drug_mappings
 DELETE FROM schema_migrations WHERE filename = '0002_agent_commands_and_export.sql';
 ```
 
+**0010_mapping_export_checkpoints.sql** — เก็บ version ของ mapping ที่อยู่ในไฟล์ส่งออกสำเร็จล่าสุด แยกตาม facility
+การสร้างไฟล์ล็อก facility ระหว่างอ่าน delta และบันทึก checkpoint; preview token ป้องกันจำนวน/ข้อมูลเปลี่ยนระหว่าง preview กับ download
+
+```sql
+DROP TABLE export_preview_tokens;
+DROP TABLE mapping_export_checkpoints;
+ALTER TABLE drug_mappings DROP INDEX uq_mappings_facility_id;
+DELETE FROM schema_migrations WHERE filename = '0010_mapping_export_checkpoints.sql';
+```
+
 ห้ามใช้ rollback บน production โดยไม่มี maintenance window ที่อนุมัติแล้ว
 
 ### บัญชี admin ตัวแรก

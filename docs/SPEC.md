@@ -98,6 +98,8 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 - `drugCatalogImports`: facilityId, filename, contentHash, sourceVersion/date, row counts, importedBy, timestamps
 - `drugCatalogRows`: importId, facilityId, 21 payload fields (ไม่มีคอลัมน์ลำดับ `#`), rowNumber; unique `(importId, HOSPDRUGCODE)`
 - `drugMappings`: facilityId, sourceDrugId unique ต่อ facility, standardCode, productCat, specPrep, ฟิลด์ส่งออก, updateFlag, ฟิลด์วันที่, source(`drug_catalog|manual`), catalogImportId, mappedBy, mappedAt, updatedAt
+- `mappingExportCheckpoints`: facilityId + mappingId, mappingUpdatedAt, exportId, exportedAt; เก็บ version ล่าสุดของแต่ละ mapping ที่ส่งออกสำเร็จ
+- `exportPreviewTokens`: tokenHash, facilityId, selection, snapshotHash, expiresAt, consumedAt; token สุ่มใช้ได้ครั้งเดียวและเก็บเฉพาะ hash
 
 **Agent**
 
@@ -186,9 +188,11 @@ token cache อยู่ใน memory หรือ encrypted DB **ห้าม�
 
 ### ชุดข้อมูลที่ส่งออกได้
 
-- `all-mapped`: ทุก mapping ปัจจุบันของ facility
-- `manual-changes`: เฉพาะ mapping ที่ source เป็น `manual`
-- หน้าจอต้องแสดงแถวจริงของชุดที่เลือกก่อนดาวน์โหลด พร้อมจำนวนที่ตรงกับไฟล์
+- `all-mapped`: ทุก mapping ปัจจุบันที่มีสถานะ `mapped` และมาตรฐานยัง valid
+- `manual-changes`: เฉพาะ mapping ที่ `mapped`/valid และยังไม่เคยส่งออก หรือ `updatedAt` เปลี่ยนจาก version ที่ส่งออกสำเร็จล่าสุด
+- ทั้ง full export และ delta ต้อง checkpoint เฉพาะแถวที่อยู่ในไฟล์หลังสร้างไฟล์สำเร็จ; export ที่ล้มเหลวห้ามเปลี่ยน checkpoint
+- checkpoint แยกตาม facility และ `pending`/`needs_review` ห้ามอยู่ในไฟล์
+- หน้าจอต้องแสดงแถวจริงของชุดที่เลือกก่อนดาวน์โหลด พร้อมจำนวนที่ตรงกับไฟล์; preview token มีอายุ 10 นาที ใช้ได้ครั้งเดียว และถ้าข้อมูลเปลี่ยนหลัง preview ให้ยกเลิก download แล้วขอให้ตรวจ preview ใหม่
 - admin ต้องเลือก effective facility อย่างชัดเจน; user ใช้ facility จาก session
 
 ### ที่มาของแต่ละคอลัมน์

@@ -1,14 +1,16 @@
 import { z } from "zod";
 import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
-import { createExport } from "@/modules/exports/service";
+import { createExport, ExportPreviewStaleError } from "@/modules/exports/service";
 import { ExportContractError } from "@/modules/exports/writer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const schema = z.object({ selection: z.enum(["all-mapped", "manual-changes"]) }).strict();
+const schema = z
+  .object({ selection: z.enum(["all-mapped", "manual-changes"]), previewToken: z.string().regex(/^[a-f0-9]{64}$/) })
+  .strict();
 
 export async function POST(request: Request) {
   const context = await withFacilityContext();
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
       facilityCode: context.context.facility.code,
       userId: context.context.actorUserId,
       selection: parsed.data.selection,
+      previewToken: parsed.data.previewToken,
     });
     return new Response(new Uint8Array(bundle.buffer), {
       status: 200,
@@ -35,6 +38,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof ExportPreviewStaleError) {
+      return apiJson({ ok: false, errorCode: error.code, message: error.message }, 409);
+    }
     if (error instanceof ExportContractError) {
       return apiJson({ ok: false, errorCode: error.code, message: error.message }, 409);
     }

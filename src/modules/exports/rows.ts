@@ -1,8 +1,18 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/db/client";
-import { drugMappings, sourceDrugs, standardProducts } from "@/db/schema";
+import {
+  drugCatalogImports,
+  drugCatalogRows,
+  drugMappings,
+  mappingExportCheckpoints,
+  sourceDrugs,
+  standardProducts,
+} from "@/db/schema";
+import { classifyMappingLifecycle } from "@/modules/mappings/lifecycle";
+import { isExportCandidate, type ExportCandidateState, type ExportSelection } from "./delta";
 
-export type ExportSelection = "all-mapped" | "manual-changes";
+export type { ExportSelection } from "./delta";
 
 /** One export row, already resolved to the values that go on the sheet. */
 export interface ExportRow {
@@ -28,6 +38,12 @@ export interface ExportRow {
   dateupdate: string | null;
   dateeffective: string | null;
 }
+
+export interface ExportCandidate extends ExportCandidateState {
+  row: ExportRow;
+}
+
+type ExportQueryDb = Pick<typeof db, "select">;
 
 function text(value: string | null | undefined): string {
   return value?.toString().trim() ?? "";
@@ -63,13 +79,38 @@ function contentText(contentValue: string | null, contentUnit: string | null, di
  * value here. UNITPRICE still falls back to the JHCIS selling price, which is a
  * local fact TMT never carries.
  */
-export async function buildExportRows(facilityId: string, selection: ExportSelection): Promise<ExportRow[]> {
-  const conditions = [eq(drugMappings.facilityId, facilityId), eq(sourceDrugs.active, 1)];
-  if (selection === "manual-changes") conditions.push(eq(drugMappings.source, "manual"));
+export async function buildExportCandidates(
+  facilityId: string,
+  selection: ExportSelection,
+  database: ExportQueryDb = db,
+  lockRows = false,
+): Promise<ExportCandidate[]> {
+  const latestCatalog = alias(drugCatalogRows, "latest_export_catalog");
+  const latestImportId = sql<string>`(
+    SELECT ${drugCatalogImports.id}
+    FROM ${drugCatalogImports}
+    WHERE ${drugCatalogImports.facilityId} = ${facilityId}
+    ORDER BY ${drugCatalogImports.createdAt} DESC
+    LIMIT 1
+  )`;
+  const everInCatalog = sql<boolean>`EXISTS (
+    SELECT 1 FROM drug_catalog_rows export_catalog_history
+    WHERE export_catalog_history.facility_id = ${sourceDrugs.facilityId}
+      AND export_catalog_history.hospdrugcode = ${sourceDrugs.drugcode}
+  )`;
 
-  const rows = await db
+  const query = database
     .select({
+      facilityId: drugMappings.facilityId,
+      mappingId: drugMappings.id,
+      mappingSource: drugMappings.source,
+      mappingUpdatedAt: drugMappings.updatedAt,
+      checkpointFacilityId: mappingExportCheckpoints.facilityId,
+      checkpointMappingId: mappingExportCheckpoints.mappingId,
+      checkpointMappingUpdatedAt: mappingExportCheckpoints.mappingUpdatedAt,
+      checkpointExportId: mappingExportCheckpoints.exportId,
       drugcode: sourceDrugs.drugcode,
+      drugtype: sourceDrugs.drugtype,
       sell: sourceDrugs.sell,
       standardCode: drugMappings.standardCode,
       productCat: drugMappings.productCat,
@@ -94,35 +135,95 @@ export async function buildExportRows(facilityId: string, selection: ExportSelec
       dispensingUnit: standardProducts.dispensingUnit,
       manufacturer: standardProducts.manufacturer,
       standardIsed: standardProducts.exportIsed,
+      standardStatus: standardProducts.status,
+      standardType: standardProducts.standardType,
+      latestCatalogRowId: latestCatalog.id,
+      latestCatalogTmtid: latestCatalog.tmtid,
+      everInCatalog,
     })
     .from(drugMappings)
-    .innerJoin(sourceDrugs, eq(sourceDrugs.id, drugMappings.sourceDrugId))
+    .innerJoin(
+      sourceDrugs,
+      and(eq(sourceDrugs.id, drugMappings.sourceDrugId), eq(sourceDrugs.facilityId, drugMappings.facilityId)),
+    )
     .leftJoin(standardProducts, eq(standardProducts.standardCode, drugMappings.standardCode))
-    .where(and(...conditions))
+    .leftJoin(
+      latestCatalog,
+      and(
+        eq(latestCatalog.importId, latestImportId),
+        eq(latestCatalog.facilityId, drugMappings.facilityId),
+        eq(latestCatalog.hospdrugcode, sourceDrugs.drugcode),
+      ),
+    )
+    .leftJoin(
+      mappingExportCheckpoints,
+      and(
+        eq(mappingExportCheckpoints.facilityId, drugMappings.facilityId),
+        eq(mappingExportCheckpoints.mappingId, drugMappings.id),
+      ),
+    )
+    .where(and(eq(drugMappings.facilityId, facilityId), eq(sourceDrugs.active, 1)))
     .orderBy(asc(sourceDrugs.drugcode));
+  const rows = await (lockRows ? query.for("update") : query);
 
-  return rows.map((row) => ({
-    hospdrugcode: text(row.drugcode),
-    productcat: text(row.productCat),
-    tmtid: text(row.standardCode),
-    specprep: text(row.specPrep),
-    genericname: text(row.activeIngredient),
-    tradename: text(row.tradeName),
-    dfscode: text(row.dfscode),
-    dosageform: text(row.dosageForm),
-    strength: text(row.strength),
-    content: contentText(row.contentValue, row.contentUnit, row.dispensingUnit),
-    unitprice: text(row.unitPrice) || text(row.sell),
-    distributor: text(row.distributor),
-    manufacturer: text(row.manufacturer),
-    // Prefer the mapping's stored ISED; fall back to the standard's current value.
-    ised: text(row.mappingIsed) || text(row.standardIsed),
-    ndc24: text(row.ndc24),
-    packsize: text(row.packsize),
-    packprice: text(row.packPrice),
-    updateflag: text(row.updateFlag),
-    datechange: row.dateChange,
-    dateupdate: row.dateUpdate,
-    dateeffective: row.dateEffective,
-  }));
+  return rows.flatMap((row) => {
+    const lifecycle = classifyMappingLifecycle({
+      active: true,
+      mapping: { source: row.mappingSource, standardCode: row.standardCode },
+      inLatestCatalog: Boolean(row.latestCatalogRowId),
+      latestCatalogTmtid: row.latestCatalogTmtid,
+      everInCatalog: Boolean(row.everInCatalog),
+    });
+    const expectedStandardType = row.drugtype === "01" ? "TMT" : row.drugtype === "10" ? "TTMT" : null;
+    const candidate: ExportCandidateState = {
+      facilityId: row.facilityId,
+      mappingId: row.mappingId,
+      mappingSource: row.mappingSource,
+      mappingUpdatedAt: row.mappingUpdatedAt,
+      checkpointExportId: row.checkpointExportId,
+      status: lifecycle.status === "hidden" ? "needs_review" : lifecycle.status,
+      standardValid: row.standardStatus === "active" && row.standardType === expectedStandardType,
+    };
+    const checkpoint =
+      row.checkpointFacilityId && row.checkpointMappingId && row.checkpointMappingUpdatedAt
+        ? {
+            facilityId: row.checkpointFacilityId,
+            mappingId: row.checkpointMappingId,
+            mappingUpdatedAt: row.checkpointMappingUpdatedAt,
+          }
+        : null;
+    if (!isExportCandidate(candidate, checkpoint, selection)) return [];
+
+    return [{
+      ...candidate,
+      row: {
+        hospdrugcode: text(row.drugcode),
+        productcat: text(row.productCat),
+        tmtid: text(row.standardCode),
+        specprep: text(row.specPrep),
+        genericname: text(row.activeIngredient),
+        tradename: text(row.tradeName),
+        dfscode: text(row.dfscode),
+        dosageform: text(row.dosageForm),
+        strength: text(row.strength),
+        content: contentText(row.contentValue, row.contentUnit, row.dispensingUnit),
+        unitprice: text(row.unitPrice) || text(row.sell),
+        distributor: text(row.distributor),
+        manufacturer: text(row.manufacturer),
+        // Prefer the mapping's stored ISED; fall back to the standard's current value.
+        ised: text(row.mappingIsed) || text(row.standardIsed),
+        ndc24: text(row.ndc24),
+        packsize: text(row.packsize),
+        packprice: text(row.packPrice),
+        updateflag: text(row.updateFlag),
+        datechange: row.dateChange,
+        dateupdate: row.dateUpdate,
+        dateeffective: row.dateEffective,
+      },
+    }];
+  });
+}
+
+export async function buildExportRows(facilityId: string, selection: ExportSelection): Promise<ExportRow[]> {
+  return (await buildExportCandidates(facilityId, selection)).map((candidate) => candidate.row);
 }

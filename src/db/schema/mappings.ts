@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { date, datetime, index, mysqlTable, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { char, date, datetime, foreignKey, index, mysqlTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { facilities } from "./identity";
 
 const now = sql`CURRENT_TIMESTAMP(3)`;
 
@@ -32,6 +33,41 @@ export const drugMappings = mysqlTable(
   },
   (table) => [
     uniqueIndex("uq_mappings_facility_source").on(table.facilityId, table.sourceDrugId),
+    uniqueIndex("uq_mappings_facility_id").on(table.facilityId, table.id),
     index("idx_mappings_facility_mapped").on(table.facilityId, table.mappedAt),
   ],
+);
+
+export const mappingExportCheckpoints = mysqlTable(
+  "mapping_export_checkpoints",
+  {
+    facilityId: varchar("facility_id", { length: 36 }).notNull(),
+    mappingId: varchar("mapping_id", { length: 36 }).notNull(),
+    mappingUpdatedAt: datetime("mapping_updated_at", { mode: "date", fsp: 3 }).notNull(),
+    exportId: varchar("export_id", { length: 96 }).notNull(),
+    exportedAt: datetime("exported_at", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.facilityId, table.mappingId] }),
+    index("idx_mapping_export_facility_time").on(table.facilityId, table.exportedAt),
+    foreignKey({
+      columns: [table.facilityId, table.mappingId],
+      foreignColumns: [drugMappings.facilityId, drugMappings.id],
+      name: "fk_mapping_export_checkpoint_mapping",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const exportPreviewTokens = mysqlTable(
+  "export_preview_tokens",
+  {
+    tokenHash: char("token_hash", { length: 64 }).primaryKey(),
+    facilityId: varchar("facility_id", { length: 36 }).notNull().references(() => facilities.id, { onDelete: "cascade" }),
+    selection: varchar("selection", { length: 24 }).notNull(),
+    snapshotHash: char("snapshot_hash", { length: 64 }).notNull(),
+    expiresAt: datetime("expires_at", { mode: "date", fsp: 3 }).notNull(),
+    consumedAt: datetime("consumed_at", { mode: "date", fsp: 3 }),
+    createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
+  },
+  (table) => [index("idx_export_preview_facility_active").on(table.facilityId, table.consumedAt, table.expiresAt)],
 );

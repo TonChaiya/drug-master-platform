@@ -45,6 +45,7 @@ export function ExportPanel() {
   const [selection, setSelection] = useState<Selection>("all-mapped");
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -59,19 +60,28 @@ export function ExportPanel() {
     const url = `/api/v1/exports/preview?selection=${selection}&limit=100`;
     try {
       const response = await fetch(url);
-      const result = (await response.json()) as { ok?: boolean; message?: string; total?: number; rows?: PreviewRow[] };
+      const result = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        total?: number;
+        rows?: PreviewRow[];
+        previewToken?: string;
+      };
       if (!response.ok || !result.ok) {
         setFailed(true);
         push("error", result.message ?? "โหลดตัวอย่างไม่สำเร็จ");
         setRows([]);
         setTotal(0);
+        setPreviewToken(null);
         return;
       }
       setFailed(false);
       setRows(result.rows ?? []);
       setTotal(result.total ?? 0);
+      setPreviewToken(result.previewToken ?? null);
     } catch {
       setFailed(true);
+      setPreviewToken(null);
     } finally {
       setLoading(false);
     }
@@ -91,16 +101,21 @@ export function ExportPanel() {
   }
 
   async function download() {
+    if (!previewToken) return;
     setDownloading(true);
     try {
       const response = await fetch("/api/v1/exports/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selection }),
+        body: JSON.stringify({ selection, previewToken }),
       });
       if (!response.ok) {
-        const result = (await response.json().catch(() => ({}))) as { message?: string };
+        const result = (await response.json().catch(() => ({}))) as { errorCode?: string; message?: string };
         push("error", result.message ?? "สร้างไฟล์ไม่สำเร็จ");
+        if (result.errorCode === "EXPORT_PREVIEW_STALE") {
+          setLoading(true);
+          await loadPreview();
+        }
         return;
       }
       const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -115,6 +130,8 @@ export function ExportPanel() {
       anchor.remove();
       URL.revokeObjectURL(url);
       push("ok", `ดาวน์โหลด ${filename} (${response.headers.get("X-Export-Row-Count") ?? "?"} แถว)`);
+      setLoading(true);
+      await loadPreview();
     } finally {
       setDownloading(false);
     }
@@ -131,7 +148,7 @@ export function ExportPanel() {
               variant="primary"
               icon={<IconDownload size={15} />}
               loading={downloading}
-              disabled={loading || total === 0}
+              disabled={loading || total === 0 || !previewToken}
               onClick={() => void download()}
             >
               ดาวน์โหลด .xls
