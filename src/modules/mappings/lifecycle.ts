@@ -2,10 +2,15 @@ export type MappingLifecycleStatus = "pending" | "needs_review" | "mapped" | "hi
 
 export interface MappingLifecycleInput {
   active: boolean;
-  mapping: { source: string; standardCode: string } | null;
+  mapping: { source: string; standardCode: string; updatedAt?: Date } | null;
   inLatestCatalog: boolean;
   latestCatalogTmtid: string | null;
   everInCatalog: boolean;
+  reviewAcknowledgement?: {
+    mappingUpdatedAt: Date;
+    catalogPresent: boolean;
+    catalogTmtid: string | null;
+  } | null;
 }
 
 export type CatalogReconcileDecision =
@@ -19,14 +24,26 @@ export function classifyMappingLifecycle(_input: MappingLifecycleInput): {
 } {
   const input = _input;
   if (!input.active) return { status: "hidden", reason: null };
+  const acknowledgementMatches =
+    input.mapping?.updatedAt !== undefined &&
+    input.reviewAcknowledgement !== null &&
+    input.reviewAcknowledgement !== undefined &&
+    input.mapping.updatedAt.getTime() === input.reviewAcknowledgement.mappingUpdatedAt.getTime() &&
+    input.inLatestCatalog === input.reviewAcknowledgement.catalogPresent &&
+    input.latestCatalogTmtid === input.reviewAcknowledgement.catalogTmtid;
   if (!input.inLatestCatalog && input.everInCatalog) {
-    return { status: "needs_review", reason: "รหัสนี้หายจาก Drug Catalog ล่าสุด" };
+    return acknowledgementMatches
+      ? { status: "mapped", reason: null }
+      : { status: "needs_review", reason: "รหัสนี้หายจาก Drug Catalog ล่าสุด" };
   }
   if (!input.mapping) return { status: "pending", reason: null };
   if (input.inLatestCatalog && !input.latestCatalogTmtid) {
-    return { status: "needs_review", reason: "Drug Catalog ล่าสุดไม่มีรหัส TMT/TTMT" };
+    return acknowledgementMatches
+      ? { status: "mapped", reason: null }
+      : { status: "needs_review", reason: "Drug Catalog ล่าสุดไม่มีรหัส TMT/TTMT" };
   }
   if (input.latestCatalogTmtid && input.latestCatalogTmtid !== input.mapping.standardCode) {
+    if (acknowledgementMatches) return { status: "mapped", reason: null };
     return {
       status: "needs_review",
       reason:

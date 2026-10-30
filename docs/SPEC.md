@@ -46,6 +46,8 @@
 - ถ้า TMT/TTMT เปลี่ยน mapping ที่มี source `drug_catalog` ต้องตาม snapshot ล่าสุด แต่ source `manual` ห้ามถูกทับ
 - ยา inactive ที่หายจาก snapshot ล่าสุดเก็บ history ไว้และไม่ขึ้น worklist
 - ห้ามลบ snapshot, mapping หรือ history เดิมอัตโนมัติจากการ reconcile
+- ผู้ใช้ยืนยัน `needs_review` ได้เฉพาะ state ที่ตรวจจริง โดยผูกกับ `drugMappings.updatedAt` และสถานะ present/TMT ของ catalog ล่าสุด; เมื่อ mapping หรือ state ที่เกี่ยวข้องเปลี่ยน acknowledgement เดิมจะ stale และกลับเป็น `needs_review`
+- การบันทึก mapping ปกติไม่ยืนยัน review อัตโนมัติ และ confirm-only ห้ามเปลี่ยน version ของ mapping
 
 ## 4. PRODUCTCAT และ SPECPREP
 
@@ -99,6 +101,7 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 - `drugCatalogRows`: importId, facilityId, 21 payload fields (ไม่มีคอลัมน์ลำดับ `#`), rowNumber; unique `(importId, HOSPDRUGCODE)`
 - `drugMappings`: facilityId, sourceDrugId unique ต่อ facility, standardCode, productCat, specPrep, ฟิลด์ส่งออก, updateFlag, ฟิลด์วันที่, source(`drug_catalog|manual`), catalogImportId, mappedBy, mappedAt, updatedAt
 - `mappingExportCheckpoints`: facilityId + mappingId, mappingUpdatedAt, exportId, exportedAt; เก็บ version ล่าสุดของแต่ละ mapping ที่ส่งออกสำเร็จ
+- `mappingReviewAcknowledgements`: current row ต่อ facilityId + mappingId, mappingUpdatedAt, catalog present/TMT/import, confirmedBy/At; history การยืนยันอยู่ใน `auditLogs`
 - `exportPreviewTokens`: tokenHash, facilityId, selection, snapshotHash, expiresAt, consumedAt; token สุ่มใช้ได้ครั้งเดียวและเก็บเฉพาะ hash
 
 **Agent**

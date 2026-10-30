@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, like, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { db } from "@/db/client";
-import { drugCatalogRows, drugMappings, sourceDrugs, standardProducts } from "@/db/schema";
+import { drugCatalogRows, drugMappings, mappingReviewAcknowledgements, sourceDrugs, standardProducts } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { classifyMappingLifecycle, type MappingLifecycleStatus } from "./lifecycle";
 
@@ -67,7 +67,13 @@ export async function mappingWorklist(options: {
     .as("catalog_history");
   const latestImportId = snapshot?.id ?? "";
   const everInCatalog = sql<boolean>`${catalogHistory.hospdrugcode} IS NOT NULL`;
-  const needsReview = sql<boolean>`(
+  const reviewAcknowledgementMatches = sql<boolean>`(
+    ${mappingReviewAcknowledgements.mappingId} IS NOT NULL
+    AND ${mappingReviewAcknowledgements.mappingUpdatedAt} = ${drugMappings.updatedAt}
+    AND ${mappingReviewAcknowledgements.catalogPresent} = (${latestCatalog.id} IS NOT NULL)
+    AND ${mappingReviewAcknowledgements.catalogTmtid} <=> ${latestCatalog.tmtid}
+  )`;
+  const unresolvedNeedsReview = sql<boolean>`(
     (${latestCatalog.id} IS NULL AND ${everInCatalog})
     OR (
       ${latestCatalog.id} IS NOT NULL
@@ -75,6 +81,7 @@ export async function mappingWorklist(options: {
       AND (${latestCatalog.tmtid} IS NULL OR ${latestCatalog.tmtid} <> ${drugMappings.standardCode})
     )
   )`;
+  const needsReview = sql<boolean>`(${unresolvedNeedsReview} AND NOT (${reviewAcknowledgementMatches}))`;
 
   const conditions: SQL[] = [eq(sourceDrugs.facilityId, options.facilityId), eq(sourceDrugs.active, 1)];
 
@@ -104,6 +111,13 @@ export async function mappingWorklist(options: {
     .leftJoin(
       drugMappings,
       and(eq(drugMappings.sourceDrugId, sourceDrugs.id), eq(drugMappings.facilityId, sourceDrugs.facilityId)),
+    )
+    .leftJoin(
+      mappingReviewAcknowledgements,
+      and(
+        eq(mappingReviewAcknowledgements.mappingId, drugMappings.id),
+        eq(mappingReviewAcknowledgements.facilityId, sourceDrugs.facilityId),
+      ),
     )
     .leftJoin(
       latestCatalog,
@@ -138,6 +152,10 @@ export async function mappingWorklist(options: {
       updateFlag: drugMappings.updateFlag,
       mappingSource: drugMappings.source,
       mappedAt: drugMappings.mappedAt,
+      mappingUpdatedAt: drugMappings.updatedAt,
+      acknowledgedMappingUpdatedAt: mappingReviewAcknowledgements.mappingUpdatedAt,
+      acknowledgedCatalogPresent: mappingReviewAcknowledgements.catalogPresent,
+      acknowledgedCatalogTmtid: mappingReviewAcknowledgements.catalogTmtid,
       standardType: standardProducts.standardType,
       tradeName: standardProducts.tradeName,
       activeIngredient: standardProducts.activeIngredient,
@@ -152,6 +170,13 @@ export async function mappingWorklist(options: {
     .leftJoin(
       drugMappings,
       and(eq(drugMappings.sourceDrugId, sourceDrugs.id), eq(drugMappings.facilityId, sourceDrugs.facilityId)),
+    )
+    .leftJoin(
+      mappingReviewAcknowledgements,
+      and(
+        eq(mappingReviewAcknowledgements.mappingId, drugMappings.id),
+        eq(mappingReviewAcknowledgements.facilityId, sourceDrugs.facilityId),
+      ),
     )
     .leftJoin(standardProducts, eq(standardProducts.standardCode, drugMappings.standardCode))
     .leftJoin(
@@ -174,19 +199,37 @@ export async function mappingWorklist(options: {
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  const classified = rows.map(({ latestCatalogRowId, everInCatalog: wasEverInCatalog, ...row }) => {
-    const lifecycle = classifyMappingLifecycle({
-      active: true,
-      mapping:
-        row.mappingId && row.standardCode
-          ? { source: row.mappingSource ?? "manual", standardCode: row.standardCode }
-          : null,
-      inLatestCatalog: Boolean(latestCatalogRowId),
-      latestCatalogTmtid: row.latestCatalogTmtid,
-      everInCatalog: Boolean(wasEverInCatalog),
-    });
-    return { ...row, status: lifecycle.status as WorklistRow["status"], statusReason: lifecycle.reason };
-  });
+  const classified = rows.map(
+    ({
+      latestCatalogRowId,
+      everInCatalog: wasEverInCatalog,
+      mappingUpdatedAt,
+      acknowledgedMappingUpdatedAt,
+      acknowledgedCatalogPresent,
+      acknowledgedCatalogTmtid,
+      ...row
+    }) => {
+      const lifecycle = classifyMappingLifecycle({
+        active: true,
+        mapping:
+          row.mappingId && row.standardCode && mappingUpdatedAt
+            ? { source: row.mappingSource ?? "manual", standardCode: row.standardCode, updatedAt: mappingUpdatedAt }
+            : null,
+        inLatestCatalog: Boolean(latestCatalogRowId),
+        latestCatalogTmtid: row.latestCatalogTmtid,
+        everInCatalog: Boolean(wasEverInCatalog),
+        reviewAcknowledgement:
+          acknowledgedMappingUpdatedAt && acknowledgedCatalogPresent !== null
+            ? {
+                mappingUpdatedAt: acknowledgedMappingUpdatedAt,
+                catalogPresent: acknowledgedCatalogPresent,
+                catalogTmtid: acknowledgedCatalogTmtid,
+              }
+            : null,
+      });
+      return { ...row, status: lifecycle.status as WorklistRow["status"], statusReason: lifecycle.reason };
+    },
+  );
 
   return {
     rows: classified,

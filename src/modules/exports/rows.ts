@@ -6,6 +6,7 @@ import {
   drugCatalogRows,
   drugMappings,
   mappingExportCheckpoints,
+  mappingReviewAcknowledgements,
   sourceDrugs,
   standardProducts,
 } from "@/db/schema";
@@ -105,6 +106,9 @@ export async function buildExportCandidates(
       mappingId: drugMappings.id,
       mappingSource: drugMappings.source,
       mappingUpdatedAt: drugMappings.updatedAt,
+      acknowledgedMappingUpdatedAt: mappingReviewAcknowledgements.mappingUpdatedAt,
+      acknowledgedCatalogPresent: mappingReviewAcknowledgements.catalogPresent,
+      acknowledgedCatalogTmtid: mappingReviewAcknowledgements.catalogTmtid,
       checkpointFacilityId: mappingExportCheckpoints.facilityId,
       checkpointMappingId: mappingExportCheckpoints.mappingId,
       checkpointMappingUpdatedAt: mappingExportCheckpoints.mappingUpdatedAt,
@@ -148,6 +152,13 @@ export async function buildExportCandidates(
     )
     .leftJoin(standardProducts, eq(standardProducts.standardCode, drugMappings.standardCode))
     .leftJoin(
+      mappingReviewAcknowledgements,
+      and(
+        eq(mappingReviewAcknowledgements.facilityId, drugMappings.facilityId),
+        eq(mappingReviewAcknowledgements.mappingId, drugMappings.id),
+      ),
+    )
+    .leftJoin(
       latestCatalog,
       and(
         eq(latestCatalog.importId, latestImportId),
@@ -169,10 +180,18 @@ export async function buildExportCandidates(
   return rows.flatMap((row) => {
     const lifecycle = classifyMappingLifecycle({
       active: true,
-      mapping: { source: row.mappingSource, standardCode: row.standardCode },
+      mapping: { source: row.mappingSource, standardCode: row.standardCode, updatedAt: row.mappingUpdatedAt },
       inLatestCatalog: Boolean(row.latestCatalogRowId),
       latestCatalogTmtid: row.latestCatalogTmtid,
       everInCatalog: Boolean(row.everInCatalog),
+      reviewAcknowledgement:
+        row.acknowledgedMappingUpdatedAt && row.acknowledgedCatalogPresent !== null
+          ? {
+              mappingUpdatedAt: row.acknowledgedMappingUpdatedAt,
+              catalogPresent: row.acknowledgedCatalogPresent,
+              catalogTmtid: row.acknowledgedCatalogTmtid,
+            }
+          : null,
     });
     const expectedStandardType = row.drugtype === "01" ? "TMT" : row.drugtype === "10" ? "TTMT" : null;
     const candidate: ExportCandidateState = {

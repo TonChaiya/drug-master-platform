@@ -45,6 +45,12 @@ test("manual mapping already exported does not reappear in delta", () => {
   assert.equal(isExportCandidate(candidate(), checkpoint(), "manual-changes"), false);
 });
 
+test("review confirmation timestamp does not change the mapping delta version", () => {
+  const confirmedAt = new Date("2026-10-29T10:00:00.000Z");
+  assert.ok(confirmedAt > candidate().mappingUpdatedAt);
+  assert.equal(isExportCandidate(candidate(), checkpoint(), "manual-changes"), false);
+});
+
 test("mapping created after the checkpoint appears in delta", () => {
   assert.equal(isExportCandidate(candidate({ mappingId: "mapping-new" }), null, "manual-changes"), true);
 });

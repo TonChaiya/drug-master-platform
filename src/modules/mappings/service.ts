@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { auditLogs, drugCatalogRows, drugMappings, sourceDrugs, standardProducts } from "@/db/schema";
+import {
+  auditLogs,
+  drugCatalogImports,
+  drugCatalogRows,
+  drugMappings,
+  mappingReviewAcknowledgements,
+  sourceDrugs,
+  standardProducts,
+} from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
-import { decideCatalogReconcile } from "./lifecycle";
+import { classifyMappingLifecycle, decideCatalogReconcile } from "./lifecycle";
 import { MappingRuleError, normalizeSpecPrep, resolveProductCategory, standardTypeForDrugType } from "./product-category";
 import { decideUpdateFlagWithSnapshot } from "./update-flag";
 
@@ -24,6 +32,7 @@ export interface ManualMappingInput {
   dateUpdate?: string | null;
   dateEffective?: string | null;
   notes?: string | null;
+  confirmReview?: boolean;
 }
 
 function today(): string {
@@ -63,7 +72,12 @@ async function requireActiveStandard(standardCode: string, expectedType: "TMT" |
  * write, and the mapping is immediately exportable — there is no approval state
  * in this system (docs/SPEC.md).
  */
-export async function saveManualMapping(input: ManualMappingInput): Promise<{ mappingId: string; updateFlag: "A" | "E" }> {
+export async function saveManualMapping(input: ManualMappingInput): Promise<{
+  mappingId: string;
+  updateFlag: "A" | "E";
+  reviewConfirmed: boolean;
+  reviewNoop: boolean;
+}> {
   const drug = await requireSourceDrug(input.facilityId, input.sourceDrugId);
   const expectedType = standardTypeForDrugType(drug.drugtype);
   const standard = await requireActiveStandard(input.standardCode, expectedType);
@@ -71,79 +85,191 @@ export async function saveManualMapping(input: ManualMappingInput): Promise<{ ma
   const productCat = resolveProductCategory(drug.drugtype, input.productCat);
   const specPrep = normalizeSpecPrep(productCat, input.specPrep);
 
-  const snapshot = await latestImport(input.facilityId);
-  let presentInSnapshot = false;
-  let catalogNdc24: string | null = null;
-  if (snapshot) {
-    const rows = await db
-      .select({ id: drugCatalogRows.id, ndc24: drugCatalogRows.ndc24 })
-      .from(drugCatalogRows)
-      .where(and(eq(drugCatalogRows.importId, snapshot.id), eq(drugCatalogRows.hospdrugcode, drug.drugcode)))
-      .limit(1);
-    presentInSnapshot = rows.length > 0;
-    catalogNdc24 = rows[0]?.ndc24 ?? null;
-  }
-  const updateFlag = decideUpdateFlagWithSnapshot(Boolean(snapshot), presentInSnapshot);
-
   const now = new Date();
   const day = today();
-  const existing = await db
-    .select({ id: drugMappings.id })
-    .from(drugMappings)
-    .where(and(eq(drugMappings.facilityId, input.facilityId), eq(drugMappings.sourceDrugId, drug.id)))
-    .limit(1);
+  return db.transaction(async (tx) => {
+    const [snapshot] = await tx
+      .select({ id: drugCatalogImports.id })
+      .from(drugCatalogImports)
+      .where(eq(drugCatalogImports.facilityId, input.facilityId))
+      .orderBy(desc(drugCatalogImports.createdAt))
+      .limit(1);
+    const [catalogRow] = snapshot
+      ? await tx
+          .select({ id: drugCatalogRows.id, tmtid: drugCatalogRows.tmtid, ndc24: drugCatalogRows.ndc24 })
+          .from(drugCatalogRows)
+          .where(
+            and(
+              eq(drugCatalogRows.facilityId, input.facilityId),
+              eq(drugCatalogRows.importId, snapshot.id),
+              eq(drugCatalogRows.hospdrugcode, drug.drugcode),
+            ),
+          )
+          .limit(1)
+      : [];
+    const [catalogHistory] = await tx
+      .select({ id: drugCatalogRows.id })
+      .from(drugCatalogRows)
+      .where(and(eq(drugCatalogRows.facilityId, input.facilityId), eq(drugCatalogRows.hospdrugcode, drug.drugcode)))
+      .limit(1);
+    const updateFlag = decideUpdateFlagWithSnapshot(Boolean(snapshot), Boolean(catalogRow));
+    const [existing] = await tx
+      .select({
+        id: drugMappings.id,
+        standardCode: drugMappings.standardCode,
+      })
+      .from(drugMappings)
+      .where(and(eq(drugMappings.facilityId, input.facilityId), eq(drugMappings.sourceDrugId, drug.id)))
+      .limit(1)
+      .for("update");
 
-  const values = {
-    facilityId: input.facilityId,
-    sourceDrugId: drug.id,
-    standardCode: standard.standardCode,
-    productCat,
-    specPrep,
-    dfscode: input.dfscode?.trim() || null,
-    unitPrice: input.unitPrice?.trim() || null,
-    distributor: input.distributor?.trim() || null,
-    // ISED always comes from the standard, never from user input.
-    ised: standard.exportIsed,
-    // NDC24 comes from the Drug Catalog file, never from cdrug.drugcode24:
-    // the file has already been through the central system that validates it,
-    // and JHCIS is not reliably right. Absent from the file means absent here.
-    ndc24: input.ndc24?.trim() || catalogNdc24 || null,
-    // PACKSIZE has no TMT field and is empty on every row of the approved
-    // DrugCat files, so it carries only what a user typed. cdrug.pack is a
-    // different quantity and putting it here would invent a value.
-    packsize: input.packsize?.trim() || null,
-    packPrice: input.packPrice?.trim() || null,
-    updateFlag,
-    dateChange: input.dateChange || day,
-    dateUpdate: input.dateUpdate || day,
-    dateEffective: input.dateEffective || day,
-    notes: input.notes?.slice(0, 500) || null,
-    source: "manual",
-    catalogImportId: null,
-    mappedBy: input.userId,
-    mappedAt: now,
-    updatedAt: now,
-  };
+    const hasExplicitMappingFields = [
+      input.productCat,
+      input.specPrep,
+      input.dfscode,
+      input.unitPrice,
+      input.distributor,
+      input.ndc24,
+      input.packsize,
+      input.packPrice,
+      input.dateChange,
+      input.dateUpdate,
+      input.dateEffective,
+      input.notes,
+    ].some((value) => value !== undefined);
+    const confirmOnly = Boolean(input.confirmReview && existing?.standardCode === standard.standardCode && !hasExplicitMappingFields);
+    const mappingId = existing?.id ?? randomUUID();
 
-  const mappingId = existing[0]?.id ?? randomUUID();
-  await db.transaction(async (tx) => {
-    if (existing[0]) {
-      await tx.update(drugMappings).set(values).where(eq(drugMappings.id, existing[0].id));
-    } else {
-      await tx.insert(drugMappings).values({ id: mappingId, ...values });
+    if (!confirmOnly) {
+      const values = {
+        facilityId: input.facilityId,
+        sourceDrugId: drug.id,
+        standardCode: standard.standardCode,
+        productCat,
+        specPrep,
+        dfscode: input.dfscode?.trim() || null,
+        unitPrice: input.unitPrice?.trim() || null,
+        distributor: input.distributor?.trim() || null,
+        ised: standard.exportIsed,
+        ndc24: input.ndc24?.trim() || catalogRow?.ndc24 || null,
+        packsize: input.packsize?.trim() || null,
+        packPrice: input.packPrice?.trim() || null,
+        updateFlag,
+        dateChange: input.dateChange || day,
+        dateUpdate: input.dateUpdate || day,
+        dateEffective: input.dateEffective || day,
+        notes: input.notes?.slice(0, 500) || null,
+        source: "manual",
+        catalogImportId: null,
+        mappedBy: input.userId,
+        mappedAt: now,
+        updatedAt: sql`CURRENT_TIMESTAMP(3)`,
+      };
+      if (existing) {
+        await tx
+          .update(drugMappings)
+          .set(values)
+          .where(and(eq(drugMappings.id, existing.id), eq(drugMappings.facilityId, input.facilityId)));
+      } else {
+        await tx.insert(drugMappings).values({ id: mappingId, ...values });
+      }
+      await tx.insert(auditLogs).values({
+        id: randomUUID(),
+        actorUserId: input.userId,
+        effectiveFacilityId: input.facilityId,
+        action: existing ? "mapping.updated" : "mapping.created",
+        entityType: "drug_mapping",
+        entityId: mappingId,
+        afterJson: { drugcode: drug.drugcode, standardCode: standard.standardCode, productCat, updateFlag },
+      });
     }
-    await tx.insert(auditLogs).values({
-      id: randomUUID(),
-      actorUserId: input.userId,
-      effectiveFacilityId: input.facilityId,
-      action: existing[0] ? "mapping.updated" : "mapping.created",
-      entityType: "drug_mapping",
-      entityId: mappingId,
-      afterJson: { drugcode: drug.drugcode, standardCode: standard.standardCode, productCat, updateFlag },
-    });
-  });
 
-  return { mappingId, updateFlag };
+    const [savedMapping] = await tx
+      .select({
+        id: drugMappings.id,
+        source: drugMappings.source,
+        standardCode: drugMappings.standardCode,
+        updatedAt: drugMappings.updatedAt,
+      })
+      .from(drugMappings)
+      .where(and(eq(drugMappings.id, mappingId), eq(drugMappings.facilityId, input.facilityId)))
+      .limit(1);
+    if (!savedMapping) throw new MappingRuleError("MAPPING_NOT_FOUND", "ไม่พบผลจับคู่หลังบันทึก");
+
+    let reviewConfirmed = false;
+    let reviewNoop = false;
+    if (input.confirmReview) {
+      const lifecycle = classifyMappingLifecycle({
+        active: true,
+        mapping: savedMapping,
+        inLatestCatalog: Boolean(catalogRow),
+        latestCatalogTmtid: catalogRow?.tmtid ?? null,
+        everInCatalog: Boolean(catalogHistory),
+      });
+      const [acknowledgement] = await tx
+        .select({
+          mappingUpdatedAt: mappingReviewAcknowledgements.mappingUpdatedAt,
+          catalogPresent: mappingReviewAcknowledgements.catalogPresent,
+          catalogTmtid: mappingReviewAcknowledgements.catalogTmtid,
+        })
+        .from(mappingReviewAcknowledgements)
+        .where(
+          and(
+            eq(mappingReviewAcknowledgements.facilityId, input.facilityId),
+            eq(mappingReviewAcknowledgements.mappingId, mappingId),
+          ),
+        )
+        .limit(1);
+      const sameState =
+        acknowledgement?.mappingUpdatedAt.getTime() === savedMapping.updatedAt.getTime() &&
+        acknowledgement.catalogPresent === Boolean(catalogRow) &&
+        acknowledgement.catalogTmtid === (catalogRow?.tmtid ?? null);
+      if (sameState) {
+        reviewNoop = true;
+      } else {
+        await tx
+          .insert(mappingReviewAcknowledgements)
+          .values({
+            facilityId: input.facilityId,
+            mappingId,
+            mappingUpdatedAt: savedMapping.updatedAt,
+            catalogPresent: Boolean(catalogRow),
+            catalogTmtid: catalogRow?.tmtid ?? null,
+            catalogImportId: snapshot?.id ?? null,
+            confirmedBy: input.userId,
+            confirmedAt: sql`CURRENT_TIMESTAMP(3)`,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              mappingUpdatedAt: savedMapping.updatedAt,
+              catalogPresent: Boolean(catalogRow),
+              catalogTmtid: catalogRow?.tmtid ?? null,
+              catalogImportId: snapshot?.id ?? null,
+              confirmedBy: input.userId,
+              confirmedAt: sql`CURRENT_TIMESTAMP(3)`,
+            },
+          });
+        await tx.insert(auditLogs).values({
+          id: randomUUID(),
+          actorUserId: input.userId,
+          effectiveFacilityId: input.facilityId,
+          action: "mapping.review_confirmed",
+          entityType: "drug_mapping",
+          entityId: mappingId,
+          afterJson: {
+            mappingUpdatedAt: savedMapping.updatedAt,
+            catalogPresent: Boolean(catalogRow),
+            catalogTmtid: catalogRow?.tmtid ?? null,
+            catalogImportId: snapshot?.id ?? null,
+            lifecycleBeforeAcknowledgement: lifecycle.status,
+          },
+        });
+        reviewConfirmed = true;
+      }
+    }
+
+    return { mappingId, updateFlag, reviewConfirmed, reviewNoop };
+  });
 }
 
 export interface ReconcileResult {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { char, date, datetime, foreignKey, index, mysqlTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, char, date, datetime, foreignKey, index, mysqlTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 import { facilities } from "./identity";
 
 const now = sql`CURRENT_TIMESTAMP(3)`;
@@ -54,6 +54,28 @@ export const mappingExportCheckpoints = mysqlTable(
       columns: [table.facilityId, table.mappingId],
       foreignColumns: [drugMappings.facilityId, drugMappings.id],
       name: "fk_mapping_export_checkpoint_mapping",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const mappingReviewAcknowledgements = mysqlTable(
+  "mapping_review_acknowledgements",
+  {
+    facilityId: char("facility_id", { length: 36 }).notNull(),
+    mappingId: char("mapping_id", { length: 36 }).notNull(),
+    mappingUpdatedAt: datetime("mapping_updated_at", { mode: "date", fsp: 3 }).notNull(),
+    catalogPresent: boolean("catalog_present").notNull(),
+    catalogTmtid: varchar("catalog_tmtid", { length: 64 }),
+    catalogImportId: char("catalog_import_id", { length: 36 }),
+    confirmedBy: char("confirmed_by", { length: 36 }).notNull(),
+    confirmedAt: datetime("confirmed_at", { mode: "date", fsp: 3 }).notNull().default(now),
+  },
+  (table) => [
+    primaryKey({ columns: [table.facilityId, table.mappingId] }),
+    foreignKey({
+      columns: [table.facilityId, table.mappingId],
+      foreignColumns: [drugMappings.facilityId, drugMappings.id],
+      name: "fk_mapping_review_ack_mapping",
     }).onDelete("cascade"),
   ],
 );

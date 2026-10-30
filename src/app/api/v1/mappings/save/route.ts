@@ -26,6 +26,7 @@ const schema = z
     dateUpdate: optionalDate,
     dateEffective: optionalDate,
     notes: optionalText(500),
+    confirmReview: z.boolean().optional(),
   })
   .strict();
 

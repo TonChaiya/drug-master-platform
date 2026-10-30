@@ -113,3 +113,101 @@ test("new latest catalog row can create a mapping for an active unmapped drug", 
     { action: "create", standardCode: "TMT-NEW" },
   );
 });
+
+test("matching review acknowledgement resolves a manual catalog conflict", () => {
+  const mappingUpdatedAt = new Date("2026-10-30T01:00:00.000Z");
+
+  assert.deepEqual(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "TMT-MANUAL", updatedAt: mappingUpdatedAt },
+      inLatestCatalog: true,
+      latestCatalogTmtid: "TMT-CATALOG",
+      everInCatalog: true,
+      reviewAcknowledgement: {
+        mappingUpdatedAt,
+        catalogPresent: true,
+        catalogTmtid: "TMT-CATALOG",
+      },
+    }),
+    { status: "mapped", reason: null },
+  );
+});
+
+test("mapping change makes a review acknowledgement stale", () => {
+  assert.deepEqual(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "TMT-MANUAL", updatedAt: new Date("2026-10-30T01:00:01.000Z") },
+      inLatestCatalog: true,
+      latestCatalogTmtid: "TMT-CATALOG",
+      everInCatalog: true,
+      reviewAcknowledgement: {
+        mappingUpdatedAt: new Date("2026-10-30T01:00:00.000Z"),
+        catalogPresent: true,
+        catalogTmtid: "TMT-CATALOG",
+      },
+    }),
+    { status: "needs_review", reason: "TMT/TTMT ใน Drug Catalog เปลี่ยน แต่รายการนี้ถูกแก้แบบ manual" },
+  );
+});
+
+test("catalog TMT change makes a review acknowledgement stale", () => {
+  const mappingUpdatedAt = new Date("2026-10-30T01:00:00.000Z");
+
+  assert.equal(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "TMT-MANUAL", updatedAt: mappingUpdatedAt },
+      inLatestCatalog: true,
+      latestCatalogTmtid: "TMT-NEW",
+      everInCatalog: true,
+      reviewAcknowledgement: {
+        mappingUpdatedAt,
+        catalogPresent: true,
+        catalogTmtid: "TMT-OLD",
+      },
+    }).status,
+    "needs_review",
+  );
+});
+
+test("missing catalog row can be acknowledged for the current mapping", () => {
+  const mappingUpdatedAt = new Date("2026-10-30T01:00:00.000Z");
+
+  assert.deepEqual(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "TMT-MANUAL", updatedAt: mappingUpdatedAt },
+      inLatestCatalog: false,
+      latestCatalogTmtid: null,
+      everInCatalog: true,
+      reviewAcknowledgement: {
+        mappingUpdatedAt,
+        catalogPresent: false,
+        catalogTmtid: null,
+      },
+    }),
+    { status: "mapped", reason: null },
+  );
+});
+
+test("catalog row returning makes an absent-state acknowledgement stale", () => {
+  const mappingUpdatedAt = new Date("2026-10-30T01:00:00.000Z");
+
+  assert.equal(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "TMT-MANUAL", updatedAt: mappingUpdatedAt },
+      inLatestCatalog: true,
+      latestCatalogTmtid: "TMT-CATALOG",
+      everInCatalog: true,
+      reviewAcknowledgement: {
+        mappingUpdatedAt,
+        catalogPresent: false,
+        catalogTmtid: null,
+      },
+    }).status,
+    "needs_review",
+  );
+});

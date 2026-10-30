@@ -265,6 +265,13 @@ ALTER TABLE drug_mappings DROP INDEX uq_mappings_facility_id;
 DELETE FROM schema_migrations WHERE filename = '0010_mapping_export_checkpoints.sql';
 ```
 
+**0011_mapping_review_acknowledgements.sql** — เก็บ current acknowledgement ของ review ต่อ mapping โดยผูกกับ mapping version และ catalog state; audit history ยังอยู่ใน `audit_logs`
+
+```sql
+DROP TABLE mapping_review_acknowledgements;
+DELETE FROM schema_migrations WHERE filename = '0011_mapping_review_acknowledgements.sql';
+```
+
 ห้ามใช้ rollback บน production โดยไม่มี maintenance window ที่อนุมัติแล้ว
 
 ### บัญชี admin ตัวแรก

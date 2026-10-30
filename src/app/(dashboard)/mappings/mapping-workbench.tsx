@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
-import { StandardSearch, type StandardRow } from "@/components/standard-search";
+import { StandardSearch } from "@/components/standard-search";
 import { Button } from "@/components/ui/button";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -123,20 +123,25 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
     }
   }
 
-  async function saveMapping(row: WorklistRow, standard: StandardRow) {
+  async function saveMapping(row: WorklistRow, standardCode: string, confirmReview = false) {
     setBusy(row.sourceDrugId);
     try {
       const response = await fetch("/api/v1/mappings/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceDrugId: row.sourceDrugId, standardCode: standard.standardCode }),
+        body: JSON.stringify({ sourceDrugId: row.sourceDrugId, standardCode, confirmReview }),
       });
       const result = (await response.json()) as { ok?: boolean; message?: string; updateFlag?: string };
       if (!response.ok || !result.ok) {
         push("error", result.message ?? "บันทึกไม่สำเร็จ");
         return;
       }
-      push("ok", `จับคู่ ${row.drugcode} → ${standard.standardCode} แล้ว (UPDATEFLAG ${result.updateFlag}) พร้อมส่งออกทันที`);
+      push(
+        "ok",
+        confirmReview
+          ? `ตรวจสอบและยืนยัน ${row.drugcode} แล้ว`
+          : `จับคู่ ${row.drugcode} → ${standardCode} แล้ว (UPDATEFLAG ${result.updateFlag}) พร้อมส่งออกทันที`,
+      );
       setSelected(null);
       await load();
     } finally {
@@ -374,12 +379,32 @@ export function MappingWorkbench({ hasCatalog }: { hasCatalog: boolean }) {
                                         ปิด
                                       </Button>
                                     </div>
+                                    {row.status === "needs_review" && row.standardCode ? (
+                                      <Alert tone="warning" className="mt-3" title="รายการนี้ต้องยืนยันหลังตรวจสอบ">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <span>{row.statusReason}</span>
+                                          <Button
+                                            size="sm"
+                                            variant="primary"
+                                            disabled={busy !== null}
+                                            loading={busy === row.sourceDrugId}
+                                            onClick={() => {
+                                              if (row.standardCode) void saveMapping(row, row.standardCode, true);
+                                            }}
+                                          >
+                                            บันทึกและยืนยันว่าตรวจสอบแล้ว
+                                          </Button>
+                                        </div>
+                                      </Alert>
+                                    ) : null}
                                     <div className="mt-3">
                                       <StandardSearch
                                         standardType={row.drugtype === "10" ? "TTMT" : "TMT"}
                                         lockType
                                         selectedCode={row.standardCode}
-                                        onSelect={(standard) => void saveMapping(row, standard)}
+                                        onSelect={(standard) =>
+                                          void saveMapping(row, standard.standardCode, row.status === "needs_review")
+                                        }
                                       />
                                     </div>
                                   </div>
