@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 # agent silently discarded a foreign config, overwrote it on the next save,
 # and appended to a log already full of the other program's errors.
 APP_DIRECTORY = "TMTDrugMasterPlatformAgent"
+IDENTITY_FILE_VERSION = 1
 DEFAULT_SERVER_URL = "https://drug-master-platform.vercel.app"
 OFFICE_PATTERN = re.compile(r"^\d{5}$")
 
@@ -240,6 +241,14 @@ def machine_mac(prefer_host: str | None = None) -> str | None:
         return None
 
 
+def machine_ip(prefer_host: str | None = None) -> str | None:
+    """Current private IPv4 used for the JHCIS/LAN route; telemetry only."""
+    try:
+        return _route_source_ip(prefer_host)
+    except Exception:  # noqa: BLE001 - telemetry must not stop the worker
+        return None
+
+
 def app_data_dir() -> Path:
     local = os.environ.get("LOCALAPPDATA")
     if not local:
@@ -247,6 +256,56 @@ def app_data_dir() -> Path:
     path = Path(local) / APP_DIRECTORY
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def machine_data_dir() -> Path:
+    root = os.environ.get("PROGRAMDATA")
+    if not root:
+        raise RuntimeError("ไม่พบ PROGRAMDATA ของ Windows")
+    path = Path(root) / APP_DIRECTORY
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+class MachineIdentityStore:
+    """Machine-wide, non-secret installation identity stored outside the user profile."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path or machine_data_dir() / "installation.json"
+
+    def _read(self) -> str | None:
+        if not self.path.exists():
+            return None
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        value = str(data.get("installationId") or "")
+        uuid.UUID(value)
+        return value
+
+    def _write(self, installation_id: str) -> None:
+        uuid.UUID(installation_id)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(prefix="installation-", suffix=".tmp", dir=self.path.parent)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                json.dump({"version": IDENTITY_FILE_VERSION, "installationId": installation_id}, stream, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary_name, self.path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+
+    def resolve(self, legacy_installation_id: str | None) -> str:
+        current = self._read()
+        if current:
+            return current
+        candidate = legacy_installation_id or str(uuid.uuid4())
+        self._write(candidate)
+        return candidate
+
+    def replace(self, installation_id: str) -> str:
+        self._write(installation_id)
+        return installation_id
 
 
 @dataclass(frozen=True)
@@ -274,8 +333,8 @@ class AgentConfig:
     poll_interval_seconds: int = 20
 
     @classmethod
-    def blank(cls) -> "AgentConfig":
-        return cls(installation_id=str(uuid.uuid4()))
+    def blank(cls, installation_id: str | None = None) -> "AgentConfig":
+        return cls(installation_id=installation_id or str(uuid.uuid4()))
 
     @property
     def enrolled(self) -> bool:
@@ -316,19 +375,25 @@ class AgentConfig:
 class ConfigStore:
     """Atomic read/write of config.json with DPAPI-protected secret fields."""
 
-    def __init__(self, path: Path | None = None) -> None:
+    def __init__(self, path: Path | None = None, identity: MachineIdentityStore | None = None) -> None:
         self.path = path or app_data_dir() / "config.json"
+        self.identity = identity or MachineIdentityStore()
+
+    def blank(self) -> AgentConfig:
+        return AgentConfig.blank(self.identity.resolve(None))
 
     def load(self) -> AgentConfig:
         if not self.path.exists():
-            return AgentConfig.blank()
+            return self.blank()
         data = json.loads(self.path.read_text(encoding="utf-8"))
+        data["installation_id"] = self.identity.resolve(str(data.get("installation_id") or "") or None)
         data["secret"] = _crypt_unprotect(str(data.pop("secret_dpapi", "")))
         data["jhcis_password"] = _crypt_unprotect(str(data.pop("jhcis_password_dpapi", "")))
         known = {field for field in AgentConfig.__dataclass_fields__}
         return AgentConfig(**{key: value for key, value in data.items() if key in known})
 
     def save(self, config: AgentConfig) -> None:
+        config = replace(config, installation_id=self.identity.resolve(config.installation_id))
         config.validate()
         data = asdict(config)
         data["secret_dpapi"] = _crypt_protect(str(data.pop("secret")))

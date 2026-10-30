@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 SANDBOX = tempfile.mkdtemp(prefix="tmt-agent-uitest-")
 os.environ["LOCALAPPDATA"] = SANDBOX
+os.environ["PROGRAMDATA"] = SANDBOX
 
 import tkinter as tk  # noqa: E402
 

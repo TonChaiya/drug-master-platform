@@ -205,7 +205,7 @@ class CommandWorker:
             api = AgentApi(self._config)
             try:
                 snapshot = read_office(self._config)
-                command = api.poll_command(snapshot.office_id, self.agent_version)
+                command = api.poll_command(snapshot.office_id, self.agent_version, True)
                 self._backoff = 0
                 if command:
                     logger.info("command_received type=%s", command.get("commandType"))
@@ -217,9 +217,14 @@ class CommandWorker:
                 logger.warning("poll_failed code=%s", failure.code)
                 self.on_status(str(failure), "error")
             except JhcisFailure as failure:
-                self._backoff = min(self._backoff + 1, 6)
                 logger.warning("jhcis_failed code=%s", failure.code)
                 self.on_status(str(failure), "error")
+                try:
+                    api.poll_command(None, self.agent_version, False)
+                    self._backoff = 0
+                except ServerFailure:
+                    self._backoff = min(self._backoff + 1, 6)
+                    logger.warning("heartbeat_failed_while_jhcis_unreachable")
 
             # exponential backoff with jitter, per docs/OPERATIONS.md
             base = self._config.poll_interval_seconds

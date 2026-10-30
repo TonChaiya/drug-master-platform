@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
 import { IconLink, IconMonitor, IconRefresh } from "@/components/ui/icons";
 import { EnrollmentPanel } from "./enrollment-panel";
+import { AgentActions } from "./agent-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function JhcisPage() {
   // A tray that reported a different office.offid than this facility's code was
   // refused by the server; the person signed in here is the one who can fix it.
   const mismatched = installations.filter((row) => row.lastMismatchAt !== null);
+  const activeTargets = installations.filter((row) => row.status === "active");
 
   return (
     <div className="space-y-4">
@@ -81,17 +83,23 @@ export default async function JhcisPage() {
               <thead>
                 <tr>
                   <th>เครื่อง</th>
+                  <th>สถานบริการ</th>
                   <th>MAC</th>
+                  <th>IP ล่าสุด</th>
                   <th>office.offid</th>
                   <th>เวอร์ชัน</th>
                   <th>key ที่ใช้ได้</th>
                   <th>เห็นล่าสุด</th>
-                  <th>สถานะ</th>
+                  <th>heartbeat</th>
+                  <th>ลงทะเบียน</th>
+                  <th>Agent</th>
+                  <th>JHCIS</th>
+                  {isAdmin ? <th>จัดการ</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {installations.length === 0 ? (
-                  <TableMessage colSpan={7}>
+                  <TableMessage colSpan={isAdmin ? 13 : 12}>
                     <EmptyState
                       compact
                       icon={<IconMonitor size={18} />}
@@ -106,7 +114,9 @@ export default async function JhcisPage() {
                         <div className="font-medium">{row.machineLabel}</div>
                         <div className="cell-code text-xxs text-slate-500">{row.installationId}</div>
                       </td>
+                      <td className="cell-code">{facility.code}</td>
                       <td className="cell-code text-xxs">{row.macAddress ?? "—"}</td>
+                      <td className="cell-code text-xxs">{row.ipAddress ?? "—"}</td>
                       <td>
                         <span className="cell-code">{row.declaredOfficeId ?? "—"}</span>
                         {row.lastMismatchAt ? (
@@ -118,9 +128,24 @@ export default async function JhcisPage() {
                       <td className="cell-code">{row.agentVersion ?? "—"}</td>
                       <td className="cell-num">{row.activeCredentials}</td>
                       <td className="whitespace-nowrap">{formatBangkok(row.lastSeenAt)}</td>
+                      <td className="whitespace-nowrap">{formatBangkok(row.lastHeartbeatAt)}</td>
                       <td>
-                        <StatusBadge status={row.status} />
+                        {row.status === "active" ? <Badge tone="success" dot>ลงทะเบียนแล้ว</Badge> : <StatusBadge status={row.status} />}
                       </td>
+                      <td className="space-y-1">
+                        <StatusBadge status={row.presence} />
+                        <StatusBadge status={row.credentialStatus === "active" ? "active-key" : "revoked"} />
+                      </td>
+                      <td><StatusBadge status={row.jhcisStatus} /></td>
+                      {isAdmin ? (
+                        <td>
+                          <AgentActions
+                            installationId={row.installationId}
+                            status={row.status}
+                            targets={activeTargets.filter((target) => target.installationId !== row.installationId).map((target) => ({ installationId: target.installationId, machineLabel: target.machineLabel }))}
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}

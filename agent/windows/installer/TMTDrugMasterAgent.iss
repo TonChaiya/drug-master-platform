@@ -1,10 +1,8 @@
 ; Inno Setup script for the TMT Drug Master Agent.
 ;
-; Per-user install on purpose: the agent registers tmtagent:// under HKCU and
-; stores its config under %LOCALAPPDATA% with DPAPI (current-user scope), so a
-; machine-wide install would put the binary somewhere the running user cannot
-; match. PrivilegesRequired=lowest also means staff at a รพ.สต. can install it
-; without calling anyone for an admin password.
+; Installation is elevated so Setup can create the machine-wide identity
+; directory with an ACL shared by Windows users. Secrets remain per-user under
+; %LOCALAPPDATA% and protected with current-user DPAPI.
 ;
 ; AppVersion is passed in by build.ps1 (/DAppVersion=...) so version.py stays
 ; the single source of truth.
@@ -28,8 +26,7 @@ DefaultDirName={autopf}\TMT Drug Master Agent
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 DisableDirPage=auto
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
 OutputBaseFilename=TMTDrugMasterAgent-Setup-{#AppVersion}
@@ -52,6 +49,11 @@ Name: "desktopicon"; Description: "สร้างไอคอนบนเดส
 
 [Files]
 Source: "..\dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+
+[Dirs]
+; Machine identity contains no secret and survives upgrades/reinstalls. Secrets
+; remain under the current user's LOCALAPPDATA protected by DPAPI.
+Name: "{commonappdata}\TMTDrugMasterPlatformAgent"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"

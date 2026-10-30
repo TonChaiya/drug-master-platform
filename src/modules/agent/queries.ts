@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
 import { agentCommands, agentCredentials, agentInstallations, agentSyncSessions } from "@/db/schema";
+import { deriveInstallationState } from "./lifecycle";
 
 export interface InstallationView {
   installationId: string;
@@ -9,12 +10,18 @@ export interface InstallationView {
   status: string;
   agentVersion: string | null;
   lastSeenAt: Date | null;
+  lastHeartbeatAt: Date | null;
   enrolledAt: Date | null;
   activeCredentials: number;
   lastMismatchOfficeId: string | null;
   lastMismatchAt: Date | null;
   enrolledBy: string | null;
   macAddress: string | null;
+  ipAddress: string | null;
+  supersededByInstallationId: string | null;
+  presence: "online" | "offline";
+  credentialStatus: "active" | "revoked";
+  jhcisStatus: "connected" | "unreachable" | "unknown";
 }
 
 /**
@@ -46,20 +53,37 @@ export async function listInstallations(facilityId: string, enrolledBy?: string)
     activeByInstallation.set(row.installationId, (activeByInstallation.get(row.installationId) ?? 0) + 1);
   }
 
-  return installations.map((row) => ({
-    installationId: row.installationId,
-    machineLabel: row.machineLabel,
-    declaredOfficeId: row.declaredOfficeId,
-    status: row.status,
-    agentVersion: row.agentVersion,
-    lastSeenAt: row.lastSeenAt,
-    enrolledAt: row.enrolledAt,
-    activeCredentials: activeByInstallation.get(row.installationId) ?? 0,
-    lastMismatchOfficeId: row.lastMismatchOfficeId,
-    lastMismatchAt: row.lastMismatchAt,
-    enrolledBy: row.enrolledBy,
-    macAddress: row.macAddress,
-  }));
+  return installations.map((row) => {
+    const activeCredentials = activeByInstallation.get(row.installationId) ?? 0;
+    const state = deriveInstallationState({
+      registrationStatus: row.status,
+      activeCredentials,
+      lastSeenAt: row.lastSeenAt,
+      lastHeartbeatAt: row.lastHeartbeatAt,
+      jhcisConnected: row.jhcisConnected,
+      lastJhcisCheckAt: row.lastJhcisCheckAt,
+    });
+    return {
+      installationId: row.installationId,
+      machineLabel: row.machineLabel,
+      declaredOfficeId: row.declaredOfficeId,
+      status: row.status,
+      agentVersion: row.agentVersion,
+      lastSeenAt: row.lastSeenAt,
+      lastHeartbeatAt: row.lastHeartbeatAt,
+      enrolledAt: row.enrolledAt,
+      activeCredentials,
+      lastMismatchOfficeId: row.lastMismatchOfficeId,
+      lastMismatchAt: row.lastMismatchAt,
+      enrolledBy: row.enrolledBy,
+      macAddress: row.macAddress,
+      ipAddress: row.ipAddress,
+      supersededByInstallationId: row.supersededByInstallationId,
+      presence: state.presence,
+      credentialStatus: state.credential,
+      jhcisStatus: state.jhcis,
+    };
+  });
 }
 
 export async function recentSyncSessions(facilityId: string, limit = 8) {

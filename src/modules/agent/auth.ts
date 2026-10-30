@@ -68,6 +68,7 @@ export async function verifyAgentRequest(request: Request, path: string, body: U
 
   await claimNonce(row.credentialId, nonce, new Date((Number(timestamp) + MAX_CLOCK_SKEW_SECONDS) * 1000));
   await db.update(agentCredentials).set({ lastUsedAt: new Date() }).where(eq(agentCredentials.id, row.credentialId));
+  await db.update(agentInstallations).set({ lastSeenAt: new Date() }).where(eq(agentInstallations.installationId, row.installationId));
   // A signed request proves the agent stored this secret, which is the trigger
   // to retire the credential it replaced.
   await retireSupersededCredentials(row.installationId, row.credentialId);
@@ -131,7 +132,7 @@ export async function clearOfficeMismatch(installationId: string): Promise<void>
 export async function touchInstallation(
   installationId: string,
   agentVersion: string,
-  officeId?: string,
+  officeId?: string | null,
   macAddress?: string | null,
 ): Promise<void> {
   await db
@@ -143,6 +144,22 @@ export async function touchInstallation(
       // Only overwrite when the agent reported one: an older build sends
       // nothing, and blanking what we already know would be a step backwards.
       ...(macAddress ? { macAddress } : {}),
+    })
+    .where(eq(agentInstallations.installationId, installationId));
+}
+
+export async function recordHeartbeat(
+  installationId: string,
+  input: { jhcisConnected: boolean; ipAddress?: string | null },
+): Promise<void> {
+  const now = new Date();
+  await db
+    .update(agentInstallations)
+    .set({
+      lastHeartbeatAt: now,
+      lastJhcisCheckAt: now,
+      jhcisConnected: input.jhcisConnected,
+      ...(input.ipAddress ? { ipAddress: input.ipAddress } : {}),
     })
     .where(eq(agentInstallations.installationId, installationId));
 }

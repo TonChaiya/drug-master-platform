@@ -14,6 +14,7 @@ export type AgentErrorCode =
   | "AGENT_BATCH_INVALID"
   | "AGENT_ROW_COUNT_MISMATCH"
   | "AGENT_ENROLLMENT_INVALID"
+  | "AGENT_POSSIBLE_DUPLICATE"
   | "AGENT_COMMAND_INVALID"
   | "AGENT_PAYLOAD_TOO_LARGE"
   | "AGENT_BODY_INVALID";
@@ -47,6 +48,7 @@ export const agentErrors = {
   rowCountMismatch: (expected: number, received: number) =>
     new AgentError("AGENT_ROW_COUNT_MISMATCH", 409, `จำนวนแถวไม่ครบ (คาด ${expected} ได้รับ ${received})`),
   enrollmentInvalid: () => new AgentError("AGENT_ENROLLMENT_INVALID", 400, "enrollment token ไม่ถูกต้องหรือหมดอายุ"),
+  possibleDuplicate: () => new AgentError("AGENT_POSSIBLE_DUPLICATE", 409, "พบ Agent ที่อาจเป็นเครื่องเดิม กรุณาให้ผู้ดูแลเลือก re-enroll Agent เดิมหรือยืนยันว่าเป็นเครื่องใหม่"),
   commandInvalid: () => new AgentError("AGENT_COMMAND_INVALID", 409, "ไม่พบคำสั่งที่ Agent นี้ถือครองอยู่"),
   payloadTooLarge: () => new AgentError("AGENT_PAYLOAD_TOO_LARGE", 413, "payload ใหญ่เกินกำหนด"),
   // The field name is safe to return: it names the request shape, never a value.

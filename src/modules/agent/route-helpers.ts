@@ -19,7 +19,7 @@ export interface AgentContext<T> {
 export async function withAgentRequest<
   T extends {
     installationId: string;
-    officeId?: string;
+    officeId?: string | null;
     agentVersion?: string;
     macAddress?: string | null;
   },

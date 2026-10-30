@@ -54,6 +54,7 @@ const STATUS: Record<string, { tone: BadgeTone; label: string }> = {
   complete: { tone: "success", label: "สำเร็จ" },
   completed: { tone: "success", label: "สำเร็จ" },
   active: { tone: "success", label: "ใช้งานอยู่" },
+  "active-key": { tone: "success", label: "key พร้อมใช้" },
   ready: { tone: "success", label: "พร้อม" },
   synced: { tone: "success", label: "ซิงก์แล้ว" },
   matched: { tone: "success", label: "จับคู่แล้ว" },
@@ -74,6 +75,12 @@ const STATUS: Record<string, { tone: BadgeTone; label: string }> = {
   revoked: { tone: "danger", label: "ถูกเพิกถอน" },
   inactive: { tone: "neutral", label: "ปิดใช้งาน" },
   disabled: { tone: "neutral", label: "ปิดใช้งาน" },
+  superseded: { tone: "neutral", label: "ถูกแทนที่" },
+  online: { tone: "success", label: "ออนไลน์" },
+  offline: { tone: "neutral", label: "ออฟไลน์" },
+  connected: { tone: "success", label: "เชื่อมต่อได้" },
+  unreachable: { tone: "danger", label: "ติดต่อไม่ได้" },
+  unknown: { tone: "neutral", label: "ยังไม่ทราบ" },
 };
 
 /**

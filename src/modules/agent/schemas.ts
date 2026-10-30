@@ -11,6 +11,7 @@ const macAddress = z
   .regex(/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/)
   .nullable()
   .optional();
+const ipAddress = z.union([z.ipv4(), z.ipv6()]).nullable().optional();
 
 export const enrollRequestSchema = z
   .object({
@@ -27,10 +28,20 @@ export const pollRequestSchema = z
   .object({
     installationId: z.uuid(),
     agentVersion,
-    officeId,
+    officeId: officeId.nullable().optional(),
     macAddress,
+    ipAddress,
+    jhcisConnected: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    // Legacy agents omit jhcisConnected but always send officeId after reading
+    // JHCIS. Only an explicit unreachable heartbeat may omit the office id.
+    if (value.jhcisConnected !== false && !value.officeId) {
+      context.addIssue({ code: "custom", path: ["officeId"], message: "officeId จำเป็นเมื่อ JHCIS เชื่อมต่อได้" });
+    }
+  })
+  .transform((value) => ({ ...value, jhcisConnected: value.jhcisConnected ?? true }));
 
 export const completeRequestSchema = z
   .object({

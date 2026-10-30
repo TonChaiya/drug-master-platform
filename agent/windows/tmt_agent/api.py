@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from tmt_agent.config import AgentConfig, machine_mac
+from tmt_agent.config import AgentConfig, machine_ip, machine_mac
 from tmt_agent.errors import ServerFailure
 from tmt_agent.security import PROTOCOL, new_nonce, new_timestamp, sign_request
 
@@ -36,6 +36,7 @@ class IssuedCredential:
     key_id: str
     secret: str
     facility_code: str
+    installation_id: str
 
 
 class AgentApi:
@@ -104,9 +105,14 @@ class AgentApi:
         except requests.RequestException:
             raise ServerFailure("SERVER_UNREACHABLE", "ติดต่อเซิร์ฟเวอร์ไม่สำเร็จ") from None
         body = _parse(response)
-        return IssuedCredential(str(body["keyId"]), str(body["secret"]), str(body["facilityCode"]))
+        return IssuedCredential(
+            str(body["keyId"]),
+            str(body["secret"]),
+            str(body["facilityCode"]),
+            str(body["installationId"]),
+        )
 
-    def poll_command(self, office_id: str, agent_version: str) -> dict[str, Any] | None:
+    def poll_command(self, office_id: str | None, agent_version: str, jhcis_connected: bool = True) -> dict[str, Any] | None:
         body = self._post_signed(
             "/api/v1/agent/commands/poll",
             {
@@ -114,6 +120,8 @@ class AgentApi:
                 "officeId": office_id,
                 "agentVersion": agent_version,
                 "macAddress": machine_mac(self.config.jhcis_host),
+                "ipAddress": machine_ip(self.config.jhcis_host),
+                "jhcisConnected": jhcis_connected,
             },
         )
         command = body.get("command")

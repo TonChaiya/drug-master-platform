@@ -106,9 +106,11 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 
 **Agent**
 
-- `agentInstallations`: installationId(UUID), facilityId, machine label, declaredOfficeId, status, lastSeenAt, agentVersion
-- `agentCredentials`: installationId, public key id, encrypted secret, createdAt, revokedAt, lastUsedAt
-- `agentEnrollmentTokens`: tokenHash, facilityId, createdBy, expiresAt, consumedAt
+- `agentInstallations`: installationId(UUID), facilityId, machine label, declaredOfficeId, status, lastSeenAt,
+  lastHeartbeatAt, JHCIS state/check time, MAC/IP telemetry, supersededByInstallationId, agentVersion
+- `agentCredentials`: installationId, public key id, encrypted secret, createdAt, revokedAt, lastUsedAt,
+  supersededByCredentialId สำหรับ revoke key เก่าหลัง key ใหม่พิสูจน์ตัวเอง
+- `agentEnrollmentTokens`: tokenHash, facilityId, createdBy, expiresAt, consumedAt, targetInstallationId nullable
 - `agentCommands`: installation/facility, type, payload, state, claim token, idempotency key, expiry, timestamps/result
 - `agentSyncSessions`: installation/facility, declared officeId, expected/received rows, status, timestamps
 - `agentSyncStaging`: sessionId, facilityId, drugcode + payload ที่ validate แล้ว; unique `(sessionId, drugcode)`

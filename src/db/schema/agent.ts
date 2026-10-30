@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { datetime, index, int, json, mysqlTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, datetime, index, int, json, mysqlTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 import { facilities } from "./identity";
 
 const now = sql`CURRENT_TIMESTAMP(3)`;
@@ -13,10 +13,15 @@ export const agentInstallations = mysqlTable(
     declaredOfficeId: varchar("declared_office_id", { length: 5 }),
     status: varchar("status", { length: 24 }).notNull(),
     lastSeenAt: datetime("last_seen_at", { mode: "date", fsp: 3 }),
+    lastHeartbeatAt: datetime("last_heartbeat_at", { mode: "date", fsp: 3 }),
+    jhcisConnected: boolean("jhcis_connected"),
+    lastJhcisCheckAt: datetime("last_jhcis_check_at", { mode: "date", fsp: 3 }),
     agentVersion: varchar("agent_version", { length: 32 }),
     createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
     enrolledAt: datetime("enrolled_at", { mode: "date", fsp: 3 }),
     macAddress: varchar("mac_address", { length: 17 }),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    supersededByInstallationId: varchar("superseded_by_installation_id", { length: 36 }),
     /** The account that registered this machine; re-enrolling reassigns it. */
     enrolledBy: varchar("enrolled_by", { length: 36 }),
     lastMismatchOfficeId: varchar("last_mismatch_office_id", { length: 8 }),
@@ -35,10 +40,12 @@ export const agentCredentials = mysqlTable(
     createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
     revokedAt: datetime("revoked_at", { mode: "date", fsp: 3 }),
     lastUsedAt: datetime("last_used_at", { mode: "date", fsp: 3 }),
+    supersededByCredentialId: varchar("superseded_by_credential_id", { length: 36 }),
   },
   (table) => [
     uniqueIndex("uq_agent_credentials_public_key").on(table.publicKeyId),
     index("idx_agent_credentials_installation_active").on(table.installationId, table.revokedAt),
+    index("idx_agent_credentials_superseded_by").on(table.supersededByCredentialId),
   ],
 );
 
@@ -51,11 +58,13 @@ export const agentEnrollmentTokens = mysqlTable(
     createdBy: varchar("created_by", { length: 36 }).notNull(),
     expiresAt: datetime("expires_at", { mode: "date", fsp: 3 }).notNull(),
     consumedAt: datetime("consumed_at", { mode: "date", fsp: 3 }),
+    targetInstallationId: varchar("target_installation_id", { length: 36 }),
     createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
   },
   (table) => [
     uniqueIndex("uq_agent_enrollment_token_hash").on(table.tokenHash),
     index("idx_agent_enrollment_facility_expiry").on(table.facilityId, table.expiresAt),
+    index("idx_agent_enrollment_target").on(table.targetInstallationId),
   ],
 );
 

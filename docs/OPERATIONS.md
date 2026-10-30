@@ -62,11 +62,17 @@ Agent เป็นทางเดียวที่รองรับสำห�
 ### Reconnect และย้ายสถานบริการ
 
 - Settings ต้องเปิดได้เสมอแม้เคย enrollment แล้ว
-- Agent มี `installationId` แบบ UUID ที่คงที่ต่อการติดตั้ง
+- Agent มี `installationId` แบบ UUID ที่คงที่ระดับเครื่อง เก็บเฉพาะ identity ที่ไม่มี secret ใน
+  `%ProgramData%\TMTDrugMasterPlatformAgent\installation.json`; config/credential/JHCIS password
+  ยังอยู่ใน `%LOCALAPPDATA%` และป้องกันด้วย DPAPI ของ Windows user
+- ถ้ายังไม่มีไฟล์ machine identity จะย้าย `installationId` จาก config เดิมแบบ atomic ก่อนสร้างค่าใหม่
+- Admin ออก token ที่ผูก `target_installation_id` เพื่อ re-enroll installation เดิมได้ และ Agent ต้องบันทึก
+  canonical id ที่ server ตอบกลับ
 - เมื่อเปิด enrollment link ใหม่ ตัว tray ที่รันอยู่ต้องโหลด config ใหม่ทันที
   (ทำผ่าน named pipe ใน `single_instance.py`) ไม่ให้ process ที่สองเขียนค่าแล้วตัวแรกใช้ค่าเก่า
 - ออก credential ใหม่ก่อน แล้ว revoke credential เดิมของ installation เดียวกัน
   **ต่อเมื่อ Agent ใช้ key ใหม่สำเร็จแล้ว** (การส่ง request ที่เซ็นผ่านคือหลักฐานว่าบันทึกสำเร็จ)
+- credential ใหม่บันทึก replacement id แบบ explicit จึงไม่พึ่งลำดับ timestamp ที่อาจชนกัน
 - ห้าม revoke Agent เครื่องอื่นใน facility เดียวกัน
 - เปลี่ยน facility ต้องตรวจ `office.offid` ใหม่และไม่รับคำสั่งก่อนจับคู่สำเร็จ
 
@@ -129,7 +135,9 @@ log เฉพาะ key id/error code **ห้าม log secret/password/body**
 
 ### Polling และคำสั่ง
 
-- poll ทุก 15–30 วินาที พร้อม exponential backoff + jitter เมื่อ error
+- poll ทุก 15–30 วินาที พร้อม exponential backoff + jitter เมื่อ Central error
+- ถ้าอ่าน JHCIS ไม่ได้ Agent ยังส่ง heartbeat ที่เซ็นแล้วโดย `jhcisConnected=false` แต่ server จะไม่ claim คำสั่ง
+  จึงแยกสถานะ Agent online ออกจาก JHCIS unreachable ได้
 - server claim command แบบ atomic ป้องกันหลาย process รับงานเดียว
 - command มี expiry และ idempotency key; งานที่ค้างเกิน 20 นาทีถูกปล่อยกลับเป็น pending
 - command ที่รองรับ: `sync_now`, `test_connection`, `refresh_config`, `upgrade_notice`
@@ -271,6 +279,26 @@ DELETE FROM schema_migrations WHERE filename = '0010_mapping_export_checkpoints.
 DROP TABLE mapping_review_acknowledgements;
 DELETE FROM schema_migrations WHERE filename = '0011_mapping_review_acknowledgements.sql';
 ```
+
+**0012_agent_identity_management.sql** — เพิ่ม machine heartbeat/JHCIS telemetry, IP ล่าสุด, ความสัมพันธ์ superseded และ target สำหรับ re-enroll Agent เดิม
+
+```sql
+DROP INDEX idx_agent_credentials_superseded_by ON agent_credentials;
+ALTER TABLE agent_credentials DROP COLUMN superseded_by_credential_id;
+DROP INDEX idx_agent_enrollment_target ON agent_enrollment_tokens;
+ALTER TABLE agent_enrollment_tokens DROP COLUMN target_installation_id;
+ALTER TABLE agent_installations
+  DROP COLUMN superseded_by_installation_id,
+  DROP COLUMN ip_address,
+  DROP COLUMN last_jhcis_check_at,
+  DROP COLUMN jhcis_connected,
+  DROP COLUMN last_heartbeat_at;
+DELETE FROM schema_migrations WHERE filename = '0012_agent_identity_management.sql';
+```
+
+การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
+การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`
+และจะเก็บ `agent_sync_sessions` ที่ยังถูกอ้างด้วย `source_drugs.last_seen_sync_id` เพื่อไม่ทำลาย provenance ของ business snapshot
 
 ห้ามใช้ rollback บน production โดยไม่มี maintenance window ที่อนุมัติแล้ว
 

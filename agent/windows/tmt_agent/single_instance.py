@@ -5,7 +5,7 @@ import json
 import threading
 from collections.abc import Callable
 
-MUTEX_NAME = "Local\\TMTDrugMasterAgentSingleInstance"
+MUTEX_NAME = "Global\\TMTDrugMasterAgentSingleInstance"
 PIPE_NAME = r"\\.\pipe\TMTDrugMasterAgentIpc"
 ERROR_ALREADY_EXISTS = 183
 PIPE_ACCESS_DUPLEX = 0x00000003

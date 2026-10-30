@@ -133,7 +133,7 @@ class AgentApp:
             # dismissed, and this is the first thing to check afterwards.
             self.logger.warning("config_unreadable path=%s error=%s", self.store.path, type(error).__name__)
             messagebox.showwarning(APP_NAME, "อ่านการตั้งค่าเดิมไม่สำเร็จ กรุณาตั้งค่าใหม่")
-            return AgentConfig.blank()
+            return self.store.blank()
         self.logger.info(
             "config_loaded enrolled=%s server=%s facility=%s jhcis=%s:%s/%s",
             config.enrolled,
@@ -251,8 +251,10 @@ class AgentApp:
                 VERSION,
                 config.jhcis_host,
             )
+            canonical = replace(config, installation_id=credential.installation_id)
+            self.store.identity.replace(credential.installation_id)
             self._persist(
-                config.with_credential(link.server_url, credential.key_id, credential.secret, credential.facility_code)
+                canonical.with_credential(link.server_url, credential.key_id, credential.secret, credential.facility_code)
             )
             self.pending_enrollment = None
             self.worker.wake()
