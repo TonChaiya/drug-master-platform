@@ -56,12 +56,17 @@ export async function mappingWorklist(options: {
   const page = Math.max(options.page ?? 1, 1);
   const snapshot = await latestImport(options.facilityId);
   const latestCatalog = alias(drugCatalogRows, "latest_catalog");
+  const catalogHistory = db
+    .select({
+      facilityId: drugCatalogRows.facilityId,
+      hospdrugcode: drugCatalogRows.hospdrugcode,
+    })
+    .from(drugCatalogRows)
+    .where(eq(drugCatalogRows.facilityId, options.facilityId))
+    .groupBy(drugCatalogRows.facilityId, drugCatalogRows.hospdrugcode)
+    .as("catalog_history");
   const latestImportId = snapshot?.id ?? "";
-  const everInCatalog = sql<boolean>`EXISTS (
-    SELECT 1 FROM drug_catalog_rows catalog_history
-    WHERE catalog_history.facility_id = ${sourceDrugs.facilityId}
-      AND catalog_history.hospdrugcode = ${sourceDrugs.drugcode}
-  )`;
+  const everInCatalog = sql<boolean>`${catalogHistory.hospdrugcode} IS NOT NULL`;
   const needsReview = sql<boolean>`(
     (${latestCatalog.id} IS NULL AND ${everInCatalog})
     OR (
@@ -108,6 +113,13 @@ export async function mappingWorklist(options: {
         eq(latestCatalog.hospdrugcode, sourceDrugs.drugcode),
       ),
     )
+    .leftJoin(
+      catalogHistory,
+      and(
+        eq(catalogHistory.facilityId, sourceDrugs.facilityId),
+        eq(catalogHistory.hospdrugcode, sourceDrugs.drugcode),
+      ),
+    )
     .where(where);
   const total = Number(counted?.total ?? 0);
 
@@ -148,6 +160,13 @@ export async function mappingWorklist(options: {
         eq(latestCatalog.importId, latestImportId),
         eq(latestCatalog.facilityId, sourceDrugs.facilityId),
         eq(latestCatalog.hospdrugcode, sourceDrugs.drugcode),
+      ),
+    )
+    .leftJoin(
+      catalogHistory,
+      and(
+        eq(catalogHistory.facilityId, sourceDrugs.facilityId),
+        eq(catalogHistory.hospdrugcode, sourceDrugs.drugcode),
       ),
     )
     .where(where)
