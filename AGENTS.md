@@ -1,7 +1,15 @@
-# ข้อตกลงการทำงานในโปรเจคนี้
+# ข้อตกลงการทำงานร่วมสำหรับ Coding Agent
 
-อ่านไฟล์นี้ก่อนแก้โค้ด และอ่าน [docs/SPEC.md](docs/SPEC.md) กับ [docs/OPERATIONS.md](docs/OPERATIONS.md) ของส่วนที่จะเปลี่ยน
+ไฟล์นี้ใช้ร่วมกันสำหรับ Codex, Claude Code และ coding agent อื่นที่ทำงานในโปรเจกต์นี้
 กฎในเอกสารเป็น source of truth หากโค้ดขัดกับเอกสารให้ยึดเอกสาร และบันทึกข้อขัดแย้งใน pull request
+
+## Required reading order
+
+1. `AGENTS.md`
+2. [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
+3. [docs/SPEC.md](docs/SPEC.md) เฉพาะ domain ที่จะแก้
+4. [docs/OPERATIONS.md](docs/OPERATIONS.md) เฉพาะ runtime, deploy หรือ security ที่เกี่ยวข้อง
+5. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) เมื่อทำงาน local, build, test หรือ deploy
 
 ---
 

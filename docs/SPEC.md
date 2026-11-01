@@ -22,6 +22,9 @@
 - อ่านจาก `cdrug` เฉพาะ `drugflag='1'` และ `drugtype IN ('01','10')` — ไม่ใช้ `drugtype='05'`
 - ห้ามใช้ TMT/TTMT เดิมใน JHCIS เป็นคำตอบโดยตรง ทุกครั้งต้องตรวจด้วย DrugCat/ฐานมาตรฐานใหม่
 - Agent ต้องอ่าน `office.offid` และยอม sync เมื่อ offid ตรงกับ facility ที่ enrollment เท่านั้น
+- Agent ต้องมี installation identity ระดับเครื่องที่คงเดิมเมื่อ upgrade/reinstall และ re-enroll เครื่องเดิมต้องใช้ canonical installation identity เดิม
+- MAC address และ IP address เป็น telemetry เพื่อช่วยตรวจสอบเท่านั้น ไม่ใช่ primary identity และห้ามใช้ auto-merge Agent
+- สถานะ Registration, Presence, Credential และ JHCIS ต้องแยกจากกัน เพื่อไม่ให้ online หรือ key ที่ active กลบสถานะ disabled/superseded หรือ JHCIS unreachable
 - ฐาน JHCIS เป็น read-only ระบบนี้ห้ามเขียนกลับ
 - เอกลักษณ์ยาท้องถิ่นคือ `(facilityId, drugcode)` ไม่ใช่ `drugcode` เดี่ยว
 - แถวที่ไม่ถูกส่งมาในรอบ sync ล่าสุดถือว่าไม่ active แล้ว

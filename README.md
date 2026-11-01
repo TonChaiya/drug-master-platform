@@ -15,7 +15,10 @@ JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  
 
 | ไฟล์ | เนื้อหา |
 |---|---|
-| [AGENTS.md](AGENTS.md) | ข้อตกลงการทำงาน กฎ ponytail และข้อผิดพลาดของระบบเดิมที่ห้ามทำซ้ำ |
+| [AGENTS.md](AGENTS.md) | กฎร่วมสำหรับ Codex, Claude Code และ coding agent อื่น |
+| [CLAUDE.md](CLAUDE.md) | entrypoint สั้นสำหรับ Claude Code ไปยังเอกสารกลาง |
+| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | สถานะ production, checkpoint และ backlog ล่าสุด |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | environment, คำสั่ง build/test และ workflow พัฒนา |
 | [docs/SPEC.md](docs/SPEC.md) | ระบบต้องทำอะไร: กฎธุรกิจ, แบบจำลองข้อมูล, TMT API, สัญญาไฟล์ DrugCat |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | ระบบทำงานอย่างไร: สถาปัตยกรรม, Agent protocol, ความปลอดภัย, การขึ้นระบบ |
 
@@ -52,8 +55,7 @@ references/templates/ แม่แบบ DrugCat เปล่าที่อน�
 
 ## สถานะ
 
-ใช้งานได้ครบทั้งสายงานแล้ว: ดึงยาจาก JHCIS → ซิงก์มาตรฐาน → นำเข้า Drug Catalog → จับคู่ → ส่งออก `.xls`
+Production deploy แล้วและ core workflow ใช้งานได้: ดึงยาจาก JHCIS → ซิงก์มาตรฐาน → นำเข้า Drug Catalog → จับคู่ → ส่งออก `.xls`
 
-**ยังไม่ควร deploy เป็น production** จนกว่า checklist ใน
-[docs/OPERATIONS.md](docs/OPERATIONS.md#5-checklist-ก่อนขึ้น-production) จะผ่านครบ
-โดยเฉพาะการทดสอบกับ JHCIS จริง, การเปิดไฟล์ส่งออกด้วย Excel บน Windows จริง และการ rotate secrets
+รายการ hardening และงานที่ยังต้องติดตามไม่ได้ถือว่าผ่านทั้งหมด ดูสถานะที่ตรวจล่าสุดใน
+[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) และ runbook/checklist ใน [docs/OPERATIONS.md](docs/OPERATIONS.md)

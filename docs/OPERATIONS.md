@@ -1,6 +1,7 @@
 # การทำงานและการขึ้นระบบ (OPERATIONS)
 
 เอกสารนี้อธิบายว่าระบบ **ทำงานอย่างไรและขึ้นระบบอย่างไร** ส่วน **ต้องทำอะไร** อยู่ใน [SPEC.md](SPEC.md)
+สถานะ deployment และ checkpoint ปัจจุบันดู [PROJECT_STATUS.md](PROJECT_STATUS.md); ไฟล์นี้เป็น runbook ไม่ใช่ status diary
 
 ---
 
@@ -180,9 +181,8 @@ python -m venv .venv
 `test_ui_smoke.py` ยืนยันทั้งสองข้อด้วยการยิง `<Control-KeyPress>` ที่มี `keycode` แต่ไม่มี keysym ละติน
 ซึ่งเป็นรูปแบบเดียวกับที่แป้นไทยส่งมา หน้าต่างต้องถูก map และ focus ก่อน Tk จึงจะส่ง event สังเคราะห์ให้
 
-ก่อนเผยแพร่จริงยังต้องมี: code signing certificate · installer (WiX/Inno) ที่หยุด process เดิม
-ถอนเวอร์ชันเก่าที่ product code เดียวกัน และล้าง shortcut/uninstall entry · เก็บ config เฉพาะตอน upgrade
-และให้เลือกเก็บ/ลบอย่างชัดเจนตอน uninstall
+ก่อนเผยแพร่ Agent รุ่นใหม่ต้องตรวจ code signing, installer ที่หยุด process เดิม, upgrade/uninstall artifact
+และการเก็บ machine identity/config ตามนโยบาย โดยใช้ Inno Setup script ที่อยู่ใน repo
 
 ---
 
@@ -313,41 +313,32 @@ DELETE FROM schema_migrations WHERE filename = '0012_agent_identity_management.s
 
 ---
 
-## 5. Checklist ก่อนขึ้น production
+## 5. Production verification checklist
 
-ระบบยัง **ไม่ควร deploy เป็น production** จนกว่ารายการนี้จะผ่านครบ
+ระบบ deploy production แล้ว ส่วนนี้แยกหลักฐานที่ตรวจแล้วออกจาก hardening ที่ยังค้าง
+เพื่อไม่ให้ deployment status ถูกตีความว่า checklist ทุกข้อผ่าน ดู checkpoint ล่าสุดที่ [PROJECT_STATUS.md](PROJECT_STATUS.md)
 
-**การแยกข้อมูลระหว่างสถานบริการ (บังคับ)**
+### Verified
 
-- [ ] ผู้ใช้ facility A เรียก API ทุกเส้นแล้วต้องไม่เห็นข้อมูลของ facility B
-- [ ] admin ที่ยังไม่เลือก facility ถูกปฏิเสธด้วย `FACILITY_CONTEXT_REQUIRED`
-- [ ] ส่ง `facilityId` ปลอมทาง body/query ต้องไม่มีผลต่อ scope
+- [x] migrations production ผ่านถึง `0012_agent_identity_management.sql`
+- [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification
+- [x] `office.offid` ต้องตรงกับ facility สำหรับ sync และ mismatch ถูกปฏิเสธ
+- [x] heartbeat รายงาน Agent online แยกจาก JHCIS unreachable ได้
+- [x] Mapping lifecycle/review acknowledgement และ Export full/delta checkpoint ผ่าน targeted production verification
+- [x] installer รักษา ProgramData installation identity หลัง restart/uninstall/reinstall ใน local controlled test
 
-**Agent (ต้องมีฐาน TiDB และ JHCIS จริง)**
+### Outstanding
 
-- [ ] enroll ครั้งแรก, reconnect เครื่องเดิม, ย้าย facility
-- [ ] `office.offid` ไม่ตรง → ปฏิเสธทั้ง begin/batch/finish
-- [ ] ส่ง request ซ้ำด้วย nonce เดิม → ปฏิเสธ
-- [ ] sync 30,000 แถว: staging ครบแล้วจึง commit และแถวที่หายไปถูกปิดใช้งาน
-- [ ] finish ที่จำนวนแถวไม่ครบ → ปฏิเสธและ session เป็น failed
+- [ ] ทดสอบ tenant isolation แบบ exhaustive ครบทุก API รวม body/query ที่ปลอม `facilityId`
+- [ ] enforce `must_change_password` flow ให้ครบ
+- [ ] rate limit login/signup/enrollment และทบทวน CSP/security headers
+- [ ] ทดสอบ Excel contract ด้วย Excel จริงทุกครั้งที่มีการแก้ writer; ตรวจเลขศูนย์นำหน้า, NDC24, ภาษาไทยและวันที่
+- [ ] ทดสอบ installer matrix เพิ่มเติมบน Windows 10/11, non-admin user และชื่อเครื่อง/พาธภาษาไทย
+- [ ] ทดสอบ sync ปริมาณ 30,000 แถวและ incomplete-session failure บน environment ที่ควบคุมได้
 
-**ไฟล์ส่งออก**
+### Operational follow-up
 
-- [ ] เปิดไฟล์ที่ส่งออกด้วย Excel จริงบน Windows
-- [ ] preview count = จำนวนแถวในไฟล์
-- [ ] เลขศูนย์นำหน้า, NDC24, ภาษาไทย, วันที่ ถูกต้องครบตามข้อ 9 ของ SPEC
-
-**Installer**
-
-- [ ] ติดตั้งใหม่, upgrade ทับเวอร์ชันเดิม, ถอนการติดตั้ง
-- [ ] Windows 10/11, ผู้ใช้ที่ไม่ใช่ admin, ชื่อเครื่อง/พาธภาษาไทย
-
-**ระบบ**
-
-- [ ] rotate secrets ทุกตัวและ secret scan ไม่พบค่าเดิม
-- [ ] migrations รันบน staging clone และมี backup/rollback plan
-- [ ] Thai/utf8mb4 round-trip ผ่าน
-- [ ] CSP, secure headers, HTTPS redirect, secure cookies, rate limits พร้อม
-- [ ] monitoring/alert สำหรับ Agent failures, TMT sync, import/export และ auth anomalies
-- [ ] backup/restore drill ทำจริงแล้ว
-- [ ] owner ลงนาม UAT
+- [ ] เพิ่ม CI workflow และ monitoring/alert สำหรับ Agent, TMT sync, import/export และ auth anomaly
+- [ ] เพิ่ม automatic cleanup สำหรับ staging, expired token/nonce และ preview records
+- [ ] ทำ backup/restore drill และกำหนด retention policy ของ import, export, audit และ staging
+- [ ] reconcile production checklist/UAT กับ owner เป็นระยะโดยไม่ตีความ deployment ว่าเท่ากับผ่านทุก gate
