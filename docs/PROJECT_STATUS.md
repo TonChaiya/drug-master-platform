@@ -7,7 +7,7 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production checkpoint: `1e533289b95805abfb41840d4769c826a811c9be`
+- Production source checkpoint: `5fd6da3e7a8577ca82941fb5452f7d542a470364`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0013_shared_rate_limits.sql`
@@ -39,6 +39,7 @@ Migration สำคัญล่าสุด:
 
 - production migrations `0010`–`0013` applied แล้ว
 - login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
+- expired rate-limit bucket cleanup เปิดใช้บน production ผ่าน Vercel Cron เวลา `30 19 * * *` UTC และ controlled invocation ผ่านโดยไม่แตะ business tables
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
 - หลัง Agent cleanup มีหนึ่ง installation และหนึ่ง active credential สำหรับเครื่องที่ตรวจ
 - actual `office.offid` validation, MAC/IP/version telemetry และ heartbeat/JHCIS connected ผ่านการตรวจ
@@ -59,7 +60,6 @@ Migration สำคัญล่าสุด:
 ### P2 Operations
 
 - เพิ่ม CI workflow
-- deploy/verify daily expired rate-limit bucket cleanup และตั้ง `CRON_SECRET` ใน production
 - automatic cleanup nonce/token/staging/preview records
 - monitoring/alerts
 - backup/restore drill และ retention policy
@@ -74,7 +74,7 @@ Migration สำคัญล่าสุด:
 
 ## Last verified checkpoint
 
-- Production application checkpoint: `1e533289b95805abfb41840d4769c826a811c9be`
+- Production source checkpoint: `5fd6da3e7a8577ca82941fb5452f7d542a470364`
 - Latest migration: `0013_shared_rate_limits.sql`
 - Agent version: `1.3.0`
 - Expected worktree: clean

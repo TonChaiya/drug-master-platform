@@ -238,6 +238,9 @@ pnpm dev                # http://localhost:3000
 (`APP_ENCRYPTION_KEY` ใช้เข้ารหัส Agent secret ที่เก็บในฐาน จึงขาดไม่ได้)
 production ที่เปิด Vercel Cron ต้องตั้ง `CRON_SECRET` แบบสุ่มอย่างน้อย 16 ตัวอักษรใน Vercel environment;
 ห้ามใส่ secret ใน query string, config หรือ log
+เมื่อต้อง rotate ให้สร้างค่าใหม่ชนิด Secret ใน Production แล้ว redeploy ก่อนยกเลิกค่าเดิม จากนั้นตรวจ request ที่ไม่มีหรือใช้ค่าเดิมว่าตอบ `401`
+การตรวจแบบ manual ให้บันทึกจำนวน bucket แยก active/within-grace/expired ก่อนเรียก route, เรียกด้วย bearer ที่ถูกต้องเพียงครั้งเดียว
+แล้วตรวจ response `deleted`/`batches`, จำนวน bucket และ log `security.rate_limit_cleanup`; request ที่ไม่มีหรือ bearer ผิดต้องตอบ `401` โดยไม่ query/write DB
 `DB_DATABASE` ต้องเป็นฐานเฉพาะของแอป **ห้ามใช้ `sys`**
 
 production ไม่มีตัวแปร `JHCIS_DB_*` เพราะ cloud ไม่ต่อ LAN ค่าเหล่านี้อยู่ใน Agent
@@ -339,6 +342,7 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 
 - [x] migrations production ผ่านถึง `0013_shared_rate_limits.sql`
 - [x] shared DB rate limit สำหรับ login/signup/enrollment ผ่าน controlled production verification
+- [x] daily expired rate-limit bucket cleanup และ `CRON_SECRET` เปิดใช้บน production; cron `30 19 * * *` UTC และ controlled invocation ผ่าน
 - [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification
 - [x] `office.offid` ต้องตรงกับ facility สำหรับ sync และ mismatch ถูกปฏิเสธ
 - [x] heartbeat รายงาน Agent online แยกจาก JHCIS unreachable ได้
@@ -357,7 +361,6 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 ### Operational follow-up
 
 - [ ] เพิ่ม CI workflow และ monitoring/alert สำหรับ Agent, TMT sync, import/export และ auth anomaly
-- [ ] deploy/verify daily expired rate-limit bucket cleanup และตั้ง `CRON_SECRET` ใน production
 - [ ] เพิ่ม automatic cleanup สำหรับ staging, expired token/nonce และ preview records
 - [ ] ทำ backup/restore drill และกำหนด retention policy ของ import, export, audit และ staging
 - [ ] reconcile production checklist/UAT กับ owner เป็นระยะโดยไม่ตีความ deployment ว่าเท่ากับผ่านทุก gate

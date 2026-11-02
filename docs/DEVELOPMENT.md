@@ -87,6 +87,13 @@ pnpm db:migrate
 - เมื่อแตะ Excel writer ต้องเปิดไฟล์ผลลัพธ์ด้วย Excel/LibreOffice จริง
 - ใช้ full suite เมื่อ change มีผลกว้างหรือเป็น release gate
 
+สำหรับ rate-limit cleanup ให้ตั้ง `CRON_SECRET` เฉพาะใน environment ทดสอบและเรียก route ด้วย bearer เดียวกัน ห้ามใช้ค่า production
+รัน targeted tests ด้วย:
+
+```bash
+pnpm exec vitest run tests/rate-limit-cleanup.test.ts tests/rate-limit-cleanup-route.test.ts tests/rate-limit-cleanup-mysql.test.ts
+```
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review
