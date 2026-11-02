@@ -202,6 +202,10 @@ python -m venv .venv
 - rate-limit login/signup/enrollment และบันทึก failed attempts โดยไม่เปิดเผยว่าบัญชีมีจริงหรือไม่
 - public rate limit ใช้ fixed-window counter ร่วมใน `rate_limit_buckets`: login 15/5 นาที, signup 5/30 นาที และ Agent enrollment 10/10 นาที ต่อ HMAC ของ IP
   โดยไม่เก็บ raw IP; ถ้าฐานของ limiter ใช้ไม่ได้ให้ fail-open และ log `security.rate_limit_unavailable` โดยไม่ log IP/credential
+- Vercel Cron เรียก `GET /api/internal/maintenance/rate-limits/cleanup` วันละครั้งเวลา `30 19 * * *` UTC
+  route รับเฉพาะ `Authorization: Bearer <CRON_SECRET>` และ fail closed ก่อน query DB เมื่อ secret ขาดหรือไม่ตรง
+- cleanup ลบเฉพาะ bucket ที่ `expires_at` เก่ากว่าเวลาปัจจุบัน 24 ชั่วโมง ครั้งละ 1,000 แถว สูงสุด 10 batches/10,000 แถวต่อ run
+  ความล้มเหลว log `security.rate_limit_cleanup_failed` และตอบ 500 โดยไม่เปลี่ยน behavior ของ public limiter; backlog ที่เหลือรอ cron วันถัดไป
 - session เป็น opaque random token เก็บ hash ใน DB rotate หลัง login และหลังเปลี่ยน password/role/status
 - user ใหม่เป็น `pending` การ activate และการเปลี่ยน role/password ต้อง audit
 - authorization เป็น deny-by-default; facility scope มาจาก verified session เท่านั้น
@@ -232,6 +236,8 @@ pnpm dev                # http://localhost:3000
 
 `.env.local` ต้องมีอย่างน้อย `DB_*`, `SESSION_SECRET` และ `APP_ENCRYPTION_KEY`
 (`APP_ENCRYPTION_KEY` ใช้เข้ารหัส Agent secret ที่เก็บในฐาน จึงขาดไม่ได้)
+production ที่เปิด Vercel Cron ต้องตั้ง `CRON_SECRET` แบบสุ่มอย่างน้อย 16 ตัวอักษรใน Vercel environment;
+ห้ามใส่ secret ใน query string, config หรือ log
 `DB_DATABASE` ต้องเป็นฐานเฉพาะของแอป **ห้ามใช้ `sys`**
 
 production ไม่มีตัวแปร `JHCIS_DB_*` เพราะ cloud ไม่ต่อ LAN ค่าเหล่านี้อยู่ใน Agent
@@ -331,7 +337,8 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 
 ### Verified
 
-- [x] migrations production ผ่านถึง `0012_agent_identity_management.sql`
+- [x] migrations production ผ่านถึง `0013_shared_rate_limits.sql`
+- [x] shared DB rate limit สำหรับ login/signup/enrollment ผ่าน controlled production verification
 - [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification
 - [x] `office.offid` ต้องตรงกับ facility สำหรับ sync และ mismatch ถูกปฏิเสธ
 - [x] heartbeat รายงาน Agent online แยกจาก JHCIS unreachable ได้
@@ -342,7 +349,7 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 
 - [ ] ทดสอบ tenant isolation แบบ exhaustive ครบทุก API รวม body/query ที่ปลอม `facilityId`
 - [ ] enforce `must_change_password` flow ให้ครบ
-- [ ] rate limit login/signup/enrollment และทบทวน CSP/security headers
+- [ ] ทบทวน CSP/security headers
 - [ ] ทดสอบ Excel contract ด้วย Excel จริงทุกครั้งที่มีการแก้ writer; ตรวจเลขศูนย์นำหน้า, NDC24, ภาษาไทยและวันที่
 - [ ] ทดสอบ installer matrix เพิ่มเติมบน Windows 10/11, non-admin user และชื่อเครื่อง/พาธภาษาไทย
 - [ ] ทดสอบ sync ปริมาณ 30,000 แถวและ incomplete-session failure บน environment ที่ควบคุมได้
@@ -350,6 +357,7 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 ### Operational follow-up
 
 - [ ] เพิ่ม CI workflow และ monitoring/alert สำหรับ Agent, TMT sync, import/export และ auth anomaly
+- [ ] deploy/verify daily expired rate-limit bucket cleanup และตั้ง `CRON_SECRET` ใน production
 - [ ] เพิ่ม automatic cleanup สำหรับ staging, expired token/nonce และ preview records
 - [ ] ทำ backup/restore drill และกำหนด retention policy ของ import, export, audit และ staging
 - [ ] reconcile production checklist/UAT กับ owner เป็นระยะโดยไม่ตีความ deployment ว่าเท่ากับผ่านทุก gate

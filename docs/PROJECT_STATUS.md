@@ -7,10 +7,10 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production checkpoint: `05425074719a30ab2e49fdfbbe9d9071630d3498`
+- Production checkpoint: `1e533289b95805abfb41840d4769c826a811c9be`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
-- Latest applied migration: `0012_agent_identity_management.sql`
+- Latest applied migration: `0013_shared_rate_limits.sql`
 - Windows Agent baseline: `1.3.0`
 
 ## Major completed areas
@@ -25,6 +25,7 @@
 - Admin workspace ปรับ UX แบบ compact แล้ว: filter สถานบริการ/บัญชีทำงานฝั่ง client และ configuration panels แสดง status ก่อนเปิดแก้ไข
 - full/delta export checkpoint ต่อ facility และ mapping version; preview token ใช้ครั้งเดียวและมี expiry
 - facility-scoped authorization จาก verified session
+- shared persistent rate limiting สำหรับ login/signup/Agent enrollment โดยไม่เก็บ raw IP
 - TMT sync/enrichment และ TTMT file import พร้อม version history
 
 Migration สำคัญล่าสุด:
@@ -32,10 +33,12 @@ Migration สำคัญล่าสุด:
 - `0010_mapping_export_checkpoints.sql` — export delta checkpoints และ preview snapshot
 - `0011_mapping_review_acknowledgements.sql` — current review acknowledgement ต่อ mapping
 - `0012_agent_identity_management.sql` — Agent identity, heartbeat/JHCIS telemetry และ targeted re-enrollment
+- `0013_shared_rate_limits.sql` — shared fixed-window counters สำหรับ public endpoints
 
 ## Verified production state
 
-- production migrations `0010`, `0011` และ `0012` applied แล้ว
+- production migrations `0010`–`0013` applied แล้ว
+- login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
 - หลัง Agent cleanup มีหนึ่ง installation และหนึ่ง active credential สำหรับเครื่องที่ตรวจ
 - actual `office.offid` validation, MAC/IP/version telemetry และ heartbeat/JHCIS connected ผ่านการตรวจ
@@ -50,13 +53,13 @@ Migration สำคัญล่าสุด:
 ### P1 Security
 
 - enforce `must_change_password` flow
-- rate limit login/signup/enrollment
 - เพิ่ม tenant isolation integration tests
 - review security headers/CSP
 
 ### P2 Operations
 
 - เพิ่ม CI workflow
+- deploy/verify daily expired rate-limit bucket cleanup และตั้ง `CRON_SECRET` ใน production
 - automatic cleanup nonce/token/staging/preview records
 - monitoring/alerts
 - backup/restore drill และ retention policy
@@ -71,8 +74,8 @@ Migration สำคัญล่าสุด:
 
 ## Last verified checkpoint
 
-- Production application checkpoint: `05425074719a30ab2e49fdfbbe9d9071630d3498`
-- Latest migration: `0012_agent_identity_management.sql`
+- Production application checkpoint: `1e533289b95805abfb41840d4769c826a811c9be`
+- Latest migration: `0013_shared_rate_limits.sql`
 - Agent version: `1.3.0`
 - Expected worktree: clean
 
