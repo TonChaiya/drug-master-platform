@@ -6,7 +6,7 @@ import { useToast } from "@/components/toast";
 import { Button, IconButton } from "@/components/ui/button";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
-import { Field, FilterBar, SearchInput, SelectInput, TextInput } from "@/components/ui/form";
+import { Field, FilterBar, SearchInput, TextInput } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
 import { IconClose, IconEdit, IconSearch, IconTrash } from "@/components/ui/icons";
@@ -45,7 +45,13 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
 
-  const pendingCount = useMemo(() => users.filter((user) => user.status === "pending").length, [users]);
+  const counts = useMemo(() => {
+    const result: Record<StatusFilter, number> = { all: users.length, pending: 0, active: 0, disabled: 0 };
+    for (const user of users) {
+      if (user.status === "pending" || user.status === "active" || user.status === "disabled") result[user.status] += 1;
+    }
+    return result;
+  }, [users]);
 
   /**
    * Filtered here rather than on the server: the whole list is already loaded
@@ -180,14 +186,13 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
 
   return (
     <>
-      <div className="px-3.5 pb-3.5 sm:px-4">
+      <div className="px-3.5 pb-2.5 sm:px-4">
         <FilterBar
           actions={
             <span className="type-caption tabular-nums" role="status" aria-live="polite">
               {filtered
                 ? `แสดง ${visible.length.toLocaleString("th-TH")} จาก ${users.length.toLocaleString("th-TH")} บัญชี`
                 : `ทั้งหมด ${users.length.toLocaleString("th-TH")} บัญชี`}
-              {pendingCount > 0 ? ` · รออนุมัติ ${pendingCount.toLocaleString("th-TH")}` : ""}
             </span>
           }
         >
@@ -200,19 +205,26 @@ export function UserTable({ users, currentUserId }: { users: AdminUserRow[]; cur
               onChange={(event) => setQuery(event.target.value)}
             />
           </Field>
-          <Field label="สถานะ" htmlFor="user-status-filter">
-            <SelectInput
-              id="user-status-filter"
-              className="w-36"
-              value={status}
-              onChange={(event) => setStatus(event.target.value as StatusFilter)}
-            >
-              <option value="all">ทั้งหมด</option>
-              <option value="pending">รอดำเนินการ</option>
-              <option value="active">ใช้งานอยู่</option>
-              <option value="disabled">ปิดใช้งาน</option>
-            </SelectInput>
-          </Field>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="กรองบัญชีตามสถานะ">
+            {(
+              [
+                ["all", "ทั้งหมด"],
+                ["pending", "รออนุมัติ"],
+                ["active", "ใช้งาน"],
+                ["disabled", "ปิดใช้"],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={status === value ? "primary" : "outline"}
+                aria-pressed={status === value}
+                onClick={() => setStatus(value)}
+              >
+                {label} {counts[value].toLocaleString("th-TH")}
+              </Button>
+            ))}
+          </div>
           {filtered ? (
             <Button
               size="sm"

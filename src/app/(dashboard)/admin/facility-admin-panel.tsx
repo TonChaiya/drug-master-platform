@@ -149,7 +149,7 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Field label="เลือกสถานบริการ" htmlFor="admin-facility" className="max-w-md">
         <SelectInput id="admin-facility" value={facilityId} onChange={(event) => select(event.target.value)}>
           <option value="">— เลือกสถานบริการ —</option>
@@ -179,7 +179,7 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
             ))}
           </dl>
 
-          <form onSubmit={save} className="space-y-3 border-t border-border pt-4">
+          <form onSubmit={save} className="space-y-3 border-t border-border pt-3">
             <SectionHeading title="แก้ไขชื่อและรหัส" />
             <div className="grid gap-2.5 sm:grid-cols-[8rem_1fr]">
               <Field label="รหัส 5 หลัก" htmlFor="admin-code" required>
@@ -220,7 +220,7 @@ export function FacilityAdminPanel({ facilities }: { facilities: AdminFacility[]
             </Button>
           </form>
 
-          <div className="space-y-3 border-t border-border pt-4">
+          <div className="space-y-3 border-t border-border pt-3">
             <SectionHeading
               title={<span className="text-danger">ล้างข้อมูลของสถานบริการนี้</span>}
               description={

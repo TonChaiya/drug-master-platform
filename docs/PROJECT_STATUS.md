@@ -7,7 +7,7 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production checkpoint: `c7608a71a02a208dba7adbaeda455e26299844e6`
+- Production checkpoint: `05425074719a30ab2e49fdfbbe9d9071630d3498`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0012_agent_identity_management.sql`
@@ -22,6 +22,7 @@
 - Mapping lifecycle `pending`, `needs_review`, `mapped` และ review acknowledgement ที่ stale เมื่อ state เปลี่ยน
 - Dashboard/Admin summary ใช้ Mapping lifecycle เดียวกับ worklist และแยก export-ready ตาม standard validity
 - Admin summary แยกบัญชี active/pending/disabled และ Agent Registration/Presence/Credential/JHCIS ตามสถานะจริง
+- Admin workspace ปรับ UX แบบ compact แล้ว: filter สถานบริการ/บัญชีทำงานฝั่ง client และ configuration panels แสดง status ก่อนเปิดแก้ไข
 - full/delta export checkpoint ต่อ facility และ mapping version; preview token ใช้ครั้งเดียวและมี expiry
 - facility-scoped authorization จาก verified session
 - TMT sync/enrichment และ TTMT file import พร้อม version history
@@ -70,7 +71,7 @@ Migration สำคัญล่าสุด:
 
 ## Last verified checkpoint
 
-- Production application checkpoint: `c7608a71a02a208dba7adbaeda455e26299844e6`
+- Production application checkpoint: `05425074719a30ab2e49fdfbbe9d9071630d3498`
 - Latest migration: `0012_agent_identity_management.sql`
 - Agent version: `1.3.0`
 - Expected worktree: clean

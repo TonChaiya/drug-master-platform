@@ -29,6 +29,7 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl);
   const [username, setUsername] = useState(initial.username);
   const [password, setPassword] = useState("");
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<"save" | "test" | "clear" | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -52,7 +53,10 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
         return;
       }
       setStatus(result.status);
+      setBaseUrl(result.status.baseUrl);
+      setUsername(result.status.username);
       setPassword("");
+      setEditing(false);
       setMessage({ ok: true, text: "บันทึก credential แล้ว กด “ทดสอบการเชื่อมต่อ” เพื่อยืนยัน" });
     } finally {
       setBusy(null);
@@ -84,12 +88,33 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
     setMessage(null);
     try {
       const result = await send("DELETE");
-      if (result.status) setStatus(result.status);
+      if (result.status) {
+        setStatus(result.status);
+        setBaseUrl(result.status.baseUrl);
+        setUsername(result.status.username);
+      }
       setPassword("");
+      setEditing(false);
       setMessage({ ok: true, text: "ลบ credential ที่บันทึกไว้แล้ว" });
     } finally {
       setBusy(null);
     }
+  }
+
+  function openEditor() {
+    setBaseUrl(status.baseUrl);
+    setUsername(status.username);
+    setPassword("");
+    setMessage(null);
+    setEditing(true);
+  }
+
+  function closeEditor() {
+    setBaseUrl(status.baseUrl);
+    setUsername(status.username);
+    setPassword("");
+    setMessage(null);
+    setEditing(false);
   }
 
   return (
@@ -104,80 +129,89 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
         ) : null}
       </div>
 
-      <p className="type-help">
-        รหัสผ่านถูกเข้ารหัสก่อนบันทึกและไม่ถูกส่งกลับมาแสดงอีก การเปลี่ยนค่าจึงต้องกรอกรหัสผ่านใหม่ทุกครั้ง
-        หากไม่ได้บันทึกไว้ที่นี่ ระบบจะใช้ค่าจากตัวแปรแวดล้อม <code className="font-mono">TMT_API_*</code> แทน
-      </p>
-
-      <form onSubmit={save} className="grid gap-2.5 sm:grid-cols-2">
-        <Field label="Base URL" htmlFor="tmt-base" className="sm:col-span-2" required>
-          <TextInput
-            id="tmt-base"
-            mono
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-            required
-            maxLength={255}
-            inputMode="url"
-          />
-        </Field>
-        <Field label="ชื่อผู้ใช้ TMT API" htmlFor="tmt-user" required>
-          <TextInput
-            id="tmt-user"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            required
-            maxLength={160}
-            autoComplete="off"
-          />
-        </Field>
-        <Field label="รหัสผ่าน TMT API" htmlFor="tmt-pass" required>
-          <TextInput
-            id="tmt-pass"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            maxLength={255}
-            autoComplete="new-password"
-            placeholder={status.source === "database" ? "กรอกใหม่เพื่อเปลี่ยน" : ""}
-          />
-        </Field>
-
-        {message ? (
-          <Alert tone={message.ok ? "success" : "danger"} className="sm:col-span-2">
-            {message.text}
-          </Alert>
-        ) : null}
-
-        <div className="flex flex-wrap gap-2 sm:col-span-2">
-          <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
-            บันทึก credential
-          </Button>
-          <Button
-            size="sm"
-            icon={<IconLink size={13} />}
-            loading={busy === "test"}
-            disabled={busy !== null || !status.configured}
-            onClick={() => void test()}
-          >
-            ทดสอบการเชื่อมต่อ
-          </Button>
-          {status.source === "database" ? (
+      {!editing ? (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xxs">
+            <dt className="text-slate-500">Base URL</dt>
+            <dd className="truncate font-mono font-medium text-slate-800" title={status.baseUrl}>{status.baseUrl || "—"}</dd>
+            <dt className="text-slate-500">ชื่อผู้ใช้</dt>
+            <dd className="truncate font-medium text-slate-800">{status.username || "—"}</dd>
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" onClick={openEditor}>แก้ไข</Button>
             <Button
               size="sm"
-              variant="danger"
-              className="ml-auto"
-              icon={<IconTrash size={13} />}
-              loading={busy === "clear"}
-              disabled={busy !== null}
-              onClick={() => void clear()}
+              icon={<IconLink size={13} />}
+              loading={busy === "test"}
+              disabled={busy !== null || !status.configured}
+              onClick={() => void test()}
             >
-              ลบค่าที่บันทึกไว้
+              ทดสอบการเชื่อมต่อ
             </Button>
-          ) : null}
-        </div>
-      </form>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={save} className="grid gap-2.5 border-t border-border pt-3 sm:grid-cols-2">
+          <p className="type-help text-slate-600 sm:col-span-2">
+            รหัสผ่านเดิมไม่ถูกส่งกลับมา การบันทึกต้องกรอกรหัสผ่านใหม่ทุกครั้ง
+          </p>
+          <Field label="Base URL" htmlFor="tmt-base" className="sm:col-span-2" required>
+            <TextInput
+              id="tmt-base"
+              mono
+              value={baseUrl}
+              onChange={(event) => setBaseUrl(event.target.value)}
+              required
+              maxLength={255}
+              inputMode="url"
+            />
+          </Field>
+          <Field label="ชื่อผู้ใช้ TMT API" htmlFor="tmt-user" required>
+            <TextInput
+              id="tmt-user"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              maxLength={160}
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="รหัสผ่าน TMT API" htmlFor="tmt-pass" required>
+            <TextInput
+              id="tmt-pass"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              maxLength={255}
+              autoComplete="new-password"
+              placeholder={status.source === "database" ? "กรอกใหม่เพื่อเปลี่ยน" : ""}
+            />
+          </Field>
+
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
+              บันทึก credential
+            </Button>
+            <Button size="sm" disabled={busy !== null} onClick={closeEditor}>ยกเลิก</Button>
+            {status.source === "database" ? (
+              <Button
+                size="sm"
+                variant="danger"
+                className="ml-auto"
+                icon={<IconTrash size={13} />}
+                loading={busy === "clear"}
+                disabled={busy !== null}
+                onClick={() => void clear()}
+              >
+                ลบค่าที่บันทึกไว้
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      )}
+
+      {message ? <Alert tone={message.ok ? "success" : "danger"}>{message.text}</Alert> : null}
     </div>
   );
 }

@@ -21,6 +21,7 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
   const [link, setLink] = useState(initial);
   const [url, setUrl] = useState(initial.url);
   const [version, setVersion] = useState(initial.version);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState<"save" | "clear" | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -45,6 +46,8 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
       }
       setLink(result.link);
       setUrl(result.link.url);
+      setVersion(result.link.version);
+      setEditing(false);
       setMessage({
         ok: true,
         text:
@@ -65,15 +68,40 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
       if (result.link) {
         setLink(result.link);
         setUrl(result.link.url);
+        setVersion(result.link.version);
       }
+      setEditing(false);
       setMessage({ ok: true, text: "ลบลิงก์ที่ตั้งไว้แล้ว" });
     } finally {
       setBusy(null);
     }
   }
 
+  const host = (() => {
+    if (!link.url) return "—";
+    try {
+      return new URL(link.url).hostname;
+    } catch {
+      return "ลิงก์ที่ตั้งไว้";
+    }
+  })();
+
+  function openEditor() {
+    setUrl(link.url);
+    setVersion(link.version);
+    setMessage(null);
+    setEditing(true);
+  }
+
+  function closeEditor() {
+    setUrl(link.url);
+    setVersion(link.version);
+    setMessage(null);
+    setEditing(false);
+  }
+
   return (
-    <form onSubmit={save} className="space-y-3">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={link.url ? "success" : "warning"} dot>
           {link.url ? "พร้อมให้ดาวน์โหลด" : "ยังไม่มีลิงก์"}
@@ -82,64 +110,79 @@ export function AgentInstallerPanel({ initial }: { initial: InstallerLink }) {
         {link.updatedAt ? <span className="type-caption">แก้ไขล่าสุด {new Date(link.updatedAt).toLocaleString("th-TH")}</span> : null}
       </div>
 
-      <p className="type-help">
-        วางลิงก์แชร์ของ Google Drive ได้เลย ระบบจะแปลงเป็นแบบดาวน์โหลดตรงให้เอง
-      </p>
+      {!editing ? (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xxs">
+            <dt className="text-slate-500">เวอร์ชัน</dt>
+            <dd className="font-mono font-medium text-slate-800">{link.version || "—"}</dd>
+            <dt className="text-slate-500">แหล่งไฟล์</dt>
+            <dd className="truncate font-medium text-slate-800" title={link.url}>{host}</dd>
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" onClick={openEditor}>แก้ไข</Button>
+            {link.url ? (
+              <ExternalButtonLink href={link.url} size="sm" icon={<IconExternal size={13} />}>
+                ทดสอบลิงก์
+              </ExternalButtonLink>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <form onSubmit={save} className="space-y-3 border-t border-border pt-3">
+          <p className="type-help text-slate-600">วางลิงก์แชร์ของ Google Drive ได้ ระบบจะแปลงเป็นแบบดาวน์โหลดตรงให้เอง</p>
 
-      <div className="grid gap-2.5 sm:grid-cols-[1fr_8rem]">
-        <Field label="ลิงก์ไฟล์ติดตั้ง (HTTPS)" htmlFor="installer-url" required>
-          <TextInput
-            id="installer-url"
-            mono
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://drive.google.com/file/d/…/view"
-            required
-            maxLength={500}
-            inputMode="url"
-          />
-        </Field>
-        <Field label="เวอร์ชัน" htmlFor="installer-version">
-          <TextInput
-            id="installer-version"
-            mono
-            value={version}
-            onChange={(event) => setVersion(event.target.value)}
-            placeholder="1.2.1"
-            maxLength={32}
-          />
-        </Field>
-      </div>
+          <div className="grid gap-2.5 sm:grid-cols-[1fr_8rem]">
+            <Field label="ลิงก์ไฟล์ติดตั้ง (HTTPS)" htmlFor="installer-url" required>
+              <TextInput
+                id="installer-url"
+                mono
+                value={url}
+                onChange={(event) => setUrl(event.target.value)}
+                placeholder="https://drive.google.com/file/d/…/view"
+                required
+                maxLength={500}
+                inputMode="url"
+              />
+            </Field>
+            <Field label="เวอร์ชัน" htmlFor="installer-version">
+              <TextInput
+                id="installer-version"
+                mono
+                value={version}
+                onChange={(event) => setVersion(event.target.value)}
+                placeholder="1.2.1"
+                maxLength={32}
+              />
+            </Field>
+          </div>
 
-      <Alert tone="warning" title="ไฟล์ใหญ่กว่า ~25 MB บน Google Drive จะขึ้นหน้าเตือนก่อนดาวน์โหลด">
-        ตัวติดตั้งใหญ่กว่านั้น ผู้ใช้จึงต้องกดยืนยันอีกครั้ง หากต้องการให้กดครั้งเดียวจบ ให้ฝากไฟล์เป็น asset ของ GitHub Release แทน
-      </Alert>
+          <Alert tone="warning" title="ไฟล์ใหญ่กว่า ~25 MB บน Google Drive จะขึ้นหน้าเตือนก่อนดาวน์โหลด">
+            หากต้องการให้กดครั้งเดียวจบ ให้ฝากไฟล์เป็น asset ของ GitHub Release แทน
+          </Alert>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
+              บันทึกลิงก์
+            </Button>
+            <Button size="sm" disabled={busy !== null} onClick={closeEditor}>ยกเลิก</Button>
+            {link.source === "database" ? (
+              <Button
+                size="sm"
+                variant="danger"
+                className="ml-auto"
+                icon={<IconTrash size={13} />}
+                loading={busy === "clear"}
+                disabled={busy !== null}
+                onClick={() => void clear()}
+              >
+                ลบลิงก์
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      )}
 
       {message ? <Alert tone={message.ok ? "success" : "danger"}>{message.text}</Alert> : null}
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" size="sm" loading={busy === "save"} disabled={busy !== null}>
-          บันทึกลิงก์
-        </Button>
-        {link.url ? (
-          <ExternalButtonLink href={link.url} size="sm" icon={<IconExternal size={13} />}>
-            ทดลองเปิดลิงก์
-          </ExternalButtonLink>
-        ) : null}
-        {link.source === "database" ? (
-          <Button
-            size="sm"
-            variant="danger"
-            className="ml-auto"
-            icon={<IconTrash size={13} />}
-            loading={busy === "clear"}
-            disabled={busy !== null}
-            onClick={() => void clear()}
-          >
-            ลบลิงก์
-          </Button>
-        ) : null}
-      </div>
-    </form>
+    </div>
   );
 }
