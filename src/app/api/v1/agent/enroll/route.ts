@@ -3,6 +3,7 @@ import { agentErrorResponse } from "@/modules/agent/route-helpers";
 import { agentErrors } from "@/modules/agent/errors";
 import { redeemEnrollment } from "@/modules/agent/enrollment";
 import { enrollRequestSchema } from "@/modules/agent/schemas";
+import { checkPublicRateLimit, ENROLL_RATE_LIMIT, rateLimitExceededResponse } from "@/modules/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
  * protected by the single-use, 10-minute enrollment token plus an officeId match.
  */
 export async function POST(request: Request) {
+  const rateLimit = await checkPublicRateLimit(request, ENROLL_RATE_LIMIT);
+  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit);
   try {
     const raw = await request.text();
     if (raw.length > 8192) throw agentErrors.payloadTooLarge();

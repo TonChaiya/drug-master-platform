@@ -2,8 +2,11 @@ import { apiJson } from "@/lib/api-response";
 import { loginSchema } from "@/modules/auth/schemas";
 import { AuthError, authenticate } from "@/modules/auth/service";
 import { createSession, setSessionCookie } from "@/modules/auth/session";
+import { checkPublicRateLimit, LOGIN_RATE_LIMIT, rateLimitExceededResponse } from "@/modules/security/rate-limit";
 
 export async function POST(request: Request) {
+  const rateLimit = await checkPublicRateLimit(request, LOGIN_RATE_LIMIT);
+  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit);
   let raw: unknown;
   try {
     raw = await request.json();

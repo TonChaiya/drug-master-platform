@@ -1,10 +1,13 @@
 import { apiJson } from "@/lib/api-response";
 import { AuthError, signup } from "@/modules/auth/service";
 import { signupSchema } from "@/modules/auth/schemas";
+import { checkPublicRateLimit, rateLimitExceededResponse, SIGNUP_RATE_LIMIT } from "@/modules/security/rate-limit";
 
 const MAX_BODY_BYTES = 16 * 1024;
 
 export async function POST(request: Request) {
+  const rateLimit = await checkPublicRateLimit(request, SIGNUP_RATE_LIMIT);
+  if (!rateLimit.allowed) return rateLimitExceededResponse(rateLimit);
   const body = await request.arrayBuffer();
   if (body.byteLength > MAX_BODY_BYTES) return apiJson({ ok: false, errorCode: "PAYLOAD_TOO_LARGE" }, 413);
   let raw: unknown;

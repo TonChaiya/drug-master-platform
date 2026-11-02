@@ -200,6 +200,8 @@ python -m venv .venv
 
 - password hash ใช้ Node `scrypt` พร้อม parameter/version ฝังใน hash **ห้าม fallback เป็น SHA/MD5**
 - rate-limit login/signup/enrollment และบันทึก failed attempts โดยไม่เปิดเผยว่าบัญชีมีจริงหรือไม่
+- public rate limit ใช้ fixed-window counter ร่วมใน `rate_limit_buckets`: login 15/5 นาที, signup 5/30 นาที และ Agent enrollment 10/10 นาที ต่อ HMAC ของ IP
+  โดยไม่เก็บ raw IP; ถ้าฐานของ limiter ใช้ไม่ได้ให้ fail-open และ log `security.rate_limit_unavailable` โดยไม่ log IP/credential
 - session เป็น opaque random token เก็บ hash ใน DB rotate หลัง login และหลังเปลี่ยน password/role/status
 - user ใหม่เป็น `pending` การ activate และการเปลี่ยน role/password ต้อง audit
 - authorization เป็น deny-by-default; facility scope มาจาก verified session เท่านั้น
@@ -295,6 +297,15 @@ ALTER TABLE agent_installations
   DROP COLUMN last_heartbeat_at;
 DELETE FROM schema_migrations WHERE filename = '0012_agent_identity_management.sql';
 ```
+
+**0013_shared_rate_limits.sql** — เพิ่ม fixed-window counter ร่วมสำหรับ public login, signup และ Agent enrollment; ไม่มี foreign key หรือ business data
+
+```sql
+DROP TABLE rate_limit_buckets;
+DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
+```
+
+ก่อน rollback ต้องหยุด traffic ของ public endpoints หรือ deploy code ที่ไม่เรียกตารางนี้ก่อน ไม่เช่นนั้น limiter จะ fail-open ตาม policy
 
 การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
 การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`

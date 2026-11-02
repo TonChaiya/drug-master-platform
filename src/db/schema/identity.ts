@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { datetime, index, json, mysqlTable, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { datetime, index, int, json, mysqlTable, primaryKey, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 const now = sql`CURRENT_TIMESTAMP(3)`;
 
@@ -69,4 +69,20 @@ export const auditLogs = mysqlTable(
     createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
   },
   (table) => [index("idx_audit_facility_created").on(table.effectiveFacilityId, table.createdAt)],
+);
+
+export const rateLimitBuckets = mysqlTable(
+  "rate_limit_buckets",
+  {
+    scope: varchar("scope", { length: 48 }).notNull(),
+    clientKeyHash: varchar("client_key_hash", { length: 64 }).notNull(),
+    windowStart: datetime("window_start", { mode: "date", fsp: 3 }).notNull(),
+    requestCount: int("request_count", { unsigned: true }).notNull(),
+    expiresAt: datetime("expires_at", { mode: "date", fsp: 3 }).notNull(),
+    updatedAt: datetime("updated_at", { mode: "date", fsp: 3 }).notNull().default(now),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.clientKeyHash, table.windowStart] }),
+    index("idx_rate_limit_buckets_expiry").on(table.expiresAt),
+  ],
 );
