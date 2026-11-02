@@ -12,6 +12,7 @@ import {
   IconExport,
   IconMappings,
   IconPill,
+  IconWarning,
 } from "@/components/ui/icons";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
 import { facilityOverview, formatBangkok } from "@/modules/facilities/queries";
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
   const mappedPercent = overview.sourceTotal === 0 ? 0 : Math.round((overview.mappedTotal / overview.sourceTotal) * 100);
   const blocked = overview.readiness.filter((item) => !item.ready);
   const hasData = overview.sourceTotal > 0;
+  const exportBlockedTotal = overview.mappedTotal - overview.exportReadyTotal;
 
   return (
     <div className="space-y-4">
@@ -70,22 +72,22 @@ export default async function DashboardPage() {
               tone="success"
               label="จับคู่มาตรฐานแล้ว"
               value={overview.mappedTotal.toLocaleString("th-TH")}
-              hint={`${mappedPercent}% ของรายการทั้งหมด`}
+              hint={`${mappedPercent}% ของรายการทั้งหมด · ผ่านเงื่อนไขส่งออก ${overview.exportReadyTotal.toLocaleString("th-TH")}`}
               icon={<IconCheckCircle size={16} />}
+            />
+            <StatTile
+              tone={overview.needsReviewTotal > 0 ? "warning" : "neutral"}
+              label="ต้องตรวจสอบ"
+              value={overview.needsReviewTotal.toLocaleString("th-TH")}
+              hint={overview.needsReviewTotal > 0 ? "ตรวจ mapping/catalog ก่อนส่งออก" : "ไม่มีรายการรอตรวจสอบ"}
+              icon={<IconWarning size={16} />}
             />
             <StatTile
               tone={overview.pendingTotal > 0 ? "warning" : "neutral"}
               label="คงค้าง"
               value={overview.pendingTotal.toLocaleString("th-TH")}
-              hint={overview.pendingTotal > 0 ? "รอจับคู่กับ TMT/TTMT" : "จับคู่ครบทุกรายการแล้ว"}
+              hint={overview.pendingTotal > 0 ? "รอจับคู่กับ TMT/TTMT" : "ไม่มีรายการรอจับคู่"}
               icon={<IconMappings size={16} />}
-            />
-            <StatTile
-              tone="info"
-              label="พร้อมส่งออก"
-              value={overview.mappedTotal.toLocaleString("th-TH")}
-              hint="บันทึกแล้วส่งออกได้ทันที"
-              icon={<IconExport size={16} />}
             />
           </section>
 
@@ -107,11 +109,12 @@ export default async function DashboardPage() {
                   tone={mappedPercent === 100 ? "success" : mappedPercent >= 50 ? "info" : "warning"}
                   label={`${overview.mappedTotal.toLocaleString("th-TH")} จาก ${overview.sourceTotal.toLocaleString("th-TH")} รายการ`}
                 />
-                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3.5 sm:grid-cols-4">
+                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3.5 sm:grid-cols-5">
                   {[
                     { label: "ชนิด 01 (TMT)", value: overview.type01 },
                     { label: "ชนิด 10 (TTMT)", value: overview.type10 },
                     { label: "จับคู่แล้ว", value: overview.mappedTotal },
+                    { label: "ต้องตรวจสอบ", value: overview.needsReviewTotal },
                     { label: "คงค้าง", value: overview.pendingTotal },
                   ].map((item) => (
                     <div key={item.label}>
@@ -128,7 +131,7 @@ export default async function DashboardPage() {
             <Card>
               <CardHeader title="สิ่งที่ต้องทำต่อ" description="ประเมินจากข้อมูลจริงของสถานบริการนี้" />
               <CardBody>
-                {blocked.length === 0 && overview.pendingTotal === 0 ? (
+                {blocked.length === 0 && overview.pendingTotal === 0 && overview.needsReviewTotal === 0 && exportBlockedTotal === 0 ? (
                   <EmptyState
                     compact
                     icon={<IconCheckCircle size={18} />}
@@ -159,13 +162,25 @@ export default async function DashboardPage() {
                         </ButtonLink>
                       </li>
                     ))}
+                    {overview.needsReviewTotal > 0 ? (
+                      <li className="flex items-start gap-2.5">
+                        <span aria-hidden className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-warning-soft text-xxs font-bold text-warning">
+                          {blocked.length + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xxs font-semibold text-slate-700">ตรวจสอบ mapping ที่เปลี่ยน</p>
+                          <p className="type-help mt-0.5">มี {overview.needsReviewTotal.toLocaleString("th-TH")} รายการที่ต้องยืนยันก่อนส่งออก</p>
+                        </div>
+                        <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
+                      </li>
+                    ) : null}
                     {overview.pendingTotal > 0 ? (
                       <li className="flex items-start gap-2.5">
                         <span
                           aria-hidden
                           className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-warning-soft text-xxs font-bold text-warning"
                         >
-                          {blocked.length + 1}
+                          {blocked.length + (overview.needsReviewTotal > 0 ? 2 : 1)}
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-xxs font-semibold text-slate-700">จับคู่รายการที่เหลือ</p>
@@ -176,6 +191,18 @@ export default async function DashboardPage() {
                         <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">
                           จับคู่
                         </ButtonLink>
+                      </li>
+                    ) : null}
+                    {exportBlockedTotal > 0 ? (
+                      <li className="flex items-start gap-2.5">
+                        <span aria-hidden className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-warning-soft text-xxs font-bold text-warning">
+                          {blocked.length + (overview.needsReviewTotal > 0 ? 1 : 0) + (overview.pendingTotal > 0 ? 1 : 0) + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xxs font-semibold text-slate-700">ตรวจมาตรฐานที่ส่งออกไม่ได้</p>
+                          <p className="type-help mt-0.5">มี {exportBlockedTotal.toLocaleString("th-TH")} mapping ที่มาตรฐาน inactive, ไม่พบ หรือชนิดไม่ตรง</p>
+                        </div>
+                        <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
                       </li>
                     ) : null}
                   </ol>

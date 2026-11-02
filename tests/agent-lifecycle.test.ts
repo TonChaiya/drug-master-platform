@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import { strict as assert } from "node:assert";
-import { deriveInstallationState, resolveCanonicalInstallation } from "@/modules/agent/lifecycle";
+import { deriveInstallationState, resolveCanonicalInstallation, summarizeAgentInstallations } from "@/modules/agent/lifecycle";
 import { hasProtectedAgentHistory } from "@/modules/agent/admin";
 import { pollRequestSchema } from "@/modules/agent/schemas";
 
@@ -64,6 +64,68 @@ test("stale heartbeat makes JHCIS state unknown", () => {
     now,
   });
   assert.deepEqual(state, { presence: "offline", credential: "revoked", jhcis: "unknown" });
+});
+
+test("admin summary separates connected, unreachable, offline, disabled and mismatched Agents", () => {
+  const now = new Date("2026-10-30T10:00:00.000Z");
+  const fresh = new Date("2026-10-30T09:59:30.000Z");
+  const stale = new Date("2026-10-30T09:55:00.000Z");
+  const summary = summarizeAgentInstallations(
+    [
+      { registrationStatus: "active", activeCredentials: 1, lastHeartbeatAt: fresh, lastSeenAt: fresh, jhcisConnected: true, lastJhcisCheckAt: fresh, mismatch: false },
+      { registrationStatus: "active", activeCredentials: 1, lastHeartbeatAt: fresh, lastSeenAt: fresh, jhcisConnected: false, lastJhcisCheckAt: fresh, mismatch: false },
+      { registrationStatus: "active", activeCredentials: 1, lastHeartbeatAt: stale, lastSeenAt: stale, jhcisConnected: true, lastJhcisCheckAt: stale, mismatch: false },
+      { registrationStatus: "disabled", activeCredentials: 1, lastHeartbeatAt: fresh, lastSeenAt: fresh, jhcisConnected: true, lastJhcisCheckAt: fresh, mismatch: false },
+      { registrationStatus: "superseded", activeCredentials: 1, lastHeartbeatAt: fresh, lastSeenAt: fresh, jhcisConnected: true, lastJhcisCheckAt: fresh, mismatch: false },
+      { registrationStatus: "active", activeCredentials: 1, lastHeartbeatAt: fresh, lastSeenAt: fresh, jhcisConnected: true, lastJhcisCheckAt: fresh, mismatch: true },
+    ],
+    now,
+  );
+  assert.deepEqual(summary, {
+    installationCount: 6,
+    agentCount: 4,
+    disabledAgentCount: 1,
+    supersededAgentCount: 1,
+    usableAgentCount: 3,
+    onlineAgentCount: 3,
+    offlineAgentCount: 1,
+    jhcisConnectedCount: 2,
+    jhcisUnreachableCount: 1,
+    jhcisUnknownCount: 1,
+    agentMismatchCount: 1,
+  });
+});
+
+test("active registration without active credential is unusable and offline", () => {
+  const now = new Date("2026-10-30T10:00:00.000Z");
+  const summary = summarizeAgentInstallations(
+    [{ registrationStatus: "active", activeCredentials: 0, lastHeartbeatAt: now, lastSeenAt: now, jhcisConnected: true, lastJhcisCheckAt: now, mismatch: false }],
+    now,
+  );
+  assert.equal(summary.agentCount, 1);
+  assert.equal(summary.usableAgentCount, 0);
+  assert.equal(summary.onlineAgentCount, 0);
+  assert.equal(summary.offlineAgentCount, 1);
+});
+
+test("online Agent with stale JHCIS check remains unknown, not connected or unreachable", () => {
+  const now = new Date("2026-10-30T10:00:00.000Z");
+  const summary = summarizeAgentInstallations(
+    [{
+      registrationStatus: "active",
+      activeCredentials: 1,
+      lastHeartbeatAt: now,
+      lastSeenAt: now,
+      jhcisConnected: true,
+      lastJhcisCheckAt: new Date("2026-10-30T09:55:00.000Z"),
+      mismatch: false,
+    }],
+    now,
+  );
+  assert.equal(summary.onlineAgentCount, 1);
+  assert.equal(summary.jhcisConnectedCount, 0);
+  assert.equal(summary.jhcisUnreachableCount, 0);
+  assert.equal(summary.jhcisUnknownCount, 1);
 });
 
 test("heartbeat can report Agent online while JHCIS has no office id", () => {

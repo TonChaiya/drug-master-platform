@@ -20,6 +20,8 @@
 - Agent admin disable, supersede และ safe delete พร้อม Registration/Presence/Credential/JHCIS แยกสถานะ
 - Drug Catalog verified snapshot lifecycle และ reconcile โดยเก็บ snapshot/mapping history เดิม
 - Mapping lifecycle `pending`, `needs_review`, `mapped` และ review acknowledgement ที่ stale เมื่อ state เปลี่ยน
+- Dashboard/Admin summary ใช้ Mapping lifecycle เดียวกับ worklist และแยก export-ready ตาม standard validity
+- Admin summary แยกบัญชี active/pending/disabled และ Agent Registration/Presence/Credential/JHCIS ตามสถานะจริง
 - full/delta export checkpoint ต่อ facility และ mapping version; preview token ใช้ครั้งเดียวและมี expiry
 - facility-scoped authorization จาก verified session
 - TMT sync/enrichment และ TTMT file import พร้อม version history
@@ -43,12 +45,6 @@ Migration สำคัญล่าสุด:
 ข้อมูลข้างต้นไม่ใช่คำรับรองว่า security/operations checklist ทุกข้อผ่าน ดูรายการค้างด้านล่างและ [OPERATIONS.md](OPERATIONS.md#5-production-verification-checklist)
 
 ## Known improvement backlog
-
-### P1 Correctness
-
-- Dashboard/Admin summary ยังนับ mapping row แบบเก่า และควรใช้ lifecycle `mapped`/`needs_review`/`pending` เต็มรูปแบบ
-- Admin Agent summary ควรใช้ status truth ใหม่ให้มากขึ้น
-- account counts ควรแยก active/pending/disabled
 
 ### P1 Security
 
@@ -74,7 +70,7 @@ Migration สำคัญล่าสุด:
 
 ## Last verified checkpoint
 
-- HEAD/production commit: `c7608a71a02a208dba7adbaeda455e26299844e6`
+- Production application checkpoint: `c7608a71a02a208dba7adbaeda455e26299844e6`
 - Latest migration: `0012_agent_identity_management.sql`
 - Agent version: `1.3.0`
 - Expected worktree: clean

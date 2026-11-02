@@ -176,31 +176,59 @@ export default async function AdminPage() {
                           {row.sourceTotal === 0 ? (
                             <span className="text-slate-400">—</span>
                           ) : (
-                            <ProgressBar
-                              value={row.mappedTotal}
-                              max={row.sourceTotal}
-                              tone={percent === 100 ? "success" : "warning"}
-                              label={`${row.mappedTotal.toLocaleString("th-TH")} / ${row.sourceTotal.toLocaleString("th-TH")}`}
-                            />
+                            <>
+                              <ProgressBar
+                                value={row.mappedTotal}
+                                max={row.sourceTotal}
+                                tone={percent === 100 ? "success" : "warning"}
+                                label={`${row.mappedTotal.toLocaleString("th-TH")} / ${row.sourceTotal.toLocaleString("th-TH")}`}
+                              />
+                              <div className="type-help mt-1">
+                                ตรวจ {row.needsReviewTotal.toLocaleString("th-TH")} · ค้าง {row.pendingTotal.toLocaleString("th-TH")}
+                              </div>
+                            </>
                           )}
                         </td>
 
-                        <td className="cell-num">
-                          {row.accountCount === 0 ? (
-                            <Badge tone="danger" title="ไม่มีบัญชีผูกกับสถานบริการนี้ จึงไม่มีใครเข้าใช้งานได้">
-                              ไม่มี
-                            </Badge>
+                        <td>
+                          {row.activeAccountCount === 0 ? (
+                            <div>
+                              <Badge tone="danger" title="ไม่มีบัญชีที่เปิดใช้งานในสถานบริการนี้">
+                                {row.pendingAccountCount > 0 ? `รอ ${row.pendingAccountCount}` : "ไม่มีบัญชีใช้งาน"}
+                              </Badge>
+                              {row.disabledAccountCount > 0 ? <div className="type-help mt-0.5">ปิดใช้ {row.disabledAccountCount.toLocaleString("th-TH")}</div> : null}
+                            </div>
                           ) : (
-                            row.accountCount.toLocaleString("th-TH")
+                            <div className="whitespace-nowrap text-xxs">
+                              <span className="font-semibold text-success">ใช้งาน {row.activeAccountCount.toLocaleString("th-TH")}</span>
+                              {row.pendingAccountCount > 0 ? <span className="ml-1.5 text-warning">รอ {row.pendingAccountCount.toLocaleString("th-TH")}</span> : null}
+                              {row.disabledAccountCount > 0 ? <div className="type-help">ปิดใช้ {row.disabledAccountCount.toLocaleString("th-TH")}</div> : null}
+                            </div>
                           )}
                         </td>
 
-                        <td className="cell-num">
-                          {row.agentCount === 0 ? (
+                        <td>
+                          {row.installationCount === 0 ? (
                             <span className="text-slate-400">—</span>
+                          ) : row.agentCount === 0 ? (
+                            <div className="text-xxs">
+                              <Badge tone="danger">ไม่มี Agent ที่ใช้งาน</Badge>
+                              <div className="type-help mt-0.5">
+                                ปิดใช้ {row.disabledAgentCount.toLocaleString("th-TH")} · แทนที่ {row.supersededAgentCount.toLocaleString("th-TH")}
+                              </div>
+                            </div>
                           ) : (
                             <>
-                              <div>{row.agentCount.toLocaleString("th-TH")}</div>
+                              <div className="whitespace-nowrap text-xxs font-semibold">
+                                {row.onlineAgentCount > 0
+                                  ? row.jhcisConnectedCount > 0
+                                    ? "ออนไลน์ · JHCIS เชื่อมต่อได้"
+                                    : row.jhcisUnreachableCount > 0
+                                      ? "ออนไลน์ · JHCIS ติดต่อไม่ได้"
+                                      : "ออนไลน์ · ยังไม่ทราบสถานะ JHCIS"
+                                  : "ออฟไลน์"}
+                              </div>
+                              <div className="type-help">ลงทะเบียน {row.agentCount.toLocaleString("th-TH")} · ออฟไลน์ {row.offlineAgentCount.toLocaleString("th-TH")}</div>
                               {row.agentMismatchCount > 0 ? (
                                 <Badge
                                   tone="danger"
@@ -241,7 +269,7 @@ export default async function AdminPage() {
               sourceTotal: row.sourceTotal,
               mappedTotal: row.mappedTotal,
               agentCount: row.agentCount,
-              accountCount: row.accountCount,
+              accountCount: row.totalAccountCount,
             }))}
           />
         </CardBody>

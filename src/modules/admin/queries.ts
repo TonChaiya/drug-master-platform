@@ -1,6 +1,8 @@
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { agentInstallations, drugMappings, facilities, sourceDrugs, users } from "@/db/schema";
+import { facilities, users } from "@/db/schema";
+import { agentFacilitySummaries } from "@/modules/agent/queries";
+import { emptyMappingLifecycleSummary, mappingLifecycleSummaries } from "@/modules/mappings/summary";
 
 export interface FacilitySummary {
   facilityId: string;
@@ -11,10 +13,24 @@ export interface FacilitySummary {
   type10: number;
   mappedTotal: number;
   pendingTotal: number;
+  needsReviewTotal: number;
+  exportReadyTotal: number;
+  installationCount: number;
   agentCount: number;
+  disabledAgentCount: number;
+  supersededAgentCount: number;
+  usableAgentCount: number;
+  onlineAgentCount: number;
+  offlineAgentCount: number;
+  jhcisConnectedCount: number;
+  jhcisUnreachableCount: number;
+  jhcisUnknownCount: number;
   /** Agents still declaring a different office.offid than this facility's code. */
   agentMismatchCount: number;
-  accountCount: number;
+  activeAccountCount: number;
+  pendingAccountCount: number;
+  disabledAccountCount: number;
+  totalAccountCount: number;
   lastMappedAt: Date | null;
 }
 
@@ -23,65 +39,59 @@ export interface FacilitySummary {
  * (docs/SPEC.md).
  */
 export async function facilitySummaries(): Promise<FacilitySummary[]> {
-  const rows = await db
-    .select({
-      facilityId: facilities.id,
-      facilityCode: facilities.facilityCode,
-      facilityName: facilities.facilityName,
-      sourceTotal: sql<number>`COUNT(DISTINCT ${sourceDrugs.id})`,
-      type01: sql<number>`COUNT(DISTINCT CASE WHEN ${sourceDrugs.drugtype} = '01' THEN ${sourceDrugs.id} END)`,
-      type10: sql<number>`COUNT(DISTINCT CASE WHEN ${sourceDrugs.drugtype} = '10' THEN ${sourceDrugs.id} END)`,
-      mappedTotal: sql<number>`COUNT(DISTINCT ${drugMappings.id})`,
-      lastMappedAt: sql<Date | null>`MAX(${drugMappings.updatedAt})`,
-    })
-    .from(facilities)
-    .leftJoin(sourceDrugs, and(eq(sourceDrugs.facilityId, facilities.id), eq(sourceDrugs.active, 1)))
-    .leftJoin(drugMappings, eq(drugMappings.sourceDrugId, sourceDrugs.id))
-    .where(eq(facilities.status, "active"))
-    .groupBy(facilities.id, facilities.facilityCode, facilities.facilityName)
-    .orderBy(asc(facilities.facilityCode));
-
-  const agents = await db
-    .select({
-      facilityId: agentInstallations.facilityId,
-      total: count(),
-      // An agent whose declared office.offid is no longer this facility's code
-      // is refused by the server on every request. Counting it as simply
-      // "1 agent" made a facility with no working agent look connected.
-      mismatched: sql<number>`SUM(CASE WHEN ${agentInstallations.declaredOfficeId} IS NOT NULL
-        AND ${agentInstallations.declaredOfficeId} <> ${facilities.facilityCode} THEN 1 ELSE 0 END)`,
-    })
-    .from(agentInstallations)
-    .innerJoin(facilities, eq(facilities.id, agentInstallations.facilityId))
-    .where(eq(agentInstallations.status, "active"))
-    .groupBy(agentInstallations.facilityId);
-  const agentByFacility = new Map(
-    agents.map((row) => [row.facilityId, { total: Number(row.total), mismatched: Number(row.mismatched ?? 0) }]),
-  );
-
-  // A facility nobody can sign in to is worth seeing, and the table never said.
-  const accounts = await db
-    .select({ facilityId: users.facilityId, total: count() })
-    .from(users)
-    .groupBy(users.facilityId);
-  const accountByFacility = new Map(accounts.map((row) => [row.facilityId, Number(row.total)]));
+  const [rows, mappingByFacility, agentByFacility, accounts] = await Promise.all([
+    db
+      .select({ facilityId: facilities.id, facilityCode: facilities.facilityCode, facilityName: facilities.facilityName })
+      .from(facilities)
+      .where(eq(facilities.status, "active"))
+      .orderBy(asc(facilities.facilityCode)),
+    mappingLifecycleSummaries(),
+    agentFacilitySummaries(),
+    db
+      .select({
+        facilityId: users.facilityId,
+        active: sql<number>`SUM(CASE WHEN ${users.status} = 'active' THEN 1 ELSE 0 END)`,
+        pending: sql<number>`SUM(CASE WHEN ${users.status} = 'pending' THEN 1 ELSE 0 END)`,
+        disabled: sql<number>`SUM(CASE WHEN ${users.status} = 'disabled' THEN 1 ELSE 0 END)`,
+        total: count(),
+      })
+      .from(users)
+      .where(sql`${users.facilityId} IS NOT NULL`)
+      .groupBy(users.facilityId),
+  ]);
+  const accountByFacility = new Map(accounts.map((row) => [row.facilityId, row]));
 
   return rows.map((row) => {
-    const sourceTotal = Number(row.sourceTotal ?? 0);
-    const mappedTotal = Number(row.mappedTotal ?? 0);
+    const mapping = mappingByFacility.get(row.facilityId) ?? emptyMappingLifecycleSummary(row.facilityId);
+    const agent = agentByFacility.get(row.facilityId);
+    const account = accountByFacility.get(row.facilityId);
     return {
       facilityId: row.facilityId,
       facilityCode: row.facilityCode,
       facilityName: row.facilityName,
-      sourceTotal,
-      type01: Number(row.type01 ?? 0),
-      type10: Number(row.type10 ?? 0),
-      mappedTotal,
-      pendingTotal: Math.max(0, sourceTotal - mappedTotal),
-      agentCount: agentByFacility.get(row.facilityId)?.total ?? 0,
-      agentMismatchCount: agentByFacility.get(row.facilityId)?.mismatched ?? 0,
-      accountCount: accountByFacility.get(row.facilityId) ?? 0,
-      lastMappedAt: row.lastMappedAt ? new Date(row.lastMappedAt) : null,
+      sourceTotal: mapping.sourceTotal,
+      type01: mapping.type01,
+      type10: mapping.type10,
+      mappedTotal: mapping.mappedTotal,
+      pendingTotal: mapping.pendingTotal,
+      needsReviewTotal: mapping.needsReviewTotal,
+      exportReadyTotal: mapping.exportReadyTotal,
+      installationCount: agent?.installationCount ?? 0,
+      agentCount: agent?.agentCount ?? 0,
+      disabledAgentCount: agent?.disabledAgentCount ?? 0,
+      supersededAgentCount: agent?.supersededAgentCount ?? 0,
+      usableAgentCount: agent?.usableAgentCount ?? 0,
+      onlineAgentCount: agent?.onlineAgentCount ?? 0,
+      offlineAgentCount: agent?.offlineAgentCount ?? 0,
+      jhcisConnectedCount: agent?.jhcisConnectedCount ?? 0,
+      jhcisUnreachableCount: agent?.jhcisUnreachableCount ?? 0,
+      jhcisUnknownCount: agent?.jhcisUnknownCount ?? 0,
+      agentMismatchCount: agent?.agentMismatchCount ?? 0,
+      activeAccountCount: Number(account?.active ?? 0),
+      pendingAccountCount: Number(account?.pending ?? 0),
+      disabledAccountCount: Number(account?.disabled ?? 0),
+      totalAccountCount: Number(account?.total ?? 0),
+      lastMappedAt: mapping.lastMappedAt,
     };
   });
 }

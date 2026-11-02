@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db/client";
-import { agentCommands, agentCredentials, agentInstallations, agentSyncSessions } from "@/db/schema";
-import { deriveInstallationState } from "./lifecycle";
+import { agentCommands, agentCredentials, agentInstallations, agentSyncSessions, facilities } from "@/db/schema";
+import { deriveInstallationState, summarizeAgentInstallations, type AgentInstallationSummary } from "./lifecycle";
 
 export interface InstallationView {
   installationId: string;
@@ -22,6 +22,57 @@ export interface InstallationView {
   presence: "online" | "offline";
   credentialStatus: "active" | "revoked";
   jhcisStatus: "connected" | "unreachable" | "unknown";
+}
+
+export async function agentFacilitySummaries(facilityId?: string): Promise<Map<string, AgentInstallationSummary>> {
+  const installationScope = facilityId
+    ? and(eq(facilities.status, "active"), eq(agentInstallations.facilityId, facilityId))
+    : eq(facilities.status, "active");
+  const credentialScope = facilityId
+    ? and(eq(facilities.status, "active"), eq(agentInstallations.facilityId, facilityId), isNull(agentCredentials.revokedAt))
+    : and(eq(facilities.status, "active"), isNull(agentCredentials.revokedAt));
+  const [installations, credentials] = await Promise.all([
+    db
+      .select({
+        installationId: agentInstallations.installationId,
+        facilityId: agentInstallations.facilityId,
+        facilityCode: facilities.facilityCode,
+        registrationStatus: agentInstallations.status,
+        lastSeenAt: agentInstallations.lastSeenAt,
+        lastHeartbeatAt: agentInstallations.lastHeartbeatAt,
+        jhcisConnected: agentInstallations.jhcisConnected,
+        lastJhcisCheckAt: agentInstallations.lastJhcisCheckAt,
+        declaredOfficeId: agentInstallations.declaredOfficeId,
+      })
+      .from(agentInstallations)
+      .innerJoin(facilities, eq(facilities.id, agentInstallations.facilityId))
+      .where(installationScope),
+    db
+      .select({ installationId: agentCredentials.installationId })
+      .from(agentCredentials)
+      .innerJoin(agentInstallations, eq(agentInstallations.installationId, agentCredentials.installationId))
+      .innerJoin(facilities, eq(facilities.id, agentInstallations.facilityId))
+      .where(credentialScope),
+  ]);
+  const activeCredentials = new Map<string, number>();
+  for (const row of credentials) {
+    activeCredentials.set(row.installationId, (activeCredentials.get(row.installationId) ?? 0) + 1);
+  }
+  const rowsByFacility = new Map<string, Parameters<typeof summarizeAgentInstallations>[0]>();
+  for (const row of installations) {
+    const rows = rowsByFacility.get(row.facilityId) ?? [];
+    rowsByFacility.set(row.facilityId, rows);
+    rows.push({
+      registrationStatus: row.registrationStatus,
+      activeCredentials: activeCredentials.get(row.installationId) ?? 0,
+      lastSeenAt: row.lastSeenAt,
+      lastHeartbeatAt: row.lastHeartbeatAt,
+      jhcisConnected: row.jhcisConnected,
+      lastJhcisCheckAt: row.lastJhcisCheckAt,
+      mismatch: row.declaredOfficeId !== null && row.declaredOfficeId !== row.facilityCode,
+    });
+  }
+  return new Map([...rowsByFacility].map(([id, rows]) => [id, summarizeAgentInstallations(rows)]));
 }
 
 /**

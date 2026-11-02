@@ -1,15 +1,14 @@
 import type { Route } from "next";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
-  agentInstallations,
   agentSyncSessions,
   drugCatalogImports,
-  drugMappings,
   facilities,
-  sourceDrugs,
   standardProducts,
 } from "@/db/schema";
+import { agentFacilitySummaries } from "@/modules/agent/queries";
+import { emptyMappingLifecycleSummary, mappingLifecycleSummaries } from "@/modules/mappings/summary";
 
 export interface ReadinessItem {
   key: "jhcis" | "catalog" | "standards";
@@ -25,6 +24,8 @@ export interface FacilityOverview {
   sourceTotal: number;
   mappedTotal: number;
   pendingTotal: number;
+  needsReviewTotal: number;
+  exportReadyTotal: number;
   type01: number;
   type10: number;
   lastSyncAt: Date | null;
@@ -43,36 +44,22 @@ export function formatBangkok(value: Date | null | undefined): string {
 /** One round of small aggregate queries; everything is scoped by facilityId. */
 export async function facilityOverview(facilityId: string): Promise<FacilityOverview> {
   /*
-   * Six independent reads, issued together.
+   * Independent reads are issued together.
    *
    * Awaiting them one after another spent six round trips where one would do,
    * and a round trip is the whole cost here: the queries themselves take a few
    * milliseconds, the trip to TiDB takes tens — hundreds if the function is not
    * in the same region as the database.
    */
-  const [drugCountRows, mappedCountRows, lastSync, installations, latestImport, standardCountRows] = await Promise.all([
-    db
-      .select({
-        total: sql<number>`COUNT(*)`,
-        type01: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '01' THEN 1 ELSE 0 END)`,
-        type10: sql<number>`SUM(CASE WHEN ${sourceDrugs.drugtype} = '10' THEN 1 ELSE 0 END)`,
-      })
-      .from(sourceDrugs)
-      .where(and(eq(sourceDrugs.facilityId, facilityId), eq(sourceDrugs.active, 1))),
-
-    db.select({ total: count() }).from(drugMappings).where(eq(drugMappings.facilityId, facilityId)),
-
+  const [mappingSummaries, agentSummaries, lastSync, latestImport, standardCountRows] = await Promise.all([
+    mappingLifecycleSummaries(facilityId),
+    agentFacilitySummaries(facilityId),
     db
       .select({ finishedAt: agentSyncSessions.finishedAt })
       .from(agentSyncSessions)
       .where(and(eq(agentSyncSessions.facilityId, facilityId), eq(agentSyncSessions.status, "complete")))
       .orderBy(desc(agentSyncSessions.finishedAt))
       .limit(1),
-
-    db
-      .select({ total: count() })
-      .from(agentInstallations)
-      .where(and(eq(agentInstallations.facilityId, facilityId), eq(agentInstallations.status, "active"))),
 
     db
       .select({ createdAt: drugCatalogImports.createdAt, rowCount: drugCatalogImports.rowCount })
@@ -89,13 +76,14 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
       .from(standardProducts),
   ]);
 
-  const drugCounts = drugCountRows[0];
-  const mappedCount = mappedCountRows[0];
+  const mappingSummary = mappingSummaries.get(facilityId) ?? emptyMappingLifecycleSummary(facilityId);
+  const agentSummary = agentSummaries.get(facilityId);
   const standardCount = standardCountRows[0];
 
-  const sourceTotal = Number(drugCounts?.total ?? 0);
-  const mappedTotal = Number(mappedCount?.total ?? 0);
-  const agentCount = Number(installations[0]?.total ?? 0);
+  const sourceTotal = mappingSummary.sourceTotal;
+  const mappedTotal = mappingSummary.mappedTotal;
+  const agentCount = agentSummary?.agentCount ?? 0;
+  const installationCount = agentSummary?.installationCount ?? 0;
   const tmtTotal = Number(standardCount?.tmt ?? 0);
   const ttmtTotal = Number(standardCount?.ttmt ?? 0);
   const lastSyncAt = lastSync[0]?.finishedAt ?? null;
@@ -103,23 +91,45 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
   return {
     sourceTotal,
     mappedTotal,
-    pendingTotal: Math.max(0, sourceTotal - mappedTotal),
-    type01: Number(drugCounts?.type01 ?? 0),
-    type10: Number(drugCounts?.type10 ?? 0),
+    pendingTotal: mappingSummary.pendingTotal,
+    needsReviewTotal: mappingSummary.needsReviewTotal,
+    exportReadyTotal: mappingSummary.exportReadyTotal,
+    type01: mappingSummary.type01,
+    type10: mappingSummary.type10,
     lastSyncAt,
     readiness: [
       {
         key: "jhcis",
         label: "JHCIS",
-        ready: agentCount > 0 && sourceTotal > 0,
+        ready:
+          (agentSummary?.usableAgentCount ?? 0) > 0 &&
+          (agentSummary?.onlineAgentCount ?? 0) > 0 &&
+          (agentSummary?.jhcisConnectedCount ?? 0) > 0 &&
+          (agentSummary?.agentMismatchCount ?? 0) === 0 &&
+          sourceTotal > 0,
         detail:
-          agentCount === 0
+          installationCount === 0
             ? "ยังไม่ได้ลงทะเบียน Agent"
+            : agentCount === 0
+              ? "Agent เดิมถูกปิดใช้งานหรือแทนที่แล้ว"
+              : (agentSummary?.agentMismatchCount ?? 0) > 0
+                ? "Agent รายงาน office.offid ไม่ตรงกับสถานบริการ"
+            : (agentSummary?.usableAgentCount ?? 0) === 0
+              ? "Agent ไม่มี credential ที่ใช้งานได้"
+              : (agentSummary?.onlineAgentCount ?? 0) === 0
+                ? "Agent ออฟไลน์"
+                : (agentSummary?.jhcisConnectedCount ?? 0) === 0
+                  ? (agentSummary?.jhcisUnreachableCount ?? 0) > 0
+                    ? "Agent ออนไลน์ · JHCIS ติดต่อไม่ได้"
+                    : "Agent ออนไลน์ · ยังไม่ทราบสถานะ JHCIS"
             : sourceTotal === 0
-              ? `Agent พร้อม ${agentCount} เครื่อง · ยังไม่ได้ดึงรายการยา`
+              ? `Agent ออนไลน์ · ยังไม่ได้ดึงรายการยา`
               : `${sourceTotal.toLocaleString("th-TH")} รายการ · ดึงล่าสุด ${formatBangkok(lastSyncAt)}`,
         href: "/jhcis",
-        actionLabel: agentCount === 0 ? "เชื่อมต่อ" : "ดึงข้อมูล",
+        actionLabel:
+          agentCount === 0 || (agentSummary?.onlineAgentCount ?? 0) === 0 || (agentSummary?.jhcisConnectedCount ?? 0) === 0
+            ? "ตรวจสอบ"
+            : "ดึงข้อมูล",
       },
       {
         key: "catalog",
