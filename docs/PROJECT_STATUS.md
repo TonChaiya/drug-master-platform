@@ -49,6 +49,13 @@ Migration สำคัญล่าสุด:
 
 ข้อมูลข้างต้นไม่ใช่คำรับรองว่า security/operations checklist ทุกข้อผ่าน ดูรายการค้างด้านล่างและ [OPERATIONS.md](OPERATIONS.md#5-production-verification-checklist)
 
+## Active redesign status
+
+- TMT/TTMT Data Model v2 Phase 1 discovery/design เสร็จแล้วใน `docs/superpowers/specs/2026-11-04-tmt-data-model-v2-design.md`
+- Phase 1 ตรวจคู่มือและ live TMT API แบบ read-only รวมถึงพิสูจน์รหัส `764169`; ไม่มี production data change, migration หรือ deployment
+- แบบออกแบบแยก TMT endpoint tables และ TTMT namespace ชัดเจน แต่ยังเป็น proposal และ production ยังใช้ `standard_products` ตามเดิม
+- ขั้นถัดไปคือ Phase 2: สร้าง schema/parser foundation ตามขอบเขตใน design document หลัง review; ห้าม reset/cutover ใน Phase 2
+
 ## Known improvement backlog
 
 ### P1 Security
