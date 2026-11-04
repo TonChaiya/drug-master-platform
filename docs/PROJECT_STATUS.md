@@ -56,8 +56,11 @@ Migration สำคัญล่าสุด:
 - Phase 2 persistence/parser foundation สร้างแล้ว: Drizzle schema, additive migrations `0014_tmt_data_model_v2.sql`/`0015_ttmt_data_model_v2.sql`, typed parsers/client ครบ 18 endpoints และ targeted contracts
 - Phase 2 recovery gates ผ่าน: production fixture cleanup ยืนยันแบบ read-only ว่าไม่เหลือข้อมูล, DB integration tests ใช้ fail-closed local-only guard และ full suite ไม่โหลด `.env.local`
 - migrations 0014/0015 ผ่าน controlled Laragon MySQL จากฐานว่างถึง migration 0015 แต่ **ยังไม่ apply production**
-- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; Phase 2 ไม่มี search/mapping/export/catalog cutover
-- ขั้นถัดไปคือ Phase 3 sync engine บน schema ใหม่ หลัง review Phase 2; ห้ามเริ่ม backfill/cutover โดยอัตโนมัติ
+- Phase 3 TMT v2 sync engine สร้างแล้ว: full/incremental/resume, version-bound run, endpoint checkpoint, bounded retry, optional isolation, idempotent persistence และ bounded invariant report
+- controlled live backfill ลง local MySQL ผ่านด้วย TMT version `20261102`: core ready, incremental replay 1,625 rowsเขียนใหม่ 0, และ `764169` ยืนยัน 1 GP / 9 TPU / 3 GPP โดย TPU ทั้ง 9 status 0
+- `/imagelist` ล้มเหลวแบบ isolated 3 historical windows; invariant report พบ dangling relationship concepts 106, self relationships 16, ATC same-date conflicts 1,446 และ RegNo same-date conflicts 803 โดยไม่มี missing level/concept counterpart หรือ unknown status/level
+- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; Phase 3 ไม่มี route/cron หรือ search/mapping/export/catalog cutover และ migrations 0014/0015 ยังไม่ production-applied
+- ขั้นถัดไปคือ Phase 4 TMT Search/Hierarchy Browser หลัง review Phase 3; ห้ามเริ่ม Phase 4 โดยอัตโนมัติ
 
 ## Known improvement backlog
 

@@ -120,6 +120,30 @@ Migration test guard host/port/database/user, สร้างฐานสะอ�
 
 > Incident note (Phase 2): During Phase 2 verification, a DB-backed baseline test inherited `.env.local`. The test completed cleanup, production cleanup was later verified read-only, and a fail-closed integration-test DB guard was added.
 
+### TMT v2 sync engine (Phase 3, local only)
+
+Engine อยู่ใน `src/modules/tmt/` และไม่มี production route/cron เรียกใช้ การทดสอบ persistence/invariant ต้องใช้ local DB ชื่อ exact `drug_master_tmt_v2_sync_test` ที่ migrate ถึง 0015:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3307"
+$env:DB_USERNAME = "root"
+$env:DB_DATABASE = "drug_master_tmt_v2_sync_test"
+pnpm exec vitest run tests/tmt-v2-persistence-mysql.test.ts tests/tmt-v2-invariants.test.ts
+```
+
+Controlled live backfill ต้องเพิ่ม `ALLOW_TMT_LIVE_SYNC=1` และ `TMT_V2_SYNC_CREDENTIAL_FILE` แบบ explicit เท่านั้น Harness อ่านเฉพาะ TMT credential เข้า memory; ถ้า env credential ว่าง จะอ่าน encrypted `app_settings.tmt_api` จาก production ด้วย SELECT-only connection แล้วปิดก่อนเขียน local DB ห้ามพิมพ์ secret/token และห้ามใช้คำสั่งนี้กับ DB ที่ guard ไม่ยอมรับ:
+
+```powershell
+$env:ALLOW_TMT_LIVE_SYNC = "1"
+$env:TMT_V2_SYNC_CREDENTIAL_FILE = (Resolve-Path ".env.local").Path
+pnpm exec vitest run tests/tmt-v2-live-sync.test.ts --reporter=verbose
+```
+
+Live harness ล้างเฉพาะตาราง `tmt_*` ใน local test DB เพื่อทำ full backfill ใหม่; ห้ามใช้กับ production และไม่แตะ `jhcisdb`
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review

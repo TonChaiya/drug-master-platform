@@ -353,6 +353,16 @@ DELETE FROM schema_migrations WHERE filename = '0015_ttmt_data_model_v2.sql';
 
 DB integration tests เป็น fail-closed operational invariant: ต้อง opt-in ด้วย `ALLOW_DB_INTEGRATION_TESTS=1`, รันใน `NODE_ENV=test`, ใช้เฉพาะ localhost และฐานชื่อ `drug_master_*test`; test ห้ามโหลดหรือ fallback ไป `.env.local` ที่ production-equivalent
 
+### TMT v2 sync engine operational state
+
+- Phase 3 engine เป็น dormant service module ไม่มี route, cron หรือ automatic import ใน production
+- run ผูกกับ `/version` ก่อน/หลัง, ใช้ checkpoint ต่อ endpoint/window และ data write + checkpoint success อยู่ transaction เดียวกัน
+- initial windows เริ่ม `2013-01-01` สูงสุด 365 วัน; incremental ใช้ cursor แยก endpoint พร้อม overlap 30 วัน
+- timeout/network/429/5xx retry สูงสุด 3 attempts พร้อม bounded exponential backoff/jitter และ `Retry-After`; 401/403 refresh token ได้ครั้งเดียว
+- core 13 data endpoints ต้องผ่านทั้งหมด; ATC และ imagelist failure เป็น warning, image เป็น on-demand เท่านั้น
+- persistence ไม่ prune จาก absence, ไม่ regress change date, เก็บ temporal NLEM/ATC/RegNo และรายงาน same-date conflict
+- controlled local live verification ใช้ version `20261102`, core ready และ incremental replay เขียนใหม่ 0; production migration/cutover ยังเป็น **NO**
+
 การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
 การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`
 และจะเก็บ `agent_sync_sessions` ที่ยังถูกอ้างด้วย `source_drugs.last_seen_sync_id` เพื่อไม่ทำลาย provenance ของ business snapshot

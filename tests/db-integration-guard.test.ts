@@ -37,7 +37,9 @@ test("rejects a production database name on localhost", () => {
 });
 
 test("rejects missing explicit opt-in even when all DB values look local", () => {
-  const { ALLOW_DB_INTEGRATION_TESTS: _ignored, ...withoutOptIn } = localTestEnv;
+  const withoutOptIn = Object.fromEntries(
+    Object.entries(localTestEnv).filter(([key]) => key !== "ALLOW_DB_INTEGRATION_TESTS"),
+  );
   assert.throws(
     () => integrationTestDbConfig(withoutOptIn),
     /ALLOW_DB_INTEGRATION_TESTS=1/,

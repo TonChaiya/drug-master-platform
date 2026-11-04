@@ -58,10 +58,11 @@ import { resolveTmtCredentials, type TmtCredentials } from "./tmt-credentials";
 
 type FetchLike = typeof fetch;
 
-class RemoteResponseError extends Error {
+export class RemoteResponseError extends Error {
   constructor(
     readonly status: number,
     readonly stage: string,
+    readonly retryAfterMs: number | null = null,
   ) {
     super(`TMT ${stage} returned HTTP ${status}`);
   }
@@ -69,6 +70,17 @@ class RemoteResponseError extends Error {
 
 class InvalidJsonError extends Error {}
 class InvalidResponseError extends Error {}
+
+export { TmtResponseError } from "./tmt-parsers";
+
+function retryAfterMs(response: Response): number | null {
+  const value = response.headers.get("Retry-After")?.trim();
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1_000);
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : null;
+}
 
 export class TmtApiError extends Error {
   constructor(
@@ -162,7 +174,7 @@ async function fetchToken(fetcher: FetchLike, credentials: TmtCredentials): Prom
     cache: "no-store",
     signal: AbortSignal.timeout(20_000),
   });
-  if (!response.ok) throw new RemoteResponseError(response.status, "token");
+  if (!response.ok) throw new RemoteResponseError(response.status, "token", retryAfterMs(response));
   const body = parseTokenResponse(await readJson(response));
   const token = body.token;
 
@@ -175,8 +187,8 @@ async function fetchToken(fetcher: FetchLike, credentials: TmtCredentials): Prom
   return token;
 }
 
-async function callEndpoint(path: string, payload: Record<string, unknown>, fetcher: FetchLike): Promise<Record<string, unknown>> {
-  const credentials = await requireCredentials();
+async function callEndpoint(path: string, payload: Record<string, unknown>, fetcher: FetchLike, providedCredentials?: TmtCredentials): Promise<Record<string, unknown>> {
+  const credentials = providedCredentials ?? await requireCredentials();
   const token = await fetchToken(fetcher, credentials);
   const response = await fetcher(`${credentials.baseUrl}${path}`, {
     method: "POST",
@@ -194,7 +206,7 @@ async function callEndpoint(path: string, payload: Record<string, unknown>, fetc
     // Token may have expired early; drop it so the next attempt re-authenticates.
     cachedToken = null;
   }
-  if (!response.ok) throw new RemoteResponseError(response.status, path);
+  if (!response.ok) throw new RemoteResponseError(response.status, path, retryAfterMs(response));
   return objectValue(await readJson(response));
 }
 
@@ -262,4 +274,42 @@ export const fetchRelationship = (window: DateWindow, fetcher: FetchLike = fetch
 export async function fetchImage(tpuid: string, fetcher: FetchLike = fetch): Promise<ImageRecord[]> {
   if (!/^\d+$/.test(tpuid)) throw new TmtApiError("TMT_INVALID_TPUID", "รหัส TPU ไม่ถูกต้อง");
   return parseImageResponse(await callEndpoint("/image", { tpuid }, fetcher));
+}
+
+export interface BoundTmtApiClient {
+  version(): Promise<string>;
+  fetch(
+    endpoint: "subs" | "vtm" | "gp" | "gpu" | "gpp" | "tp" | "tpu" | "tpp" | "imagelist" | "nlem" | "atc" | "regno" | "mastertmt" | "concept" | "relationship",
+    window: DateWindow,
+  ): Promise<SubsRecord[] | VtmRecord[] | GpRecord[] | GpuRecord[] | GppRecord[] | TpRecord[] | TpuRecord[] | TppRecord[] | ImageListRecord[] | NlemRecord[] | AtcRecord[] | RegnoRecord[] | MasterTmtRecord[] | ConceptRecord[] | RelationshipRecord[]>;
+}
+
+/** Explicitly bound client for controlled jobs that must not resolve credentials through the application DB. */
+export function createTmtApiClient(credentials: TmtCredentials, fetcher: FetchLike = fetch): BoundTmtApiClient {
+  const parsers = {
+    subs: parseSubsResponse,
+    vtm: parseVtmResponse,
+    gp: parseGpResponse,
+    gpu: parseGpuResponse,
+    gpp: parseGppResponse,
+    tp: parseTpResponse,
+    tpu: parseTpuResponse,
+    tpp: parseTppResponse,
+    imagelist: parseImageListResponse,
+    nlem: parseNlemResponse,
+    atc: parseAtcResponse,
+    regno: parseRegnoResponse,
+    mastertmt: parseMasterTmtResponse,
+    concept: parseConceptResponse,
+    relationship: parseRelationshipResponse,
+  };
+  return {
+    async version() {
+      return parseVersionResponse(await callEndpoint("/version", {}, fetcher, credentials)).tmtVersion;
+    },
+    async fetch(endpoint, window) {
+      const body = await callEndpoint(`/${endpoint}`, { begindate: window.begindate, enddate: window.enddate }, fetcher, credentials);
+      return parsers[endpoint](body);
+    },
+  };
 }

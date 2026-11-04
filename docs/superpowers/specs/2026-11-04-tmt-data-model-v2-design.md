@@ -606,3 +606,18 @@ Phase 2 implements only the persistence and parser foundation:
 5. Current production paths stay operational until later sync/search/mapping phases pass controlled verification.
 
 Phase 2 returns for review before any production migration or live backfill. The next permitted phase is Phase 3 sync engine work.
+
+## Phase 3 implementation result
+
+Phase 3 adds a dormant sync engine under `src/modules/tmt/` without changing `src/modules/standards/sync.ts` or any production route/cron/consumer:
+
+1. Full, incremental, and resume flows are version-bound, sequential, checkpointed per endpoint/window, and use atomic data-write/checkpoint transactions.
+2. Retry uses three total attempts for timeout/network/429/5xx with bounded exponential backoff/jitter and Retry-After; 401/403 clears the memory token once and retries once.
+3. Level/concept/relationship rows never regress an older change date; same-date conflicts are warnings. Temporal NLEM/ATC/RegNo identities preserve multiple values and exact replay is a no-op. MasterTMT retains raw status 0/1 and updates last-seen metadata without inferring absence.
+4. ATC and ImageList are optional; Image remains on-demand. Invariant reports return aggregate counts and bounded examples only.
+5. Controlled live local backfill against version `20261102` covered `2013-01-01` through `2026-11-04` in 198,728 ms: 521,999 received, 521,928 unique, 517,862 written, 71 exact duplicates. Three ImageList historical windows returned HTTP 500 and were isolated; core succeeded.
+6. Local counts after incremental replay: SUBS 2,552; VTM 3,142; GP 9,015; GPU 10,948; GPP 8,070; TP 32,025; TPU 34,487; TPP 12,747; NLEM 47,071; ATC 39,096; RegNo 14,714; MasterTMT 34,487; Concept 112,986; Relationship 156,522. Incremental received 1,625 and wrote 0.
+7. `764169` is GPU with the expected clinical FSN, one inbound GP, nine outbound TPU, three outbound GPP; all nine TPU exist in TPU/MasterTMT/Concept and have MasterTMT status 0.
+8. Invariants found zero missing concept/endpoint counterparts, zero level/FSN mismatch, zero MasterTMT/TPU counterpart gaps, zero unknown level/status, and zero duplicate relationship pairs. Observable source-quality findings were 106 dangling relationship concepts, 16 self relationships, 1,446 ATC same-date conflicts, and 803 RegNo same-date conflicts.
+
+Migrations 0014/0015 remain unapplied in production. Legacy standards/search/mapping/export/catalog/TTMT paths remain active. Phase 4 is the next permitted phase after review; it has not started.

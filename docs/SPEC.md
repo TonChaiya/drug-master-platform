@@ -180,6 +180,10 @@ token cache อยู่ใน memory หรือ encrypted DB **ห้าม�
 ครั้งแรกแบ่งเป็น date window ไม่เกินหนึ่งปีต่อรอบ เพื่อให้ retry และนับ reconciliation ต่อ partition ได้
 งานถือว่าสำเร็จเมื่อครบทุก partition เท่านั้น
 
+**TMT v2 sync invariants** — full run เริ่ม `2013-01-01`, window deterministic ไม่เกิน 365 วัน และ checkpoint แยก endpoint; incremental ใช้ latest successful cursor ของแต่ละ endpointพร้อม overlap 30 วัน การ replay ต้อง idempotentและห้าม prune/deactivate จาก absence
+
+run ต้องผูก `/version` ก่อนและหลัง; version drift ทำให้ run stale ห้าม publish core readiness Retry timeout/network/429/5xx สูงสุด 3 attempts และ refresh tokenหลัง 401/403 ได้ครั้งเดียว Core readiness ต้องครบ SUBS/VTM/GP/GPU/GPP/TP/TPU/TPP/NLEM/RegNo/MasterTMT/Concept/Relationship; ATC และ ImageList failure เป็น warning ส่วน Image ใช้ on-demand เท่านั้น
+
 **TTMT** — คู่มือ API ไม่ยืนยัน MasterTTMT endpoint ระบบจึงนำเข้า MasterTTMT จากไฟล์ที่อนุมัติ
 และแยก version/import history ของ TTMT ออกจาก TMT API **ห้ามถือว่าเป็นข้อมูลเดียวกัน**
 
