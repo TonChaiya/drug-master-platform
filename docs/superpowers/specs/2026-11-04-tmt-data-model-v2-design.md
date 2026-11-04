@@ -493,7 +493,7 @@ Each run records counts and bounded examples for:
 
 ### Level markers
 
-Phase 4 must follow the owner-approved TMT Browser convention: GP red, GPU green, TP yellow, and TPU blue. Every color marker must include a textual level badge such as `GPU`; color alone is not accessible or sufficient. SUBS/VTM/GPP/TPP colors remain undecided. Phase 2 records this requirement only and implements no browser UI.
+Phase 4 follows the owner-approved TMT Browser convention: GP red, GPU green, TP yellow, and TPU blue. Every decorative color marker includes a textual level badge such as `GPU`; color alone is not accessible or sufficient. SUBS/VTM/GPP/TPP use neutral application styling without claiming an official color meaning. `TMT_LEVEL_PRESENTATION` is the single presentation source.
 
 ### Search
 
@@ -506,7 +506,7 @@ Phase 4 must follow the owner-approved TMT Browser convention: GP red, GPU green
 ### Concept detail and graph
 
 - Show ordered outbound/inbound relationships separately and label the direction as “API concept1 -> concept2”, not contractual parent/child.
-- Traverse with a visited set, configurable maximum depth (default 4), and bounded result count (default 200).
+- Traverse with a visited set, configurable maximum depth (default 2, hard maximum 4), and bounded result count (hard maximum 200).
 - Provide known paths such as GPU -> TPU and TP -> TPU while preserving pack-to-pack relationships.
 - Multi-parent nodes are displayed once with all direct incoming paths.
 
@@ -521,7 +521,17 @@ Mapping eligible: No - commercial TMT mappings require an active TPU
 Related TPU: 9 direct results; all status 0 in version 20261102
 ```
 
-The GPU row has no save button. Each related TPU displays trade/manufacturer/status. Active TPU has “เลือก”; inactive or unknown status remains visible but disabled with a reason.
+The GPU row has no save button. Each related TPU displays trade/manufacturer/status and opens read-only detail; inactive or unknown status remains visible with a reason.
+
+### Phase 4 implementation state
+
+- Authenticated read-only routes are `GET /api/v1/tmt-v2/search` and `GET /api/v1/tmt-v2/concepts/:id`; all inputs and graph bounds are validated before database access.
+- The hidden internal page is `/admin/tmt-v2`. It is absent from normal navigation and does not call mapping persistence.
+- `TMT_V2_BROWSER_ENABLED` is default-off. Disabled page/routes do not construct the database pool or query v2 tables.
+- Exact numeric lookup ranks first; numeric prefixes use bounded `BIGINT` ranges, normalized FSN uses prefix search, and optional manufacturer/registration/ATC/NLEM filters remain parameterized.
+- Direct edges preserve `concept1 -> concept2`. Bounded application-side BFS handles cycles, self edges, multi-parent and dangling concepts without choosing arbitrary conflict values.
+- Mapping eligibility is preview-only and currently states only the approved commercial TPU rule.
+- Activation requires migrations 0014/0015, a successful v2 sync, reviewed invariants, and an explicit enable flag. Production migration, enablement, and legacy cutover remain outside Phase 4.
 
 ## Test plan for Phases 2-6
 

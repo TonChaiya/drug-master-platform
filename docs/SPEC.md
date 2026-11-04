@@ -104,6 +104,8 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 - TTMT ใช้ contract จากไฟล์ MasterTTMT ที่อนุมัติเท่านั้น ห้ามสร้าง hierarchy/API แบบ TMT โดยไม่มีหลักฐาน
 - commercial TMT mapping ต้องอ้างระดับที่ eligible ตามชนิดสินค้าและ raw source status; สำหรับ PRODUCTCAT `1` เป้าหมายต้องเป็น TPU ที่ `status=0` ส่วน GPU/TP/ระดับอื่นแสดงเพื่ออธิบายได้แต่ห้ามบันทึกแทน TPU
 - TMT Browser ต้องแสดง level ด้วยสีและ text badge พร้อมกัน: GP สีแดง, GPU สีเขียว, TP สีเหลือง, TPU สีน้ำเงิน; ห้ามใช้สีเพียงอย่างเดียว ส่วนสี SUBS/VTM/GPP/TPP ยังไม่กำหนด
+- TMT Browser v2 เป็น read-only preview: exact/prefix/normalized-FSN search ได้ทุก level, แสดง inbound/outbound ตาม API `concept1 -> concept2`, conflict หลายค่าต้องแสดงทั้งหมด และ graph ต้องจำกัด depth/node พร้อม cycle protection
+- commercial mapping eligibility preview ใช้กฎที่อนุมัติเท่านั้น: TPU ต้องมี MasterTMT `status=0`; GPU/ระดับอื่น, cancelled หรือสถานะไม่ทราบต้องไม่แสดงว่าพร้อม และ Phase 4 ห้ามบันทึก mapping
 
 Implementation status ของข้อกำหนดนี้อยู่ใน `PROJECT_STATUS.md`; การมี schema foundation ไม่ได้แปลว่า production cutover แล้ว
 

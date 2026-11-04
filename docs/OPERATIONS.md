@@ -363,6 +363,10 @@ DB integration tests เป็น fail-closed operational invariant: ต้อ�
 - persistence ไม่ prune จาก absence, ไม่ regress change date, เก็บ temporal NLEM/ATC/RegNo และรายงาน same-date conflict
 - controlled local live verification ใช้ version `20261102`, core ready และ incremental replay เขียนใหม่ 0; production migration/cutover ยังเป็น **NO**
 
+### TMT Browser v2 activation gate
+
+`TMT_V2_BROWSER_ENABLED` default-off และต้องมีค่า exact `1` จึงเปิด hidden `/admin/tmt-v2` กับ API read-only. ก่อนเปิดใน environment ใดต้องยืนยันครบ: migrations 0014/0015 ถูก apply ด้วย runner เดิม, v2 sync สำเร็จ, invariant report ได้ review แล้ว และผู้รับผิดชอบอนุมัติ enable flag. การเปิด flag ก่อน schema พร้อมจะทำให้ browser ใช้งานไม่ได้ จึงห้ามเพิ่ม production env ใน Phase 4. ปิด flag เป็น rollback ของ browser โดยไม่เปลี่ยน legacy standards/mapping/export/catalog paths.
+
 การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
 การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`
 และจะเก็บ `agent_sync_sessions` ที่ยังถูกอ้างด้วย `source_drugs.last_seen_sync_id` เพื่อไม่ทำลาย provenance ของ business snapshot

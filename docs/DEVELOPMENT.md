@@ -144,6 +144,22 @@ pnpm exec vitest run tests/tmt-v2-live-sync.test.ts --reporter=verbose
 
 Live harness ล้างเฉพาะตาราง `tmt_*` ใน local test DB เพื่อทำ full backfill ใหม่; ห้ามใช้กับ production และไม่แตะ `jhcisdb`
 
+### TMT Browser v2 (Phase 4, local only)
+
+Browser อยู่ที่ hidden route `/admin/tmt-v2` และ default-off. ใช้ fixture DB แยกชื่อ exact `drug_master_tmt_v2_browser_test` ที่ localhost เท่านั้น; ห้ามโหลด `.env.local` หรือใช้ `jhcisdb`:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3307"
+$env:DB_USERNAME = "root"
+$env:DB_DATABASE = "drug_master_tmt_v2_browser_test"
+pnpm exec vitest run tests/tmt-v2-browser-mysql.test.ts tests/tmt-v2-browser-routes.test.ts tests/tmt-v2-browser-ui.test.ts
+```
+
+สำหรับ visual review local เท่านั้น ให้ตั้ง `TMT_V2_BROWSER_ENABLED=1` ใน process ของ dev server หลัง migrate 0001–0015 และโหลด fixture แล้ว เมื่อไม่ตั้งหรือค่าไม่ใช่ `1` page/API ต้องไม่ query ตาราง v2.
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review
