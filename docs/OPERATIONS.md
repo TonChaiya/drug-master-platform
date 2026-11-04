@@ -316,6 +316,43 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 
 ก่อน rollback ต้องหยุด traffic ของ public endpoints หรือ deploy code ที่ไม่เรียกตารางนี้ก่อน ไม่เช่นนั้น limiter จะ fail-open ตาม policy
 
+**0014_tmt_data_model_v2.sql** — เพิ่ม 15 TMT source tables ตามชื่อ endpoint และ `tmt_sync_runs`/`tmt_sync_checkpoints` สำหรับ Phase 3 แบบ additive; ไม่แก้หรือลบ legacy standards/mapping/export tables และยังไม่ถูก apply production ใน Phase 2
+
+Rollback ก่อนมี Phase 3 data/cutover เท่านั้น ต้องหยุด sync v2 และลบตาม dependency order:
+
+```sql
+DROP TABLE tmt_sync_checkpoints;
+DROP TABLE tmt_version;
+DROP TABLE tmt_sync_runs;
+DROP TABLE tmt_relationship;
+DROP TABLE tmt_concept;
+DROP TABLE tmt_mastertmt;
+DROP TABLE tmt_regno;
+DROP TABLE tmt_atc;
+DROP TABLE tmt_nlem;
+DROP TABLE tmt_tpp;
+DROP TABLE tmt_tpu;
+DROP TABLE tmt_tp;
+DROP TABLE tmt_gpp;
+DROP TABLE tmt_gpu;
+DROP TABLE tmt_gp;
+DROP TABLE tmt_vtm;
+DROP TABLE tmt_subs;
+DELETE FROM schema_migrations WHERE filename = '0014_tmt_data_model_v2.sql';
+```
+
+**0015_ttmt_data_model_v2.sql** — เพิ่ม `ttmt_imports` และ `ttmt_products` แยก namespace จาก TMT แบบ additive; TTMT importer production เดิมยังไม่ cutover และ migration ยังไม่ถูก apply production ใน Phase 2
+
+```sql
+DROP TABLE ttmt_products;
+DROP TABLE ttmt_imports;
+DELETE FROM schema_migrations WHERE filename = '0015_ttmt_data_model_v2.sql';
+```
+
+หลังเริ่ม Phase 3 backfill ห้ามใช้คำสั่ง rollback ข้างต้นแบบ ad-hoc ให้ใช้ maintenance window/backup policy และประเมินข้อมูล sync/import ที่ต้องเก็บก่อนเสมอ
+
+DB integration tests เป็น fail-closed operational invariant: ต้อง opt-in ด้วย `ALLOW_DB_INTEGRATION_TESTS=1`, รันใน `NODE_ENV=test`, ใช้เฉพาะ localhost และฐานชื่อ `drug_master_*test`; test ห้ามโหลดหรือ fallback ไป `.env.local` ที่ production-equivalent
+
 การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
 การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`
 และจะเก็บ `agent_sync_sessions` ที่ยังถูกอ้างด้วย `source_drugs.last_seen_sync_id` เพื่อไม่ทำลาย provenance ของ business snapshot

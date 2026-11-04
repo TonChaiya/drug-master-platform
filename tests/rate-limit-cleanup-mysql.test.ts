@@ -1,27 +1,21 @@
 import assert from "node:assert/strict";
-import { afterAll, beforeAll, test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 import { asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import mysql, { type Pool } from "mysql2/promise";
+import type { Pool } from "mysql2/promise";
 import * as schema from "@/db/schema";
 import { rateLimitBuckets } from "@/db/schema";
 import {
   cleanupExpiredRateLimitBuckets,
   deleteExpiredRateLimitBucketBatch,
 } from "@/modules/security/rate-limit-cleanup";
+import { createIntegrationTestPool, dbIntegrationTestsEnabled, integrationTestDbConfig } from "./helpers/db-integration";
 
 let pool: Pool;
 
+describe.runIf(dbIntegrationTestsEnabled())("rate-limit cleanup on isolated local MySQL", () => {
 beforeAll(async () => {
-  assert.equal(process.env.RATE_LIMIT_TEST_DATABASE, "drug_master_rate_limit_test");
-  pool = mysql.createPool({
-    host: "127.0.0.1",
-    port: 3306,
-    user: "root",
-    database: process.env.RATE_LIMIT_TEST_DATABASE,
-    connectionLimit: 4,
-    timezone: "Z",
-  });
+  pool = createIntegrationTestPool(integrationTestDbConfig(), { connectionLimit: 4 });
   await pool.execute("DELETE FROM rate_limit_buckets");
 });
 
@@ -83,4 +77,5 @@ test("local MySQL cleanup deletes only rows beyond the 24-hour grace across scop
     { scope: "auth.login", clientKeyHash: "d".repeat(64) },
   ]);
   assert.deepEqual(afterSchema, beforeSchema);
+});
 });

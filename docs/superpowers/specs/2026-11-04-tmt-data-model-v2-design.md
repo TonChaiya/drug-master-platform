@@ -1,14 +1,14 @@
-# TMT/TTMT Data Model v2 - Phase 1 discovery and design
+# TMT/TTMT Data Model v2 - discovery, design, and Phase 2 foundation
 
 ## Executive summary
 
-Phase 1 maps the current implementation, verifies the owner-provided TMT API manual against the live read-only API, proves TMT ID `764169`, and proposes a replacement data model and cutover plan. It does not change production logic, schema, migrations, or production domain data.
+Phase 1 mapped the current implementation, verified the owner-provided TMT API manual against the live read-only API, proved TMT ID `764169`, and proposed a replacement data model and cutover plan. Phase 2 implements the additive persistence and parser/client foundation in migrations 0014/0015 without changing production consumers, applying production migrations, or mutating production domain data.
 
 The current application flattens only MasterTMT TPU products and file-imported TTMT products into one `standard_products` table. That is sufficient for today's commercial-product mapping, but it loses the TMT concept graph, permits TMT/TTMT code collisions, cannot show non-TPU concepts, and cannot represent endpoint-specific history such as NLEM, ATC, registration, or relationship changes.
 
 Data Model v2 therefore keeps the manual's endpoint names verbatim (`tmt_subs`, `tmt_vtm`, ..., `tmt_version`), treats `tmt_concept` and `tmt_relationship` as the graph source of truth, treats `tmt_mastertmt` as TPU product-detail/status truth, and moves TTMT to its own namespace. Mapping references become an explicit `(standard_source, standard_code, standard_level)` tuple. No absence-based pruning is allowed until TMT documents deletion/tombstone behavior.
 
-## Scope, goals, and non-goals
+## Phase 1 scope, goals, and non-goals
 
 ### Goals
 
@@ -21,7 +21,7 @@ Data Model v2 therefore keeps the manual's endpoint names verbatim (`tmt_subs`, 
 
 ### Non-goals
 
-- No migration, schema creation, production data mutation, reset, deployment, or implementation of Phase 2.
+- Phase 1 created no migration, schema, production data mutation, reset, deployment, or Phase 2 implementation.
 - No assumption that TTMT implements TMT's hierarchy or API contract.
 - No attempt to infer a deleted concept/edge from an absent API response.
 - No image persistence design in Phase 2; images remain optional/follow-up.
@@ -217,7 +217,7 @@ Phase 2-6 policy is therefore non-destructive: upsert incoming records, retain p
 
 ## Data Model v2
 
-This section is a proposal, not executable DDL. API identifiers are live JSON numbers well within JavaScript's safe integer range; store them as `BIGINT UNSIGNED` and serialize them as strings at browser/API boundaries to avoid future precision assumptions. All timestamps are UTC; TMT `change_date` remains `DATE`.
+This section describes the Phase 2 foundation implemented by `src/db/schema/tmt.ts`, `src/db/schema/ttmt.ts`, `0014_tmt_data_model_v2.sql`, and `0015_ttmt_data_model_v2.sql`. API identifiers are stored as `BIGINT UNSIGNED` and parsed/serialized as strings at application boundaries to avoid JavaScript precision assumptions. All timestamps are UTC; TMT `change_date` remains `DATE`.
 
 ### Common lifecycle rules
 
@@ -311,16 +311,16 @@ Indexes: `(level_name,tmtid)`, `(change_date,tmtid)`, `normalized_fsn`. Only the
 | `change_date` | `DATE NOT NULL` | source field |
 | `level_name1` | `VARCHAR(16) NOT NULL` | source field |
 | `level_name2` | `VARCHAR(16) NOT NULL` | source field |
-| `first_seen_version`, `last_seen_version` | `CHAR(8) NOT NULL` | application metadata |
+| `source_version`, `last_seen_version` | `VARCHAR(32) NOT NULL` | application metadata |
 | `synced_at`, `created_at`, `updated_at` | `DATETIME(3) NOT NULL` | application metadata |
 
 Primary key: `(concept1, concept2)`. Indexes: `(concept2,concept1)`, `(level_name1,level_name2)`, `(change_date,concept1)`. Preserve API order. No concept foreign keys are added because relationship and concept windows can commit independently. Upsert equal/newer `change_date`; never delete an edge from absence.
 
 ### `tmt_version`
 
-Columns: `tmt_version CHAR(8) NOT NULL` (PK), `fetched_at DATETIME(3) NOT NULL`, `http_latency_ms INT UNSIGNED NULL`, `core_sync_run_id CHAR(36) NULL`, `created_at DATETIME(3) NOT NULL`.
+Columns: `id CHAR(36) NOT NULL` (PK), `tmt_version VARCHAR(32) NOT NULL`, `observed_at DATETIME(3) NOT NULL`, `http_latency_ms INT UNSIGNED NULL`, `core_sync_run_id CHAR(36) NULL`, `created_at DATETIME(3) NOT NULL`.
 
-Index `(fetched_at)`. Every distinct observed version is retained. The newest successful core run points to its version; merely fetching `/version` does not mark the data set ready.
+Unique `(tmt_version,observed_at)` plus indexes on version and observation time retain version observations without inventing effective-date semantics. Merely fetching `/version` does not mark the data set ready.
 
 ### Sync application metadata
 
@@ -329,7 +329,7 @@ Two additional internal tables are justified because endpoint-specific resume ca
 - `tmt_sync_runs`: `id`, mode (`initial|incremental`), target version/date range, status, actor, received/written/warning counts, started/finished timestamps.
 - `tmt_sync_checkpoints`: PK `(run_id, endpoint)`, window start/end, next window, status, attempts, received/written counts, last error code, updated time.
 
-They are not TMT API payload tables. Phase 2 may choose these exact names after TiDB migration review; no migration is created in Phase 1.
+They are not TMT API payload tables. Phase 2 selected these names after MySQL/TiDB compatibility review and created them in migration 0014; that migration remains unapplied in production.
 
 ## TMT source-of-truth and invariants
 
@@ -351,11 +351,12 @@ No cross-source FK should make ingestion fail because one endpoint arrived first
 
 The only verified TTMT contract is the approved MasterTTMT spreadsheet consumed by the current importer. Its aliases demonstrate fields for code, active ingredient, strength, dosage form, content, dispensing unit, trade name, manufacturer, FSN, status, NLEM/ISED, and registration. There is no evidence of TMT levels, relationship endpoints, or a TTMT API.
 
-Proposed TTMT tables:
+Implemented Phase 2 TTMT foundation:
 
-- `ttmt_imports`: immutable import metadata (`id`, version, file hash/name, row count, status, imported_by, started/completed timestamps). Unique `(version)` and unique content hash prevent accidental replay.
-- `ttmt_import_rows`: immutable parsed evidence keyed by `(import_id,row_number)` with raw source fields and normalized code. Unique `(import_id,ttmtcode)` after duplicate validation.
-- `ttmt_masterttmt`: current approved version keyed by `ttmtcode`, with the verified source fields, normalized search columns, `status`, `source_import_id`, and timestamps.
+- `ttmt_imports`: immutable import metadata (`id`, version, file hash/name, row count, status, imported_by, started/completed timestamps). Unique version and content hash prevent accidental replay.
+- `ttmt_products`: current approved product keyed by `ttmtcode`, with the verified source fields, normalized search columns, `status`, `source_import_id`, and timestamps.
+
+An append-only `ttmt_import_rows` table was not added because the owner-approved Phase 2 acceptance requires only import metadata and current products, and the current importer has no verified immutable-row contract. It can be proposed later only with an approved file/audit requirement.
 
 Do not create `ttmt_gpu`, `ttmt_tpu`, or other TMT-shaped tables without a TTMT contract. `standard_products`, `standard_imports`, and TTMT rows currently mixed into them are reset during cutover after the new importer is verified.
 
@@ -490,6 +491,10 @@ Each run records counts and bounded examples for:
 
 ## Search and TMT Browser design
 
+### Level markers
+
+Phase 4 must follow the owner-approved TMT Browser convention: GP red, GPU green, TP yellow, and TPU blue. Every color marker must include a textual level badge such as `GPU`; color alone is not accessible or sufficient. SUBS/VTM/GPP/TPP colors remain undecided. Phase 2 records this requirement only and implements no browser UI.
+
 ### Search
 
 - Exact/prefix TMT ID search starts in `tmt_concept` and returns every level.
@@ -590,14 +595,14 @@ Rejected for the owner's naming requirement and because endpoint-specific FSN/ma
 
 This mirrors the external contract, keeps raw provenance understandable, supports graph/search, and lets mapping eligibility be explicit. Intentional duplication is controlled by post-sync invariants rather than hidden behind a generic abstraction.
 
-## Phase 2 exact scope
+## Phase 2 implementation result
 
-Phase 2 may implement only the persistence and parser foundation:
+Phase 2 implements only the persistence and parser foundation:
 
-1. Add new migrations (next available numbers only) and Drizzle schemas for the 15 required TMT tables, `tmt_sync_runs/checkpoints`, and evidence-backed TTMT tables.
-2. Add typed/zod parsers and client methods for all documented endpoints, with token/redaction behavior unchanged.
-3. Add schema/parser/contract tests using synthetic fixtures derived from field shapes, not live credential/token or bulk API dumps.
-4. Add no production cutover, reset, data migration, search switch, mapping switch, export switch, or deletion of `standard_products`.
-5. Keep current production paths operational until later sync/search/mapping phases pass controlled verification.
+1. Migrations 0014/0015 and Drizzle schemas add the 15 required TMT tables, `tmt_sync_runs/checkpoints`, `ttmt_imports`, and `ttmt_products`.
+2. Typed Zod parsers/client methods cover all 18 documented endpoints while retaining the existing server credential resolver and memory-only bearer token.
+3. Schema/parser/contracts use synthetic fixtures only; controlled local MySQL verifies clean migration through 0015 and idempotent journal rerun.
+4. No production cutover, reset, data migration, search switch, mapping switch, export switch, or deletion of `standard_products` occurs.
+5. Current production paths stay operational until later sync/search/mapping phases pass controlled verification.
 
-Phase 2 must return for review before any production migration or live backfill. Phase 1 ends with this document and a status update only.
+Phase 2 returns for review before any production migration or live backfill. The next permitted phase is Phase 3 sync engine work.

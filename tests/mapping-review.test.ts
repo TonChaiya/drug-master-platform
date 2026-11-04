@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { afterAll, beforeAll, describe, test } from "vitest";
 import { and, count, eq, inArray } from "drizzle-orm";
+import type { Pool } from "mysql2/promise";
+import {
+  clearIntegrationTestPool,
+  createIntegrationTestPool,
+  dbIntegrationTestsEnabled,
+  installIntegrationTestPool,
+  integrationTestDbConfig,
+} from "./helpers/db-integration";
 
-if (existsSync(".env.local")) process.loadEnvFile(".env.local");
-
-const hasDatabase = Boolean(
-  process.env.DB_HOST &&
-    process.env.DB_PORT &&
-    process.env.DB_USERNAME &&
-    process.env.DB_PASSWORD &&
-    process.env.DB_DATABASE,
-);
+const hasDatabase = dbIntegrationTestsEnabled();
 
 const facilityA = randomUUID();
 const facilityB = randomUUID();
@@ -36,6 +35,7 @@ async function loadModules() {
 }
 
 let modules: Awaited<ReturnType<typeof loadModules>>;
+let pool: Pool;
 let mappingIdA = "";
 let mappingUpdatedAtBeforeConfirm = new Date(0);
 
@@ -77,6 +77,8 @@ async function statusFor(facilityId: string, drugcode: string) {
 
 describe.runIf(hasDatabase).sequential("mapping review acknowledgement", () => {
   beforeAll(async () => {
+    pool = createIntegrationTestPool(integrationTestDbConfig());
+    installIntegrationTestPool(pool);
     modules = await loadModules();
     const { db, schema } = modules;
     await db.insert(schema.facilities).values([
@@ -133,6 +135,8 @@ describe.runIf(hasDatabase).sequential("mapping review acknowledgement", () => {
     await db
       .delete(schema.standardProducts)
       .where(inArray(schema.standardProducts.standardCode, [standardCatalog, standardManual]));
+    clearIntegrationTestPool();
+    await pool.end();
   });
 
   test("normal save leaves an unresolved catalog conflict in needs_review", async () => {

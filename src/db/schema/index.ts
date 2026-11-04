@@ -5,3 +5,5 @@ export * from "./catalog";
 export * from "./mappings";
 export * from "./agent";
 export * from "./settings";
+export * from "./tmt";
+export * from "./ttmt";

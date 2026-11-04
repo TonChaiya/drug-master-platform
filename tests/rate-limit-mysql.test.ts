@@ -1,22 +1,16 @@
 import assert from "node:assert/strict";
-import { afterAll, beforeAll, test } from "vitest";
+import { afterAll, beforeAll, describe, test } from "vitest";
 import { drizzle } from "drizzle-orm/mysql2";
-import mysql, { type Pool } from "mysql2/promise";
+import type { Pool } from "mysql2/promise";
 import * as schema from "@/db/schema";
 import { incrementRateLimitBucket, type RateLimitBucketInput } from "@/modules/security/rate-limit";
+import { createIntegrationTestPool, dbIntegrationTestsEnabled, integrationTestDbConfig } from "./helpers/db-integration";
 
 let pool: Pool;
 
+describe.runIf(dbIntegrationTestsEnabled())("rate limiter on isolated local MySQL", () => {
 beforeAll(async () => {
-  assert.equal(process.env.RATE_LIMIT_TEST_DATABASE, "drug_master_rate_limit_test");
-  pool = mysql.createPool({
-    host: "127.0.0.1",
-    port: 3306,
-    user: "root",
-    database: process.env.RATE_LIMIT_TEST_DATABASE,
-    connectionLimit: 20,
-    timezone: "Z",
-  });
+  pool = createIntegrationTestPool(integrationTestDbConfig(), { connectionLimit: 20 });
   await pool.execute("DELETE FROM rate_limit_buckets");
 });
 
@@ -35,4 +29,5 @@ test("concurrent increments are atomic on Laragon MySQL", async () => {
   const counts = await Promise.all(Array.from({ length: 40 }, () => incrementRateLimitBucket(database, input)));
 
   assert.deepEqual([...counts].sort((a, b) => a - b), Array.from({ length: 40 }, (_, index) => index + 1));
+});
 });

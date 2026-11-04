@@ -1,4 +1,41 @@
 import { createHash } from "node:crypto";
+import {
+  parseAtcResponse,
+  parseConceptResponse,
+  parseGpResponse,
+  parseGppResponse,
+  parseGpuResponse,
+  parseImageListResponse,
+  parseImageResponse,
+  parseMasterTmtResponse,
+  parseNlemResponse,
+  parseRegnoResponse,
+  parseRelationshipResponse,
+  parseSubsResponse,
+  parseTokenResponse,
+  parseTpResponse,
+  parseTppResponse,
+  parseTpuResponse,
+  parseVersionResponse,
+  parseVtmResponse,
+  TmtResponseError,
+  type AtcRecord,
+  type ConceptRecord,
+  type GpRecord,
+  type GppRecord,
+  type GpuRecord,
+  type ImageListRecord,
+  type ImageRecord,
+  type MasterTmtRecord,
+  type NlemRecord,
+  type RegnoRecord,
+  type RelationshipRecord,
+  type SubsRecord,
+  type TpRecord,
+  type TppRecord,
+  type TpuRecord,
+  type VtmRecord,
+} from "./tmt-parsers";
 /**
  * TMT API adapter.
  *
@@ -57,7 +94,7 @@ function resultError(startedAt: number, error: unknown): TmtVersionResult {
   if (error instanceof InvalidJsonError) {
     return { ok: false, tmtVersion: null, httpStatus: null, latencyMs, errorCode: "TMT_INVALID_JSON", message: "TMT API ส่ง JSON ที่อ่านไม่ได้" };
   }
-  if (error instanceof InvalidResponseError) {
+  if (error instanceof InvalidResponseError || error instanceof TmtResponseError) {
     return { ok: false, tmtVersion: null, httpStatus: null, latencyMs, errorCode: "TMT_INVALID_RESPONSE", message: "TMT API ส่งข้อมูลไม่ครบตามรูปแบบ" };
   }
   if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
@@ -126,11 +163,10 @@ async function fetchToken(fetcher: FetchLike, credentials: TmtCredentials): Prom
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new RemoteResponseError(response.status, "token");
-  const body = objectValue(await readJson(response));
-  const token = typeof body.token === "string" ? body.token.trim() : "";
-  if (!token) throw new InvalidResponseError();
+  const body = parseTokenResponse(await readJson(response));
+  const token = body.token;
 
-  const expiry = typeof body.expire === "string" ? Date.parse(body.expire) : Number.NaN;
+  const expiry = Date.parse(body.expire);
   cachedToken = {
     token,
     expiresAt: Number.isFinite(expiry) ? expiry : Date.now() + 30 * 60_000,
@@ -162,20 +198,10 @@ async function callEndpoint(path: string, payload: Record<string, unknown>, fetc
   return objectValue(await readJson(response));
 }
 
-function rows(body: Record<string, unknown>, ...keys: string[]): Record<string, unknown>[] {
-  for (const key of keys) {
-    const value = body[key];
-    if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null);
-  }
-  return [];
-}
-
 export async function fetchTmtVersion(fetcher: FetchLike = fetch): Promise<TmtVersionResult> {
   const startedAt = Date.now();
   try {
-    const body = await callEndpoint("/version", {}, fetcher);
-    const tmtVersion = typeof body.tmt_version === "string" ? body.tmt_version.trim() : "";
-    if (!/^\d{8}$/.test(tmtVersion)) throw new InvalidResponseError();
+    const { tmtVersion } = parseVersionResponse(await callEndpoint("/version", {}, fetcher));
     return {
       ok: true,
       tmtVersion,
@@ -192,75 +218,48 @@ export async function fetchTmtVersion(fetcher: FetchLike = fetch): Promise<TmtVe
   }
 }
 
-export interface MasterTmtRecord {
-  tpucode: string;
-  activeingredient: string | null;
-  strength: string | null;
-  dosageform: string | null;
-  contvalue: string | null;
-  contunit: string | null;
-  dispunit: string | null;
-  tradename: string | null;
-  manufacturer: string | null;
-  fsn: string | null;
-  status: string | null;
+export type {
+  AtcRecord,
+  ConceptRecord,
+  GpRecord,
+  GppRecord,
+  GpuRecord,
+  ImageListRecord,
+  ImageRecord,
+  MasterTmtRecord,
+  NlemRecord,
+  RegnoRecord,
+  RelationshipRecord,
+  SubsRecord,
+  TpRecord,
+  TppRecord,
+  TpuRecord,
+  VtmRecord,
+};
+
+export interface DateWindow { begindate: string; enddate: string }
+
+async function fetchWindow<T>(path: string, window: DateWindow, parser: (body: unknown) => T[], fetcher: FetchLike): Promise<T[]> {
+  return parser(await callEndpoint(path, { begindate: window.begindate, enddate: window.enddate }, fetcher));
 }
 
-function text(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  const trimmed = String(value).trim();
-  return trimmed === "" ? null : trimmed;
-}
+export const fetchSubs = (window: DateWindow, fetcher: FetchLike = fetch): Promise<SubsRecord[]> => fetchWindow("/subs", window, parseSubsResponse, fetcher);
+export const fetchVtm = (window: DateWindow, fetcher: FetchLike = fetch): Promise<VtmRecord[]> => fetchWindow("/vtm", window, parseVtmResponse, fetcher);
+export const fetchGp = (window: DateWindow, fetcher: FetchLike = fetch): Promise<GpRecord[]> => fetchWindow("/gp", window, parseGpResponse, fetcher);
+export const fetchGpu = (window: DateWindow, fetcher: FetchLike = fetch): Promise<GpuRecord[]> => fetchWindow("/gpu", window, parseGpuResponse, fetcher);
+export const fetchGpp = (window: DateWindow, fetcher: FetchLike = fetch): Promise<GppRecord[]> => fetchWindow("/gpp", window, parseGppResponse, fetcher);
+export const fetchTp = (window: DateWindow, fetcher: FetchLike = fetch): Promise<TpRecord[]> => fetchWindow("/tp", window, parseTpResponse, fetcher);
+export const fetchTpu = (window: DateWindow, fetcher: FetchLike = fetch): Promise<TpuRecord[]> => fetchWindow("/tpu", window, parseTpuResponse, fetcher);
+export const fetchTpp = (window: DateWindow, fetcher: FetchLike = fetch): Promise<TppRecord[]> => fetchWindow("/tpp", window, parseTppResponse, fetcher);
+export const fetchImageList = (window: DateWindow, fetcher: FetchLike = fetch): Promise<ImageListRecord[]> => fetchWindow("/imagelist", window, parseImageListResponse, fetcher);
+export const fetchNlem = (window: DateWindow, fetcher: FetchLike = fetch): Promise<NlemRecord[]> => fetchWindow("/nlem", window, parseNlemResponse, fetcher);
+export const fetchAtc = (window: DateWindow, fetcher: FetchLike = fetch): Promise<AtcRecord[]> => fetchWindow("/atc", window, parseAtcResponse, fetcher);
+export const fetchRegno = (window: DateWindow, fetcher: FetchLike = fetch): Promise<RegnoRecord[]> => fetchWindow("/regno", window, parseRegnoResponse, fetcher);
+export const fetchMasterTmt = (window: DateWindow, fetcher: FetchLike = fetch): Promise<MasterTmtRecord[]> => fetchWindow("/mastertmt", window, parseMasterTmtResponse, fetcher);
+export const fetchConcept = (window: DateWindow, fetcher: FetchLike = fetch): Promise<ConceptRecord[]> => fetchWindow("/concept", window, parseConceptResponse, fetcher);
+export const fetchRelationship = (window: DateWindow, fetcher: FetchLike = fetch): Promise<RelationshipRecord[]> => fetchWindow("/relationship", window, parseRelationshipResponse, fetcher);
 
-export async function fetchMasterTmt(window: { begindate: string; enddate: string }, fetcher: FetchLike = fetch): Promise<MasterTmtRecord[]> {
-  const body = await callEndpoint("/mastertmt", window, fetcher);
-  return rows(body, "mastertmt", "data", "result")
-    .map((row) => ({
-      tpucode: String(row.tpucode ?? "").trim(),
-      activeingredient: text(row.activeingredient),
-      strength: text(row.strength),
-      dosageform: text(row.dosageform),
-      contvalue: text(row.contvalue),
-      contunit: text(row.contunit),
-      dispunit: text(row.dispunit),
-      tradename: text(row.tradename),
-      manufacturer: text(row.manufacturer),
-      fsn: text(row.fsn),
-      status: text(row.status),
-    }))
-    .filter((row) => row.tpucode !== "");
-}
-
-export interface NlemRecord {
-  tpuid: string;
-  nlem: string | null;
-  changeDate: string | null;
-}
-
-export async function fetchNlem(window: { begindate: string; enddate: string }, fetcher: FetchLike = fetch): Promise<NlemRecord[]> {
-  const body = await callEndpoint("/nlem", window, fetcher);
-  return rows(body, "nlem", "data", "result")
-    .map((row) => ({
-      tpuid: String(row.tpuid ?? "").trim(),
-      nlem: text(row.nlem),
-      changeDate: text(row.change_date),
-    }))
-    .filter((row) => row.tpuid !== "");
-}
-
-export interface RegnoRecord {
-  tpuid: string;
-  regno: string | null;
-  changeDate: string | null;
-}
-
-export async function fetchRegno(window: { begindate: string; enddate: string }, fetcher: FetchLike = fetch): Promise<RegnoRecord[]> {
-  const body = await callEndpoint("/regno", window, fetcher);
-  return rows(body, "regno", "data", "result")
-    .map((row) => ({
-      tpuid: String(row.tpuid ?? "").trim(),
-      regno: text(row.regno),
-      changeDate: text(row.change_date),
-    }))
-    .filter((row) => row.tpuid !== "");
+export async function fetchImage(tpuid: string, fetcher: FetchLike = fetch): Promise<ImageRecord[]> {
+  if (!/^\d+$/.test(tpuid)) throw new TmtApiError("TMT_INVALID_TPUID", "รหัส TPU ไม่ถูกต้อง");
+  return parseImageResponse(await callEndpoint("/image", { tpuid }, fetcher));
 }

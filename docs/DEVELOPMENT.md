@@ -94,6 +94,32 @@ pnpm db:migrate
 pnpm exec vitest run tests/rate-limit-cleanup.test.ts tests/rate-limit-cleanup-route.test.ts tests/rate-limit-cleanup-mysql.test.ts
 ```
 
+### TMT/TTMT Data Model v2 foundation
+
+Parser และ schema contracts ใช้ synthetic fixtures เท่านั้น:
+
+```bash
+pnpm exec vitest run tests/tmt-api-client.test.ts tests/tmt-v2-schema.test.ts
+```
+
+การตรวจ migrations 0001-0015 ต้องใช้ MySQL ของ Laragon ที่แยกจาก production/JHCIS และฐานชื่อ exact `drug_master_tmt_v2_test` เท่านั้น ห้ามโหลด `.env.local`:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:TMT_V2_TEST_HOST = "127.0.0.1"
+$env:TMT_V2_TEST_PORT = "3307"
+$env:TMT_V2_TEST_DATABASE = "drug_master_tmt_v2_test"
+$env:TMT_V2_TEST_USERNAME = "root"
+pnpm exec vitest run tests/tmt-v2-migration-mysql.test.ts
+```
+
+DB integration tests อื่นต้องตั้ง `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_DATABASE` โดยตรง ฐานต้องอยู่ที่ `localhost`/`127.0.0.1` และชื่อตรง pattern `drug_master_*test` เท่านั้น หากไม่ opt-in test จะ skip; หาก opt-in แต่ target ไม่ผ่าน guard จะ fail ก่อนสร้าง connection และไม่มี fallback ไป `.env.local`
+
+Migration test guard host/port/database/user, สร้างฐานสะอาด, ตรวจ journal/hash/schema/rerun แล้ว drop เฉพาะฐานทดสอบเมื่อจบ
+
+> Incident note (Phase 2): During Phase 2 verification, a DB-backed baseline test inherited `.env.local`. The test completed cleanup, production cleanup was later verified read-only, and a fail-closed integration-test DB guard was added.
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review

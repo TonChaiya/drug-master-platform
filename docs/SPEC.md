@@ -97,6 +97,16 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 - `standardImports`: kind, version, file hash, counts, status, importedBy, timestamps
 - `standardSyncRuns`: source, method, date window/cursor, counts, status, error code, timestamps
 
+**TMT/TTMT Data Model v2 requirement**
+
+- TMT และ TTMT เป็นคนละ domain/namespace; รหัสเหมือนกันต้องอยู่ร่วมกันได้โดยไม่ชนกัน
+- ตาราง source ของ TMT ต้องสะท้อนชื่อ endpoint ในคู่มือแบบ singular ตามที่อนุมัติ: `tmt_subs`, `tmt_vtm`, `tmt_gp`, `tmt_gpu`, `tmt_gpp`, `tmt_tp`, `tmt_tpu`, `tmt_tpp`, `tmt_nlem`, `tmt_atc`, `tmt_regno`, `tmt_mastertmt`, `tmt_concept`, `tmt_relationship`, `tmt_version`
+- TTMT ใช้ contract จากไฟล์ MasterTTMT ที่อนุมัติเท่านั้น ห้ามสร้าง hierarchy/API แบบ TMT โดยไม่มีหลักฐาน
+- commercial TMT mapping ต้องอ้างระดับที่ eligible ตามชนิดสินค้าและ raw source status; สำหรับ PRODUCTCAT `1` เป้าหมายต้องเป็น TPU ที่ `status=0` ส่วน GPU/TP/ระดับอื่นแสดงเพื่ออธิบายได้แต่ห้ามบันทึกแทน TPU
+- TMT Browser ต้องแสดง level ด้วยสีและ text badge พร้อมกัน: GP สีแดง, GPU สีเขียว, TP สีเหลือง, TPU สีน้ำเงิน; ห้ามใช้สีเพียงอย่างเดียว ส่วนสี SUBS/VTM/GPP/TPP ยังไม่กำหนด
+
+Implementation status ของข้อกำหนดนี้อยู่ใน `PROJECT_STATUS.md`; การมี schema foundation ไม่ได้แปลว่า production cutover แล้ว
+
 **แหล่งยาและ catalog**
 
 - `sourceDrugs`: facilityId + drugcode unique, ชื่อท้องถิ่น, generic, drugtype, pack/unit/price/NDC, active, lastSeenSyncId

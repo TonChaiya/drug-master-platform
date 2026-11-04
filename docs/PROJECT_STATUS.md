@@ -53,8 +53,11 @@ Migration สำคัญล่าสุด:
 
 - TMT/TTMT Data Model v2 Phase 1 discovery/design เสร็จแล้วใน `docs/superpowers/specs/2026-11-04-tmt-data-model-v2-design.md`
 - Phase 1 ตรวจคู่มือและ live TMT API แบบ read-only รวมถึงพิสูจน์รหัส `764169`; ไม่มี production data change, migration หรือ deployment
-- แบบออกแบบแยก TMT endpoint tables และ TTMT namespace ชัดเจน แต่ยังเป็น proposal และ production ยังใช้ `standard_products` ตามเดิม
-- ขั้นถัดไปคือ Phase 2: สร้าง schema/parser foundation ตามขอบเขตใน design document หลัง review; ห้าม reset/cutover ใน Phase 2
+- Phase 2 persistence/parser foundation สร้างแล้ว: Drizzle schema, additive migrations `0014_tmt_data_model_v2.sql`/`0015_ttmt_data_model_v2.sql`, typed parsers/client ครบ 18 endpoints และ targeted contracts
+- Phase 2 recovery gates ผ่าน: production fixture cleanup ยืนยันแบบ read-only ว่าไม่เหลือข้อมูล, DB integration tests ใช้ fail-closed local-only guard และ full suite ไม่โหลด `.env.local`
+- migrations 0014/0015 ผ่าน controlled Laragon MySQL จากฐานว่างถึง migration 0015 แต่ **ยังไม่ apply production**
+- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; Phase 2 ไม่มี search/mapping/export/catalog cutover
+- ขั้นถัดไปคือ Phase 3 sync engine บน schema ใหม่ หลัง review Phase 2; ห้ามเริ่ม backfill/cutover โดยอัตโนมัติ
 
 ## Known improvement backlog
 
