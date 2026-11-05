@@ -2,7 +2,9 @@ export type MappingLifecycleStatus = "pending" | "needs_review" | "mapped" | "hi
 
 export interface MappingLifecycleInput {
   active: boolean;
-  mapping: { source: string; standardCode: string; updatedAt?: Date } | null;
+  mapping: { source: string; standardCode: string; updatedAt?: Date; standardSource?: string | null; standardLevel?: string | null } | null;
+  /** Defined only by v2 callers. Undefined preserves legacy lifecycle semantics. */
+  standardValid?: boolean;
   inLatestCatalog: boolean;
   latestCatalogTmtid: string | null;
   everInCatalog: boolean;
@@ -24,6 +26,9 @@ export function classifyMappingLifecycle(_input: MappingLifecycleInput): {
 } {
   const input = _input;
   if (!input.active) return { status: "hidden", reason: null };
+  if (input.mapping && input.standardValid === false) {
+    return { status: "needs_review", reason: "รายการมาตรฐานที่จับคู่ไม่พร้อมใช้งาน" };
+  }
   const acknowledgementMatches =
     input.mapping?.updatedAt !== undefined &&
     input.reviewAcknowledgement !== null &&

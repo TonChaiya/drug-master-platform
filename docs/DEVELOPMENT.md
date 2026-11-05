@@ -102,7 +102,7 @@ Parser และ schema contracts ใช้ synthetic fixtures เท่าน�
 pnpm exec vitest run tests/tmt-api-client.test.ts tests/tmt-v2-schema.test.ts
 ```
 
-การตรวจ migrations 0001-0015 ต้องใช้ MySQL ของ Laragon ที่แยกจาก production/JHCIS และฐานชื่อ exact `drug_master_tmt_v2_test` เท่านั้น ห้ามโหลด `.env.local`:
+การตรวจ migrations 0001-0016 ต้องใช้ MySQL ของ Laragon ที่แยกจาก production/JHCIS และฐานชื่อ exact `drug_master_tmt_v2_test` เท่านั้น ห้ามโหลด `.env.local`:
 
 ```powershell
 $env:NODE_ENV = "test"
@@ -159,6 +159,18 @@ pnpm exec vitest run tests/tmt-v2-browser-mysql.test.ts tests/tmt-v2-browser-rou
 ```
 
 สำหรับ visual review local เท่านั้น ให้ตั้ง `TMT_V2_BROWSER_ENABLED=1` ใน process ของ dev server หลัง migrate 0001–0015 และโหลด fixture แล้ว เมื่อไม่ตั้งหรือค่าไม่ใช่ `1` page/API ต้องไม่ query ตาราง v2.
+
+### Mapping v2 (Phase 5, local only)
+
+Mapping v2 อยู่ที่ hidden route `/mappings/v2` และต้องตั้งทั้ง `TMT_V2_BROWSER_ENABLED=1` และ `TMT_V2_MAPPING_ENABLED=1` ใน process ของ dev server หลัง migrate 0001–0016 บนฐาน local ที่ guard อนุญาตเท่านั้น. Save API ปฏิเสธก่อน query เมื่อ mapping flag ปิด ส่วน TMT Browser API ปฏิเสธก่อน query เมื่อ browser flag ปิด; `/mappings` legacy ยังใช้ `standard_products` ตามเดิม.
+
+รัน targeted contract tests โดยไม่ใช้ `.env.local`:
+
+```powershell
+pnpm exec vitest run tests/mapping-v2.test.ts tests/mapping-v2-routes.test.ts tests/tmt-v2-browser-ui.test.ts tests/mapping-lifecycle.test.ts tests/tmt-v2-schema.test.ts
+```
+
+การตรวจ clean migration + TMT/TTMT save/review/facility isolation ใช้ฐาน exact `drug_master_mapping_v2_test` บน localhost เท่านั้น และต้องกำหนด `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `TMT_V2_TEST_*` ครบก่อนรัน `tests/tmt-v2-migration-mysql.test.ts`; guard ปฏิเสธชื่อฐาน/host อื่นและไม่อ่าน `.env.local`.
 
 ## Deployment workflow
 

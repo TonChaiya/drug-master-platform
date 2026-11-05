@@ -101,6 +101,20 @@ test("active drug never present in catalog and without mapping is pending", () =
   );
 });
 
+test("a v2 mapping with an unavailable source-specific standard needs review without changing legacy callers", () => {
+  assert.deepEqual(
+    classifyMappingLifecycle({
+      active: true,
+      mapping: { source: "manual", standardCode: "565818", standardSource: "TMT", standardLevel: "tpu" },
+      standardValid: false,
+      inLatestCatalog: true,
+      latestCatalogTmtid: "565818",
+      everInCatalog: true,
+    }),
+    { status: "needs_review", reason: "รายการมาตรฐานที่จับคู่ไม่พร้อมใช้งาน" },
+  );
+});
+
 test("new latest catalog row can create a mapping for an active unmapped drug", () => {
   assert.deepEqual(
     decideCatalogReconcile({

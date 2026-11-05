@@ -631,3 +631,11 @@ Phase 3 adds a dormant sync engine under `src/modules/tmt/` without changing `sr
 8. Invariants found zero missing concept/endpoint counterparts, zero level/FSN mismatch, zero MasterTMT/TPU counterpart gaps, zero unknown level/status, and zero duplicate relationship pairs. Observable source-quality findings were 106 dangling relationship concepts, 16 self relationships, 1,446 ATC same-date conflicts, and 803 RegNo same-date conflicts.
 
 Migrations 0014/0015 remain unapplied in production. Legacy standards/search/mapping/export/catalog/TTMT paths remain active. Phase 4 is the next permitted phase after review; it has not started.
+
+## Phase 5 implementation result
+
+Phase 5 adds a dormant mapping identity path only. Migration `0016_mapping_v2_identity.sql` adds nullable `drug_mappings.standard_source` and `standard_level`; it never guesses or backfills legacy rows. Source-specific server validation requires an active `tpu` concept plus MasterTMT status `0` for PRODUCTCAT 1, and an active `ttmt_products` row from a succeeded import for PRODUCTCAT 3. GPU `764169` stays inspectable and exposes its related TPU list, but cannot be persisted directly. PRODUCTCAT 2/4 stays fail-closed.
+
+The authenticated `POST /api/v1/mappings/v2` is guarded by the mapping flag, while the hidden `/mappings/v2` workspace requires both mapping and browser flags; local acceptance enables both explicitly. The legacy mapping route, catalog reconcile, dashboard and export continue to use legacy standards. Changing v2 source/code/level writes `drug_mappings.updatedAt`, so the existing review acknowledgement automatically becomes stale without a permanent boolean. Production migration, environment enablement, export/catalog cutover and data reset remain outside Phase 5.
+
+Local acceptance used isolated MySQL through migration 0016 and synthetic verified-shape fixtures only. It verified GPU `764169` direct rejection, nine related TPU rows, active/inactive status handling, server-truth reload, repeat-confirm no-op, acknowledgement staleness, TTMT namespace separation, facility isolation, and responsive layouts at 1366/768/390. The ordinary `/mappings` worklist remains legacy-only until the approved cutover phase.

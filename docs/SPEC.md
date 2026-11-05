@@ -114,7 +114,7 @@ Implementation status ของข้อกำหนดนี้อยู่ใ�
 - `sourceDrugs`: facilityId + drugcode unique, ชื่อท้องถิ่น, generic, drugtype, pack/unit/price/NDC, active, lastSeenSyncId
 - `drugCatalogImports`: facilityId, filename, contentHash, sourceVersion/date, row counts, importedBy, timestamps
 - `drugCatalogRows`: importId, facilityId, 21 payload fields (ไม่มีคอลัมน์ลำดับ `#`), rowNumber; unique `(importId, HOSPDRUGCODE)`
-- `drugMappings`: facilityId, sourceDrugId unique ต่อ facility, standardCode, productCat, specPrep, ฟิลด์ส่งออก, updateFlag, ฟิลด์วันที่, source(`drug_catalog|manual`), catalogImportId, mappedBy, mappedAt, updatedAt
+- `drugMappings`: facilityId, sourceDrugId unique ต่อ facility, standardCode และ identity v2 nullable `(standardSource, standardCode, standardLevel)`, productCat, specPrep, ฟิลด์ส่งออก, updateFlag, ฟิลด์วันที่, source(`drug_catalog|manual`), catalogImportId, mappedBy, mappedAt, updatedAt
 - `mappingExportCheckpoints`: facilityId + mappingId, mappingUpdatedAt, exportId, exportedAt; เก็บ version ล่าสุดของแต่ละ mapping ที่ส่งออกสำเร็จ
 - `mappingReviewAcknowledgements`: current row ต่อ facilityId + mappingId, mappingUpdatedAt, catalog present/TMT/import, confirmedBy/At; history การยืนยันอยู่ใน `auditLogs`
 - `exportPreviewTokens`: tokenHash, facilityId, selection, snapshotHash, expiresAt, consumedAt; token สุ่มใช้ได้ครั้งเดียวและเก็บเฉพาะ hash
@@ -140,6 +140,15 @@ Implementation status ของข้อกำหนดนี้อยู่ใ�
 - เวลาเก็บ UTC แสดงผล `Asia/Bangkok`
 - ไม่พึ่ง FULLTEXT / trigger / stored procedure / event
 - Sync ใช้ staging แล้ว commit แบบ atomic หลังจำนวนแถวและ `officeId` ผ่าน ห้าม upsert ตารางจริงทีละ batch
+
+### Mapping identity v2 (dormant until approved cutover)
+
+- `standard_source` เป็น `TMT` หรือ `TTMT`; `standard_code` เป็น string และ `standard_level` เป็น level ที่ source ยืนยัน (`tpu` สำหรับ commercial TMT, `product` สำหรับ TTMT).
+- Legacy rows ที่ source/level เป็น `NULL` เป็น state ที่ยังไม่ cutover: ห้ามเดา namespace จากตัวเลข code.
+- PRODUCTCAT 1 ใช้ได้เฉพาะ TMT TPU ที่มี `tmt_concept.level_name=tpu` และ `tmt_mastertmt.status=0`; GPU/GP/TP แสดงเพื่ออธิบายได้แต่บันทึกไม่ได้.
+- TTMT ตรวจ `ttmt_products` และ import ที่สำเร็จตาม contract ของ TTMT โดยไม่ใช้ TMT hierarchy.
+- PRODUCTCAT 2/4 ยังปฏิเสธจนกว่าจะมีกฎ TP/GP-F/GP-X ที่ยืนยันได้.
+- การเปลี่ยน source/code/level เป็น mapping write จึงทำให้ review acknowledgement ที่ผูก `updatedAt` เดิม stale โดยอัตโนมัติ.
 
 ---
 

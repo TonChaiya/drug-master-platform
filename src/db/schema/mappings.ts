@@ -11,6 +11,10 @@ export const drugMappings = mysqlTable(
     facilityId: varchar("facility_id", { length: 36 }).notNull(),
     sourceDrugId: varchar("source_drug_id", { length: 36 }).notNull(),
     standardCode: varchar("standard_code", { length: 64 }).notNull(),
+    // Nullable during the additive v2 rollout: existing legacy rows must not
+    // be guessed into a namespace before the approved cutover.
+    standardSource: varchar("standard_source", { length: 8 }),
+    standardLevel: varchar("standard_level", { length: 16 }),
     productCat: varchar("product_cat", { length: 8 }).notNull(),
     specPrep: varchar("spec_prep", { length: 255 }),
     dfscode: varchar("dfscode", { length: 64 }),
@@ -35,6 +39,8 @@ export const drugMappings = mysqlTable(
     uniqueIndex("uq_mappings_facility_source").on(table.facilityId, table.sourceDrugId),
     uniqueIndex("uq_mappings_facility_id").on(table.facilityId, table.id),
     index("idx_mappings_facility_mapped").on(table.facilityId, table.mappedAt),
+    index("idx_mappings_facility_standard_source").on(table.facilityId, table.standardSource),
+    index("idx_mappings_standard_identity").on(table.standardSource, table.standardCode, table.standardLevel),
   ],
 );
 

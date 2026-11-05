@@ -5,6 +5,7 @@ import { getTableConfig } from "drizzle-orm/mysql-core";
 import { test } from "vitest";
 import * as tmt from "@/db/schema/tmt";
 import * as ttmt from "@/db/schema/ttmt";
+import { drugMappings } from "@/db/schema/mappings";
 
 const tmtSourceTables = [
   tmt.tmtSubs,
@@ -91,4 +92,18 @@ test("0014 and 0015 are additive contracts and leave legacy schema untouched", a
   assert.doesNotMatch(sql, /^\s*(?:DROP|TRUNCATE|DELETE|ALTER)\b/im);
   assert.doesNotMatch(sql, /standard_products|standard_imports|standard_sync_runs|drug_mappings/i);
   assert.doesNotMatch(sql, /FOREIGN KEY .*tmt_(?:concept|tpu)/i);
+});
+
+test("0016 adds nullable mapping identity without rewriting legacy data", async () => {
+  const sql = await readFile(new URL("../src/db/migrations/0016_mapping_v2_identity.sql", import.meta.url), "utf8");
+  assert.match(sql, /^ALTER TABLE drug_mappings/m);
+  assert.match(sql, /ADD COLUMN standard_source VARCHAR\(8\) NULL/i);
+  assert.match(sql, /ADD COLUMN standard_level VARCHAR\(16\) NULL/i);
+  assert.match(sql, /idx_mappings_facility_standard_source/);
+  assert.match(sql, /idx_mappings_standard_identity/);
+  assert.doesNotMatch(sql, /\b(?:DROP|DELETE|TRUNCATE|UPDATE)\b/i);
+  const columns = getTableConfig(drugMappings).columns.map((column) => column.name);
+  assert.ok(columns.includes("standard_code"));
+  assert.ok(columns.includes("standard_source"));
+  assert.ok(columns.includes("standard_level"));
 });

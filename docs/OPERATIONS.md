@@ -351,6 +351,18 @@ DELETE FROM schema_migrations WHERE filename = '0015_ttmt_data_model_v2.sql';
 
 หลังเริ่ม Phase 3 backfill ห้ามใช้คำสั่ง rollback ข้างต้นแบบ ad-hoc ให้ใช้ maintenance window/backup policy และประเมินข้อมูล sync/import ที่ต้องเก็บก่อนเสมอ
 
+**0016_mapping_v2_identity.sql** — เพิ่ม nullable `standard_source` และ `standard_level` พร้อม index lookup ให้ `drug_mappings`; additive เท่านั้น, ไม่ backfill/เดา legacy identity, ไม่ทำ cutover export/catalog และยังไม่ apply production.
+
+ก่อนเปิด Mapping v2 ต้อง apply 0016 ผ่าน migration runner, มี TMT/TTMT v2 data ที่ตรวจ invariant แล้ว, ผ่าน local E2E/review regression และเปิดทั้ง `TMT_V2_BROWSER_ENABLED=1` กับ `TMT_V2_MAPPING_ENABLED=1`. ระหว่าง Phase 5 ให้ทั้งสองค่า production เป็น off; legacy mapping/export/catalog ต้องคงเป็น runtime หลัก.
+
+Rollback ก่อนมี data v2 และหลังหยุด feature gate เท่านั้น:
+
+```sql
+ALTER TABLE drug_mappings DROP INDEX idx_mappings_standard_identity, DROP INDEX idx_mappings_facility_standard_source,
+  DROP COLUMN standard_level, DROP COLUMN standard_source;
+DELETE FROM schema_migrations WHERE filename = '0016_mapping_v2_identity.sql';
+```
+
 DB integration tests เป็น fail-closed operational invariant: ต้อง opt-in ด้วย `ALLOW_DB_INTEGRATION_TESTS=1`, รันใน `NODE_ENV=test`, ใช้เฉพาะ localhost และฐานชื่อ `drug_master_*test`; test ห้ามโหลดหรือ fallback ไป `.env.local` ที่ production-equivalent
 
 ### TMT v2 sync engine operational state

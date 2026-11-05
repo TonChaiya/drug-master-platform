@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { test } from "vitest";
+import { afterEach, test, vi } from "vitest";
 import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
+import { loadV2SavedIdentity } from "@/components/mappings/v2-saved-identity";
 import { TmtBrowser } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
+
+afterEach(() => vi.unstubAllGlobals());
 
 test("level badge always exposes text while its color marker is decorative", () => {
   const gp = renderToStaticMarkup(createElement(TmtLevelBadge, { level: "gp" }));
@@ -36,4 +39,25 @@ test("browser starts as a compact read-only search workspace", () => {
   assert.match(html, /ความพร้อมจับคู่/);
   assert.match(html, /ดูข้อมูลเท่านั้น/);
   assert.doesNotMatch(html, /api\/v1\/mappings\/save/);
+});
+
+test("mapping v2 reloads server truth for the newly selected source drug", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    ok: true,
+    mapping: { standardSource: "TTMT", standardCode: "565818", standardLevel: "product" },
+  }), { status: 200, headers: { "Content-Type": "application/json" } }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  assert.deepEqual(await loadV2SavedIdentity("source-drug-b"), {
+    source: "TTMT",
+    code: "565818",
+    level: "product",
+  });
+  assert.equal(fetchMock.mock.calls[0]?.[0], "/api/v1/mappings/v2?sourceDrugId=source-drug-b");
+
+  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, mapping: null }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  }));
+  assert.equal(await loadV2SavedIdentity("source-drug-without-mapping"), null);
 });
