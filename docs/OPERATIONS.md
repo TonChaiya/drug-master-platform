@@ -363,6 +363,18 @@ ALTER TABLE drug_mappings DROP INDEX idx_mappings_standard_identity, DROP INDEX 
 DELETE FROM schema_migrations WHERE filename = '0016_mapping_v2_identity.sql';
 ```
 
+### Phase 7 activation prerequisites (ยังห้าม execute)
+
+Phase 6 ไม่เพิ่ม migration 0017 และไม่เปลี่ยน production flags. ก่อน production cutover ต้องได้รับอนุมัติ Phase 7 แยกต่างหากและยืนยันอย่างน้อย:
+
+- migrations 0014–0016 ผ่าน runner เดิมและ journal/hash ตรงบน production database ที่ยืนยัน identity แล้ว
+- TMT v2 sync สำเร็จ, invariant report ได้ review และ TTMT import ที่จะใช้มีสถานะ succeeded
+- mapping identity/backfill/reset plan, rollback window และผลกระทบ legacy ถูกอนุมัติ
+- targeted Catalog/lifecycle/full/delta/preview/XLS regression และ production read-only smoke ผ่าน
+- เปิด `TMT_V2_CATALOG_ENABLED`/`TMT_V2_EXPORT_ENABLED` ทีละส่วนตามแผน; ห้ามเปิดล่วงหน้าก่อน schema/data readiness
+
+การปิด flags ต้องคืน runtime ไป legacy `standard_products` path โดยไม่ลบ v2 data. ห้าม drop legacy tables หรือแก้ migration เก่าใน cutover.
+
 DB integration tests เป็น fail-closed operational invariant: ต้อง opt-in ด้วย `ALLOW_DB_INTEGRATION_TESTS=1`, รันใน `NODE_ENV=test`, ใช้เฉพาะ localhost และฐานชื่อ `drug_master_*test`; test ห้ามโหลดหรือ fallback ไป `.env.local` ที่ production-equivalent
 
 ### TMT v2 sync engine operational state

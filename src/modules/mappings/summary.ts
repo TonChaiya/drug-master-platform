@@ -10,6 +10,8 @@ import {
   standardProducts,
 } from "@/db/schema";
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
+import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
+import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
 
 export interface MappingLifecycleSummaryInput {
   facilityId: string;
@@ -17,6 +19,8 @@ export interface MappingLifecycleSummaryInput {
   lifecycle: MappingLifecycleInput;
   standardStatus: string | null;
   standardType: string | null;
+  /** Defined only by v2 callers; undefined preserves the legacy readiness check. */
+  standardEligible?: boolean;
   mappingUpdatedAt: Date | null;
 }
 
@@ -67,7 +71,9 @@ export function summarizeMappingLifecycleInputs(
     if (lifecycle.status === "mapped") {
       summary.mappedTotal += 1;
       const expectedStandardType = row.drugtype === "01" ? "TMT" : row.drugtype === "10" ? "TTMT" : null;
-      if (row.standardStatus === "active" && row.standardType === expectedStandardType) summary.exportReadyTotal += 1;
+      if (row.standardEligible ?? (row.standardStatus === "active" && row.standardType === expectedStandardType)) {
+        summary.exportReadyTotal += 1;
+      }
     } else if (lifecycle.status === "needs_review") {
       summary.needsReviewTotal += 1;
     } else if (lifecycle.status === "pending") {
@@ -91,6 +97,7 @@ export async function mappingLifecycleSummaries(
   facilityId?: string,
   database: MappingSummaryDb = db,
 ): Promise<Map<string, MappingLifecycleSummary>> {
+  if (tmtV2CatalogEnabled()) return mappingLifecycleSummariesV2(facilityId, database);
   const importScope = facilityId
     ? eq(drugCatalogImports.facilityId, facilityId)
     : eq(facilities.status, "active");
@@ -210,4 +217,101 @@ export async function mappingLifecycleSummaries(
       };
     }),
   );
+}
+
+async function mappingLifecycleSummariesV2(
+  facilityId: string | undefined,
+  database: MappingSummaryDb,
+): Promise<Map<string, MappingLifecycleSummary>> {
+  const importScope = facilityId ? eq(drugCatalogImports.facilityId, facilityId) : eq(facilities.status, "active");
+  const rankedImports = database
+    .select({
+      id: drugCatalogImports.id,
+      facilityId: drugCatalogImports.facilityId,
+      rank: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${drugCatalogImports.facilityId} ORDER BY ${drugCatalogImports.createdAt} DESC)`.as("snapshot_rank"),
+    })
+    .from(drugCatalogImports)
+    .innerJoin(facilities, eq(facilities.id, drugCatalogImports.facilityId))
+    .where(importScope)
+    .as("ranked_catalog_imports_v2");
+  const latestImports = await database.select({ id: rankedImports.id, facilityId: rankedImports.facilityId })
+    .from(rankedImports).where(eq(rankedImports.rank, 1));
+  const sourceScope = facilityId
+    ? and(eq(sourceDrugs.active, 1), eq(sourceDrugs.facilityId, facilityId))
+    : and(eq(sourceDrugs.active, 1), eq(facilities.status, "active"));
+  const historyScope = facilityId ? eq(drugCatalogRows.facilityId, facilityId) : eq(facilities.status, "active");
+  const catalogHistory = database
+    .select({ facilityId: drugCatalogRows.facilityId, hospdrugcode: drugCatalogRows.hospdrugcode })
+    .from(drugCatalogRows)
+    .innerJoin(facilities, eq(facilities.id, drugCatalogRows.facilityId))
+    .where(historyScope)
+    .groupBy(drugCatalogRows.facilityId, drugCatalogRows.hospdrugcode)
+    .as("summary_catalog_history_v2");
+  const latestImportIds = latestImports.map((row) => row.id);
+  const [sourceRows, latestCatalogRows] = await Promise.all([
+    database
+      .select({
+        facilityId: sourceDrugs.facilityId,
+        drugcode: sourceDrugs.drugcode,
+        drugtype: sourceDrugs.drugtype,
+        mappingId: drugMappings.id,
+        mappingSource: drugMappings.source,
+        standardSource: drugMappings.standardSource,
+        standardCode: drugMappings.standardCode,
+        standardLevel: drugMappings.standardLevel,
+        productCat: drugMappings.productCat,
+        mappingUpdatedAt: drugMappings.updatedAt,
+        acknowledgedMappingUpdatedAt: mappingReviewAcknowledgements.mappingUpdatedAt,
+        acknowledgedCatalogPresent: mappingReviewAcknowledgements.catalogPresent,
+        acknowledgedCatalogTmtid: mappingReviewAcknowledgements.catalogTmtid,
+        everInCatalog: sql<boolean>`${catalogHistory.hospdrugcode} IS NOT NULL`,
+      })
+      .from(sourceDrugs)
+      .innerJoin(facilities, eq(facilities.id, sourceDrugs.facilityId))
+      .leftJoin(drugMappings, and(eq(drugMappings.sourceDrugId, sourceDrugs.id), eq(drugMappings.facilityId, sourceDrugs.facilityId)))
+      .leftJoin(mappingReviewAcknowledgements, and(eq(mappingReviewAcknowledgements.mappingId, drugMappings.id), eq(mappingReviewAcknowledgements.facilityId, sourceDrugs.facilityId)))
+      .leftJoin(catalogHistory, and(eq(catalogHistory.facilityId, sourceDrugs.facilityId), eq(catalogHistory.hospdrugcode, sourceDrugs.drugcode)))
+      .where(sourceScope),
+    latestImportIds.length === 0 ? Promise.resolve([]) : database
+      .select({ importId: drugCatalogRows.importId, facilityId: drugCatalogRows.facilityId, hospdrugcode: drugCatalogRows.hospdrugcode, tmtid: drugCatalogRows.tmtid })
+      .from(drugCatalogRows).where(inArray(drugCatalogRows.importId, latestImportIds)),
+  ]);
+  const identities: MappingV2Identity[] = sourceRows.flatMap((row) =>
+    row.mappingId && (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
+      ? [{ source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }]
+      : [],
+  );
+  const standards = await loadMappedStandardsV2(identities, database);
+  const latestCatalogByDrug = new Map(latestCatalogRows.map((row) => [`${row.facilityId}\u0000${row.hospdrugcode}`, row]));
+  return summarizeMappingLifecycleInputs(sourceRows.map((row) => {
+    const latest = latestCatalogByDrug.get(`${row.facilityId}\u0000${row.drugcode}`);
+    const identity: MappingV2Identity | null = row.mappingId && (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
+      ? { source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }
+      : null;
+    const standard = identity ? standards.get(mappingV2IdentityKey(identity)) : null;
+    return {
+      facilityId: row.facilityId,
+      drugtype: row.drugtype,
+      lifecycle: {
+        active: true,
+        mapping: row.mappingId && row.standardCode && row.mappingUpdatedAt ? {
+          source: row.mappingSource ?? "manual", standardCode: row.standardCode, standardSource: row.standardSource,
+          standardLevel: row.standardLevel, updatedAt: row.mappingUpdatedAt,
+        } : null,
+        standardValid: row.mappingId ? standard?.eligible ?? false : undefined,
+        inLatestCatalog: Boolean(latest),
+        latestCatalogTmtid: latest?.tmtid ?? null,
+        everInCatalog: Boolean(row.everInCatalog),
+        reviewAcknowledgement: row.acknowledgedMappingUpdatedAt && row.acknowledgedCatalogPresent !== null ? {
+          mappingUpdatedAt: row.acknowledgedMappingUpdatedAt,
+          catalogPresent: row.acknowledgedCatalogPresent,
+          catalogTmtid: row.acknowledgedCatalogTmtid,
+        } : null,
+      },
+      standardStatus: null,
+      standardType: row.standardSource,
+      standardEligible: standard?.eligible ?? false,
+      mappingUpdatedAt: row.mappingUpdatedAt,
+    };
+  }));
 }

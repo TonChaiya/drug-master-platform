@@ -11,6 +11,10 @@ export interface ExportCandidateState {
   checkpointExportId: string | null;
   status: Exclude<MappingLifecycleStatus, "hidden">;
   standardValid: boolean;
+  /** Present for v2; omitted by legacy candidates so feature OFF hashes stay unchanged. */
+  standardSource?: string | null;
+  standardCode?: string | null;
+  standardLevel?: string | null;
 }
 
 export interface MappingExportCheckpointState {
@@ -42,6 +46,9 @@ export function exportSnapshotHash(
     mappingId: candidate.mappingId,
     mappingUpdatedAt: candidate.mappingUpdatedAt.toISOString(),
     checkpointExportId: candidate.checkpointExportId,
+    standardSource: candidate.standardSource,
+    standardCode: candidate.standardCode,
+    standardLevel: candidate.standardLevel,
     row: candidate.row,
   }));
   return createHash("sha256").update(JSON.stringify({ facilityId, selection, payload })).digest("hex");

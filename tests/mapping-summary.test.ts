@@ -120,3 +120,19 @@ test("keeps lifecycle mapped but excludes invalid or inactive standards from exp
   assert.equal(summary.mappedTotal, 3);
   assert.equal(summary.exportReadyTotal, 0);
 });
+
+test("v2 eligibility is the export-ready truth without consulting legacy standard status", () => {
+  const ready = summarize([row({ standardStatus: null, standardType: null, standardEligible: true })]);
+  assert.equal(ready.mappedTotal, 1);
+  assert.equal(ready.exportReadyTotal, 1);
+
+  const invalid = summarize([row({
+    lifecycle: { ...row().lifecycle, standardValid: false },
+    standardStatus: null,
+    standardType: null,
+    standardEligible: false,
+  })]);
+  assert.equal(invalid.mappedTotal, 0);
+  assert.equal(invalid.needsReviewTotal, 1);
+  assert.equal(invalid.exportReadyTotal, 0);
+});

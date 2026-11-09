@@ -172,6 +172,38 @@ pnpm exec vitest run tests/mapping-v2.test.ts tests/mapping-v2-routes.test.ts te
 
 การตรวจ clean migration + TMT/TTMT save/review/facility isolation ใช้ฐาน exact `drug_master_mapping_v2_test` บน localhost เท่านั้น และต้องกำหนด `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `TMT_V2_TEST_*` ครบก่อนรัน `tests/tmt-v2-migration-mysql.test.ts`; guard ปฏิเสธชื่อฐาน/host อื่นและไม่อ่าน `.env.local`.
 
+### Catalog/Export v2 (Phase 6, local only)
+
+Catalog และ Export v2 แยก flag และ default-off. ใช้เฉพาะ local/test process ที่ migrate ถึง 0016 แล้ว:
+
+```powershell
+$env:TMT_V2_CATALOG_ENABLED = "1"
+$env:TMT_V2_EXPORT_ENABLED = "1"
+```
+
+Targeted pure tests ไม่ต้องใช้ฐานข้อมูล:
+
+```powershell
+pnpm exec vitest run tests/mapping-v2-consumer.test.ts tests/export-v2.test.ts tests/mapping-summary.test.ts tests/tmt-v2-browser.test.ts
+```
+
+Local E2E ต้องใช้ Laragon MySQL ที่ `127.0.0.1` และฐาน exact `drug_master_export_v2_test` เท่านั้น โดยกำหนด env ต่อ process แบบ explicit, ห้ามโหลด `.env.local`, ห้ามใช้ `jhcisdb` และต้อง opt-in integration guard:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3307"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = ""
+$env:DB_DATABASE = "drug_master_export_v2_test"
+$env:TMT_V2_CATALOG_ENABLED = "1"
+$env:TMT_V2_EXPORT_ENABLED = "1"
+pnpm exec vitest run tests/export-v2-mysql.test.ts --reporter=verbose
+```
+
+E2E สร้างและลบเฉพาะฐานทดสอบดังกล่าว ตรวจ full/delta/checkpoint/rollback/stale preview/invalidation/tenant isolation และเขียนไฟล์จริงไป temp directory. ทุกครั้งที่แตะ writer หรือ row contract ต้องอ่านไฟล์กลับแบบ programmatic และเปิดไฟล์ผลลัพธ์ด้วย Excel/LibreOffice จริงเพื่อตรวจหัว 22 ช่อง, Thai text, leading zeroes, NDC24, วันที่, ISED และ PRODUCTCAT.
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review

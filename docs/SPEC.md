@@ -228,6 +228,20 @@ run ต้องผูก `/version` ก่อนและหลัง; version 
 - หน้าจอต้องแสดงแถวจริงของชุดที่เลือกก่อนดาวน์โหลด พร้อมจำนวนที่ตรงกับไฟล์; preview token มีอายุ 10 นาที ใช้ได้ครั้งเดียว และถ้าข้อมูลเปลี่ยนหลัง preview ให้ยกเลิก download แล้วขอให้ตรวจ preview ใหม่
 - admin ต้องเลือก effective facility อย่างชัดเจน; user ใช้ facility จาก session
 
+### Mapping v2 consumer และ export
+
+- identity มาตรฐานต้องเป็น tuple `(standard_source, standard_code, standard_level)`; รหัสตัวเลขเดียวกันของ TMT และ TTMT เป็นคนละ namespace และห้าม fallback ข้าม source
+- PRODUCTCAT 1 ส่งออกได้เฉพาะ `TMT / <code> / tpu` ที่มี active MasterTMT (`status=0`); GPU/GP/TP, missing MasterTMT และ inactive TPU ต้อง fail closed
+- Drug Catalog `TMTID` เทียบกับ final mapped code โดยตรง ไม่ traverse graph เพื่อเปลี่ยน GPU เป็น TPU อัตโนมัติ ตัวอย่าง GPU `764169` ใช้เป็น mapping/export ไม่ได้ แต่เมื่อผู้ใช้เลือก TPU `565818` ค่า export ต้องเป็น `565818`
+- TMT export fields มาจาก MasterTMT; ISED มาจาก distinct latest-date NLEM เท่านั้น ถ้าค่า unknown หรือ latest-date conflict ให้ ISED ว่างพร้อม warning ห้ามเดา
+- latest-date RegNo หลายค่าต้องคงเป็น conflict และห้ามเลือก first/alphabetical ปัจจุบัน RegNo ไม่อยู่ใน DrugCat 22 ช่องจึงเป็น warning และไม่ block export
+- ATC ไม่อยู่ใน DrugCat 22 ช่อง ดังนั้น ATC conflict ไม่ block export และ export adapter ไม่ต้อง query ATC
+- TTMT mapping resolve จาก `ttmt_products` ของ succeeded import เท่านั้น ใช้ status/fields ของ TTMT โดยตรง ห้าม query TMT graph, MasterTMT หรือ enrichment ของ TMT
+- mapping v2 export-ready เมื่อ lifecycle เป็น `mapped`, acknowledgement (ถ้าต้องใช้) ยัง current, source-specific standard valid และไม่มี conflict ที่ทำให้คอลัมน์ contract กำกวม
+- delta/checkpoint ใช้ version จาก `drug_mappings.updatedAt`; การ refresh metadata ของ TMT/TTMT เพียงอย่างเดียวห้ามทำให้ mapping กลับเข้า delta
+- preview hash ต้องรวม source/code/level เพื่อให้ token stale เมื่อ identity เปลี่ยน และ failed export ห้ามเลื่อน checkpoint
+- v2 Catalog/Export เปิดใช้เฉพาะ feature flag explicit; เมื่อปิดต้องใช้ legacy resolver เดิมและไม่ query v2 tables
+
 ### ที่มาของแต่ละคอลัมน์
 
 - `GENERICNAME` ← standard `activeIngredient`

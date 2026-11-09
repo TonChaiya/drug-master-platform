@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { mappingEligibility } from "@/modules/tmt/browser";
-import { tmtV2BrowserEnabled, tmtV2MappingEnabled } from "@/modules/tmt/feature";
+import {
+  tmtV2BrowserEnabled,
+  tmtV2CatalogEnabled,
+  tmtV2ExportEnabled,
+  tmtV2MappingEnabled,
+} from "@/modules/tmt/feature";
 import { TMT_LEVEL_PRESENTATION } from "@/modules/tmt/presentation";
 
 test("TMT v2 browser is disabled unless the explicit flag equals 1", () => {
@@ -15,6 +20,15 @@ test("TMT v2 mapping is separately disabled unless its explicit flag equals 1", 
   assert.equal(tmtV2MappingEnabled({}), false);
   assert.equal(tmtV2MappingEnabled({ TMT_V2_MAPPING_ENABLED: "true" }), false);
   assert.equal(tmtV2MappingEnabled({ TMT_V2_MAPPING_ENABLED: "1" }), true);
+});
+
+test("catalog and export v2 require independent exact feature flags", () => {
+  assert.equal(tmtV2CatalogEnabled({}), false);
+  assert.equal(tmtV2CatalogEnabled({ TMT_V2_CATALOG_ENABLED: "true" }), false);
+  assert.equal(tmtV2CatalogEnabled({ TMT_V2_CATALOG_ENABLED: "1" }), true);
+  assert.equal(tmtV2ExportEnabled({}), false);
+  assert.equal(tmtV2ExportEnabled({ TMT_V2_EXPORT_ENABLED: "true" }), false);
+  assert.equal(tmtV2ExportEnabled({ TMT_V2_EXPORT_ENABLED: "1" }), true);
 });
 
 test("commercial mapping eligibility accepts only active MasterTMT TPU", () => {

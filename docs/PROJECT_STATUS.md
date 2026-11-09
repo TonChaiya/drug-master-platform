@@ -62,10 +62,14 @@ Migration สำคัญล่าสุด:
 - Phase 5 Mapping v2 เพิ่ม additive migration `0016_mapping_v2_identity.sql`, identity `(standard_source, standard_code, standard_level)`, resolver TMT/TTMT แยกกัน และ hidden `/mappings/v2`; default-off ต้องตั้งทั้ง `TMT_V2_MAPPING_ENABLED=1` และ Browser flag ใน local เท่านั้น
 - Phase 5 ยังคง legacy `/mappings`, catalog reconcile, dashboard และ export ไว้ตาม `standard_products`; ไม่มี production migration/cutover/backfill และ legacy row ใช้ source/level `NULL` ได้
 - Phase 5 ผ่าน local E2E บนฐานแยก: GPU `764169` บันทึกตรงไม่ได้, active TPU/TTMT บันทึกและ GET คืน server truth, inactive standard ปฏิเสธ, facility scope fail-closed และ review confirm/repeat no-op/identity staleness ผ่าน; visual 1366/768/390 ไม่มี horizontal overflow
+- Phase 6 เพิ่ม consumer ฝั่ง Catalog/lifecycle/export สำหรับ identity v2 แบบ source-aware: TMT resolve เฉพาะ active TPU จาก MasterTMT พร้อม latest NLEM/RegNo และ TTMT resolve จาก `ttmt_products` โดยไม่ข้าม namespace
+- Phase 6 full/delta export ยังคงสัญญา DrugCat 22 ช่อง, checkpoint จาก `drug_mappings.updatedAt`, preview one-time/stale protection และ review acknowledgement เดิม; GPU `764169` ไม่ถูก export และ fixture ที่เลือก TPU `565818` ส่งออก `TMTID=565818`
+- Phase 6 ผ่าน local E2E บนฐาน exact `drug_master_export_v2_test` ถึง migration 0016 รวม full/delta/rollback/invalidation/tenant isolation และเปิดไฟล์ `.xls` จริงด้วย Microsoft Excel แล้ว; RegNo latest-date conflict ไม่เลือกค่าเองและ ATC ไม่ block export เพราะไม่อยู่ใน contract 22 ช่อง
+- Catalog/export v2 ยัง default-off (`TMT_V2_CATALOG_ENABLED=1` และ `TMT_V2_EXPORT_ENABLED=1` ต้องเปิดแยกกัน) จึงไม่มี production cutover, migration หรือ environment change; production ยังใช้ legacy `standard_products`
 - controlled live backfill ลง local MySQL ผ่านด้วย TMT version `20261102`: core ready, incremental replay 1,625 rowsเขียนใหม่ 0, และ `764169` ยืนยัน 1 GP / 9 TPU / 3 GPP โดย TPU ทั้ง 9 status 0
 - `/imagelist` ล้มเหลวแบบ isolated 3 historical windows; invariant report พบ dangling relationship concepts 106, self relationships 16, ATC same-date conflicts 1,446 และ RegNo same-date conflicts 803 โดยไม่มี missing level/concept counterpart หรือ unknown status/level
-- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; Phase 3 ไม่มี route/cron หรือ search/mapping/export/catalog cutover และ migrations 0014/0015 ยังไม่ production-applied
-- ขั้นถัดไปหลัง Phase 5 คือ Phase 6 Drug Catalog + export integration; ห้ามเริ่มโดยอัตโนมัติ
+- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; migrations 0014/0015/0016 ยังไม่ production-applied
+- ขั้นถัดไปหลัง Phase 6 คือ Phase 7 production reset/cutover ซึ่งต้องได้รับอนุมัติแยกและห้ามเริ่มโดยอัตโนมัติ
 
 ## Known improvement backlog
 

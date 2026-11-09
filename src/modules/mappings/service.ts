@@ -12,6 +12,8 @@ import {
 } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { classifyMappingLifecycle, decideCatalogReconcile } from "./lifecycle";
+import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
+import { reconcileFromLatestCatalogV2 } from "./reconcile-v2";
 import { MappingRuleError, normalizeSpecPrep, resolveProductCategory, standardTypeForDrugType } from "./product-category";
 import { decideUpdateFlagWithSnapshot } from "./update-flag";
 
@@ -289,6 +291,11 @@ export interface ReconcileResult {
  * follow the latest snapshot; manual mappings are never overwritten.
  */
 export async function reconcileFromLatestCatalog(facilityId: string, userId: string): Promise<ReconcileResult> {
+  if (tmtV2CatalogEnabled()) return reconcileFromLatestCatalogV2(facilityId, userId);
+  return reconcileFromLatestCatalogLegacy(facilityId, userId);
+}
+
+async function reconcileFromLatestCatalogLegacy(facilityId: string, userId: string): Promise<ReconcileResult> {
   const snapshot = await latestImport(facilityId);
   if (!snapshot) throw new MappingRuleError("CATALOG_SNAPSHOT_MISSING", "ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้");
 
