@@ -14,7 +14,12 @@
     "check:agent-signature": "node scripts/check-agent-signature.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
-    "keys:generate": "node scripts/generate-keys.mjs"
+    "keys:generate": "node scripts/generate-keys.mjs",
+    "phase7:maintenance": "tsx scripts/phase7-maintenance.ts",
+    "tmt:v2:sync": "tsx scripts/tmt-v2-sync.ts",
+    "ttmt:v2:import": "tsx scripts/ttmt-v2-import.ts",
+    "phase7:preflight": "tsx scripts/phase7-preflight.ts",
+    "phase7:reset": "tsx scripts/phase7-reset.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.3.3",
@@ -32,6 +37,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "9.39.2",
     "eslint-config-next": "16.3.4",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vitest": "3.2.4"
   },

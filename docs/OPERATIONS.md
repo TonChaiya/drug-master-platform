@@ -375,6 +375,18 @@ Phase 6 ไม่เพิ่ม migration 0017 และไม่เปลี�
 
 การปิด flags ต้องคืน runtime ไป legacy `standard_products` path โดยไม่ลบ v2 data. ห้าม drop legacy tables หรือแก้ migration เก่าใน cutover.
 
+### Phase 7A readiness tooling (ยังห้าม production execute)
+
+- `pnpm phase7:maintenance` อ่าน/เปิด/ปิด persistent `maintenance_mode` ใน encrypted `app_settings`; transition ที่เปลี่ยน state จริงสร้าง audit และ same-state เป็น no-op
+- เมื่อ maintenance ON, server ตอบ `503 MAINTENANCE_MODE` หลัง authentication แต่ก่อน write ของ Agent sync/command, Catalog import/reconcile, Mapping save/review, Export preview/download และ admin facility-data clear; login/admin/read-only ยังทำงาน
+- `pnpm tmt:v2:sync` reuse Phase 3 full/incremental/resume engine และ full เริ่ม `2013-01-01`; `pnpm ttmt:v2:import` เขียนเฉพาะ `ttmt_imports`/`ttmt_products`
+- TMT runner fail run เมื่อ invariant โครงสร้างผิด (counterpart/level/MasterTMT/unknown/duplicate edge); FSN, dangling/self edge และ enrichment conflicts เป็น reviewable warnings ตาม source behavior ที่ยืนยันแล้ว
+- `pnpm phase7:preflight` เป็น SELECT-only และคืน non-zero เมื่อ migration/maintenance/credential/table/MasterTTMT/flag gate ไม่พร้อม
+- `pnpm phase7:reset` default dry-run, ใช้ exact DELETE allowlist ใน transaction, hard-deny KEEP tables, ต้องมี backup reference และ execute ต้องเพิ่ม `--execute --confirm-db <exact database>`
+- production execution ของ runner/import/reset ต้องยืนยัน TiDB Cloud host, port 4000, database `drug_master_platform`, migrations 0014–0016 ตามที่ command ต้องใช้, maintenance ON และ env file explicit; ห้ามพิมพ์ credential
+
+Rollback ของ maintenance boundary คือ disable ผ่าน CLI ที่ guard แล้วหลังตรวจ cutover state; reset ไม่มี automatic rollback หลัง commit จึงต้องอาศัย verified backup reference และ maintenance window. Phase 7A ไม่ apply migration, ไม่ reset, ไม่ sync/import และไม่เปิด flags บน production. Production MasterTTMT ของจริงยังต้องมาจาก owner ก่อน cutover.
+
 DB integration tests เป็น fail-closed operational invariant: ต้อง opt-in ด้วย `ALLOW_DB_INTEGRATION_TESTS=1`, รันใน `NODE_ENV=test`, ใช้เฉพาะ localhost และฐานชื่อ `drug_master_*test`; test ห้ามโหลดหรือ fallback ไป `.env.local` ที่ production-equivalent
 
 ### TMT v2 sync engine operational state

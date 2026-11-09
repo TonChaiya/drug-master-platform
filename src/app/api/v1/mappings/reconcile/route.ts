@@ -2,6 +2,7 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { MappingRuleError } from "@/modules/mappings/product-category";
 import { reconcileFromLatestCatalog } from "@/modules/mappings/service";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ export const maxDuration = 300;
 export async function POST() {
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   try {
     const result = await reconcileFromLatestCatalog(context.context.facilityId, context.context.actorUserId);

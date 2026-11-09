@@ -1,6 +1,7 @@
 import { abortStaleSessions, beginSync } from "@/modules/agent/sync";
 import { withAgentRequest } from "@/modules/agent/route-helpers";
 import { syncBeginSchema } from "@/modules/agent/schemas";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,5 +13,5 @@ export async function POST(request: Request) {
     const session = await beginSync(identity, body.officeId, body.expectedRows);
     await abortStaleSessions(identity.facilityId, session.sessionId);
     return session;
-  });
+  }, { beforeMutation: maintenanceMutationResponse });
 }

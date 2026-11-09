@@ -2,6 +2,7 @@ import { completeCommand } from "@/modules/agent/commands";
 import { withAgentRequest } from "@/modules/agent/route-helpers";
 import { completeRequestSchema } from "@/modules/agent/schemas";
 import { z } from "zod";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,5 +15,5 @@ export async function POST(request: Request) {
   return withAgentRequest(request, PATH, schema, async ({ identity, body }) => {
     await completeCommand(identity, body.commandId, body.claimToken, body.success, body.resultCode, body.resultMessage);
     return {};
-  });
+  }, { beforeMutation: maintenanceMutationResponse });
 }

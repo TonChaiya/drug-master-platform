@@ -8,6 +8,7 @@ import { MappingRuleError } from "@/modules/mappings/product-category";
 import { MappingV2RuleError, MAPPING_STANDARD_SOURCES, TMT_MAPPING_LEVELS, TTMT_MAPPING_LEVEL } from "@/modules/mappings/v2";
 import { saveV2Mapping } from "@/modules/mappings/v2-service";
 import { tmtV2MappingEnabled } from "@/modules/tmt/feature";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,8 @@ export async function POST(request: Request) {
   if (!tmtV2MappingEnabled()) return apiJson({ ok: false, errorCode: "TMT_V2_MAPPING_DISABLED", message: "Mapping v2 ยังไม่เปิดใช้งาน" }, 503);
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ข้อมูลการจับคู่ไม่ถูกต้อง" }, 400);
   try {

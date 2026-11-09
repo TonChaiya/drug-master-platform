@@ -198,6 +198,12 @@ run ต้องผูก `/version` ก่อนและหลัง; version 
 **TTMT** — คู่มือ API ไม่ยืนยัน MasterTTMT endpoint ระบบจึงนำเข้า MasterTTMT จากไฟล์ที่อนุมัติ
 และแยก version/import history ของ TTMT ออกจาก TMT API **ห้ามถือว่าเป็นข้อมูลเดียวกัน**
 
+TTMT v2 importer ใช้ known MasterTTMT column aliases เดียวกับ legacy parser แต่ duplicate identity ในไฟล์ต้อง reject, import/version และ hash ต้อง unique และ import + product upsert + audit ต้อง commit ใน transaction เดียวกัน ข้อมูล v2 เขียนได้เฉพาะ `ttmt_imports`/`ttmt_products`; ห้าม fallback ไป `standard_products` หรือ TMT hierarchy. Dry-run parse/hash/summary เท่านั้นและต้องเขียน 0 แถว.
+
+**Phase 7 maintenance boundary** — สถานะเก็บแบบ persistent/encrypted ใน `app_settings`. เมื่อ ON ทุก domain mutation ที่เปลี่ยน source/catalog/mapping/review/export/sync, Agent command state หรือ facility business data ต้องถูกปฏิเสธหลัง authentication แต่ก่อน service write ด้วย HTTP 503; read-only/login/admin และ guarded operational tooling ยังใช้ได้. สถานะอ่านไม่ได้ต้อง fail closed สำหรับ domain mutation. การ enable/disable ที่เปลี่ยน state จริงต้อง audit และ same-state เป็น no-op.
+
+**Controlled reset** — ใช้ exact table allowlist และ transaction เท่านั้น ห้าม wildcard/drop และห้ามแตะ users/facilities/sessions/app settings/audit/Agent identity+credentials+commands+tokens/rate limits/migration journal. Dry-run เป็น default; execution ต้องมี maintenance ON, verified backup reference, explicit execute และ exact database confirmation.
+
 ---
 
 ## 9. Drug Catalog: นำเข้าและส่งออก

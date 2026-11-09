@@ -3,6 +3,7 @@ import { apiJson, unauthorized } from "@/lib/api-response";
 import { requireTenantContext } from "@/lib/authorization/effective-facility";
 import { currentUser } from "@/modules/auth/session";
 import { COMMAND_TYPES, queueCommand } from "@/modules/agent/commands";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   } catch {
     return apiJson({ ok: false, errorCode: "FACILITY_CONTEXT_REQUIRED", message: "กรุณาเลือกสถานบริการก่อน" }, 409);
   }
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "คำสั่งไม่ถูกต้อง" }, 400);

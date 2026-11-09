@@ -190,6 +190,18 @@ test("version drift marks a completed core run stale", async () => {
   assert.equal(store.finished.at(-1)?.errorCode, "TMT_VERSION_DRIFT");
 });
 
+test("a blocking invariant failure prevents core readiness", async () => {
+  const store = new FakeStore();
+  const result = await runInitialTmtSync({
+    source: fakeSource(), store, coreEndpoints: ["gpu"], optionalEndpoints: [], historyStart: "2026-11-04",
+    invariantCheck: async () => { throw new Error("blocking invariant"); },
+    ...orchestrationOptions,
+  });
+  assert.equal(result.coreReady, false);
+  assert.equal(result.status, "failed");
+  assert.equal(result.errorCode, "Error");
+});
+
 test("a final version check failure closes the run as failed", async () => {
   const store = new FakeStore();
   let versionCalls = 0;

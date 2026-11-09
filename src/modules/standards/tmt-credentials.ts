@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { appSettings } from "@/db/schema";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secret-box";
+import type { Pool, RowDataPacket } from "mysql2/promise";
 
 const SETTING_KEY = "tmt_api";
 export const DEFAULT_TMT_API_BASE = "https://tmt.this.or.th/tmtapi";
@@ -37,9 +38,13 @@ async function fromDatabase(): Promise<{ credentials: TmtCredentials; updatedAt:
   const rows = await db.select().from(appSettings).where(eq(appSettings.settingKey, SETTING_KEY)).limit(1);
   const row = rows[0];
   if (!row) return null;
+  return parseStoredCredentials(row.valueEncrypted, row.updatedAt);
+}
+
+function parseStoredCredentials(valueEncrypted: string, updatedAt: Date): { credentials: TmtCredentials; updatedAt: Date } | null {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decryptSecret(row.valueEncrypted));
+    parsed = JSON.parse(decryptSecret(valueEncrypted));
   } catch {
     // A blob that will not decrypt means APP_ENCRYPTION_KEY was rotated without
     // re-saving. Fall through to the environment rather than failing every sync.
@@ -49,7 +54,7 @@ async function fromDatabase(): Promise<{ credentials: TmtCredentials; updatedAt:
   if (!value.username || !value.password) return null;
   return {
     credentials: { baseUrl: normalizeBase(value.baseUrl), username: value.username, password: value.password },
-    updatedAt: row.updatedAt,
+    updatedAt,
   };
 }
 
@@ -57,6 +62,16 @@ async function fromDatabase(): Promise<{ credentials: TmtCredentials; updatedAt:
 export async function resolveTmtCredentials(): Promise<TmtCredentials | null> {
   const stored = await fromDatabase();
   return stored?.credentials ?? fromEnvironment();
+}
+
+export async function resolveTmtCredentialsFromPool(pool: Pool): Promise<TmtCredentials | null> {
+  const [rows] = await pool.query<RowDataPacket[]>("SELECT value_encrypted,updated_at FROM app_settings WHERE setting_key='tmt_api' LIMIT 1");
+  const row = rows[0];
+  if (row) {
+    const stored = parseStoredCredentials(String(row.value_encrypted), row.updated_at instanceof Date ? row.updated_at : new Date(String(row.updated_at)));
+    if (stored) return stored.credentials;
+  }
+  return fromEnvironment();
 }
 
 export async function readTmtCredentialStatus(): Promise<TmtCredentialStatus> {

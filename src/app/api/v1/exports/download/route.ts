@@ -3,6 +3,7 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { createExport, ExportPreviewStaleError } from "@/modules/exports/service";
 import { ExportContractError } from "@/modules/exports/writer";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ const schema = z
 export async function POST(request: Request) {
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ตัวเลือกไม่ถูกต้อง" }, 400);

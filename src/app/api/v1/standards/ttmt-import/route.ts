@@ -1,6 +1,7 @@
 import { apiJson } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/authorization/require-context";
 import { TtmtImportError, importMasterTtmt } from "@/modules/standards/ttmt-import";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export async function POST(request: Request) {
   const admin = await requireAdmin();
   if (!admin.ok) return admin.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");

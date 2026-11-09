@@ -2,6 +2,7 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { CatalogParseError } from "@/modules/catalog/parser";
 import { importDrugCatalog } from "@/modules/catalog/service";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export async function POST(request: Request) {
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");

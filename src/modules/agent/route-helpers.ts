@@ -28,6 +28,7 @@ export async function withAgentRequest<
   path: string,
   schema: ZodType<T>,
   handler: (context: AgentContext<T>) => Promise<unknown>,
+  options: { beforeMutation?: () => Promise<Response | null> } = {},
 ): Promise<Response> {
   try {
     const raw = new Uint8Array(await request.arrayBuffer());
@@ -47,6 +48,10 @@ export async function withAgentRequest<
     assertInstallation(identity, parsed.data.installationId);
     if (parsed.data.officeId) {
       await assertOffice(identity, parsed.data.officeId);
+    }
+    const blocked = await options.beforeMutation?.();
+    if (blocked) return blocked;
+    if (parsed.data.officeId) {
       await clearOfficeMismatch(identity.installationId);
     }
     if (parsed.data.agentVersion) {

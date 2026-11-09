@@ -5,6 +5,7 @@ import { facilities } from "@/db/schema";
 import { apiJson } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/authorization/require-context";
 import { AdminActionError, clearFacilityData } from "@/modules/admin/service";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,8 @@ const schema = z
 export async function POST(request: Request) {
   const admin = await requireAdmin();
   if (!admin.ok) return admin.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ข้อมูลไม่ถูกต้อง" }, 400);

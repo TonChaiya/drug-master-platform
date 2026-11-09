@@ -70,6 +70,9 @@ Migration สำคัญล่าสุด:
 - `/imagelist` ล้มเหลวแบบ isolated 3 historical windows; invariant report พบ dangling relationship concepts 106, self relationships 16, ATC same-date conflicts 1,446 และ RegNo same-date conflicts 803 โดยไม่มี missing level/concept counterpart หรือ unknown status/level
 - production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; migrations 0014/0015/0016 ยังไม่ production-applied
 - ขั้นถัดไปหลัง Phase 6 คือ Phase 7 production reset/cutover ซึ่งต้องได้รับอนุมัติแยกและห้ามเริ่มโดยอัตโนมัติ
+- Phase 7A เพิ่ม readiness tooling แล้ว: operational TMT v2 runner, TTMT v2 file importer, persistent maintenance boundary, read-only preflight และ allowlisted transactional reset; ผ่าน local MySQL rehearsal บน `drug_master_phase7_readiness_test`
+- Phase 7A **ยังไม่ใช่ production cutover**: production writes = 0, migrations ยังถึง 0013, flags v2 ยัง OFF และ legacy production path ยัง active
+- Production MasterTTMT file ยังไม่มีใน approved repository/Desktop/Downloads (`MASTER_TTMT_FILE = MISSING`) จึงยัง block Phase 7 production cutover แม้ readiness code จะพร้อม
 
 ## Known improvement backlog
 

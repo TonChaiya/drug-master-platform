@@ -144,6 +144,26 @@ pnpm exec vitest run tests/tmt-v2-live-sync.test.ts --reporter=verbose
 
 Live harness ล้างเฉพาะตาราง `tmt_*` ใน local test DB เพื่อทำ full backfill ใหม่; ห้ามใช้กับ production และไม่แตะ `jhcisdb`
 
+### Phase 7A cutover readiness (local rehearsal only)
+
+ทุก CLI ต้องรับ `--env-file` แบบ explicit และไม่ fallback ไป `.env.local`. เป้าหมาย local ต้องเป็น localhost และชื่อ `drug_master_*test`; production fingerprint/confirmation/maintenance guards ถูกทดสอบแยก แต่ห้าม execute production ใน Phase 7A.
+
+```powershell
+pnpm phase7:maintenance -- --environment local --env-file <local-test.env> --status
+pnpm tmt:v2:sync -- --environment local --env-file <local-test.env> --mode full --dry-run
+pnpm ttmt:v2:import -- --environment local --env-file <local-test.env> --file <approved-fixture.xls> --version <version> --dry-run
+pnpm phase7:preflight -- --environment local --env-file <local-test.env> --master-ttmt <approved-fixture.xls>
+pnpm phase7:reset -- --environment local --env-file <local-test.env> --backup-reference <local-backup> --dry-run
+```
+
+Integration rehearsal ใช้ `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1`, `127.0.0.1:3307` และฐาน exact `drug_master_phase7_readiness_test`:
+
+```powershell
+pnpm exec vitest run tests/phase7-readiness-mysql.test.ts
+```
+
+fixture ใน test สร้างจาก known legacy MasterTTMT column contract เท่านั้น ไม่ใช่ production MasterTTMT file และห้ามนำไปใช้ cutover.
+
 ### TMT Browser v2 (Phase 4, local only)
 
 Browser อยู่ที่ hidden route `/admin/tmt-v2` และ default-off. ใช้ fixture DB แยกชื่อ exact `drug_master_tmt_v2_browser_test` ที่ localhost เท่านั้น; ห้ามโหลด `.env.local` หรือใช้ `jhcisdb`:

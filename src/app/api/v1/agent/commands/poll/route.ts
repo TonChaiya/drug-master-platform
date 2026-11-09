@@ -2,6 +2,7 @@ import { claimNextCommand } from "@/modules/agent/commands";
 import { withAgentRequest } from "@/modules/agent/route-helpers";
 import { pollRequestSchema } from "@/modules/agent/schemas";
 import { recordHeartbeat } from "@/modules/agent/auth";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,5 +20,5 @@ export async function POST(request: Request) {
       command,
       pollIntervalSeconds: command ? 5 : 20,
     };
-  });
+  }, { beforeMutation: maintenanceMutationResponse });
 }

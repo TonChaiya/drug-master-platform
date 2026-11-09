@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { createExportPreview } from "@/modules/exports/service";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ const schema = z.object({
 export async function GET(request: Request) {
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_QUERY", message: "ตัวเลือกไม่ถูกต้อง" }, 400);

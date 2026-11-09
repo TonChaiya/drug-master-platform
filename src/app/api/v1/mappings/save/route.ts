@@ -3,6 +3,7 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { MappingRuleError } from "@/modules/mappings/product-category";
 import { saveManualMapping } from "@/modules/mappings/service";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,8 @@ const schema = z
 export async function POST(request: Request) {
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ข้อมูลการจับคู่ไม่ถูกต้อง" }, 400);

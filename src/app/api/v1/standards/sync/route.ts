@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiJson } from "@/lib/api-response";
 import { requireAdmin } from "@/lib/authorization/require-context";
 import { readSyncProgress, syncMasterTmt } from "@/modules/standards/sync";
+import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const admin = await requireAdmin();
   if (!admin.ok) return admin.response;
+  const maintenance = await maintenanceMutationResponse();
+  if (maintenance) return maintenance;
 
   const parsed = schema.safeParse((await request.json().catch(() => null)) ?? {});
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ช่วงวันที่ไม่ถูกต้อง" }, 400);
