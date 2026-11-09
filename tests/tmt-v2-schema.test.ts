@@ -96,6 +96,10 @@ test("0014 and 0015 are additive contracts and leave legacy schema untouched", a
 
 test("0016 adds nullable mapping identity without rewriting legacy data", async () => {
   const sql = await readFile(new URL("../src/db/migrations/0016_mapping_v2_identity.sql", import.meta.url), "utf8");
+  const statements = sql.split(";").map((statement) => statement.trim()).filter(Boolean);
+  assert.equal(statements.length, 3);
+  assert.match(statements[0] ?? "", /^ALTER TABLE drug_mappings\s+ADD COLUMN standard_source VARCHAR\(8\) NULL AFTER standard_code$/i);
+  assert.match(statements[1] ?? "", /^ALTER TABLE drug_mappings\s+ADD COLUMN standard_level VARCHAR\(16\) NULL AFTER standard_source$/i);
   assert.match(sql, /^ALTER TABLE drug_mappings/m);
   assert.match(sql, /ADD COLUMN standard_source VARCHAR\(8\) NULL/i);
   assert.match(sql, /ADD COLUMN standard_level VARCHAR\(16\) NULL/i);
