@@ -2,7 +2,7 @@ import type { Pool, RowDataPacket } from "mysql2/promise";
 import { mappingEligibility, masterTmtStatus, type LatestTmtValues, type TmtSearchResult } from "./browser";
 import { loadDirectTmtRelationships, traverseTmtGraph, type TmtDirectRelationships, type TmtGraphResult } from "./graph";
 import { TmtSyncRepository } from "./persistence";
-import { searchTmt } from "./search";
+import { latestRegnoByTmtIds, searchTmt } from "./search";
 
 export interface TmtRelatedTpu {
   tmtId: string;
@@ -10,6 +10,8 @@ export interface TmtRelatedTpu {
   endpointFsn: string | null;
   manufacturer: string | null;
   tradeName: string | null;
+  registrationNumber: string | null;
+  registrationConflict: boolean;
   status: "active" | "cancelled" | "unknown";
   mappingEligible: boolean;
   mappingEligibilityReason: string;
@@ -48,6 +50,7 @@ async function relatedTpu(pool: Pool, ids: string[]): Promise<TmtRelatedTpu[]> {
      WHERE c.level_name='tpu' AND c.tmtid IN (${placeholders}) ORDER BY c.tmtid`,
     ids,
   );
+  const regnoById = await latestRegnoByTmtIds(pool, ids);
   return rows.map((row) => {
     const status = row.status === null || row.status === undefined ? null : Number(row.status);
     const eligibility = mappingEligibility("tpu", status);
@@ -57,6 +60,8 @@ async function relatedTpu(pool: Pool, ids: string[]): Promise<TmtRelatedTpu[]> {
       endpointFsn: row.endpoint_fsn === null ? null : String(row.endpoint_fsn),
       manufacturer: row.manufacturer === null ? null : String(row.manufacturer),
       tradeName: row.tradename === null ? null : String(row.tradename),
+      registrationNumber: regnoById.get(String(row.tmtid))?.value ?? null,
+      registrationConflict: regnoById.get(String(row.tmtid))?.conflict ?? false,
       status: masterTmtStatus(status),
       mappingEligible: eligibility.eligible,
       mappingEligibilityReason: eligibility.reason,

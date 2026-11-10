@@ -35,6 +35,8 @@ export interface TmtSearchResult {
   contentUnit: string | null;
   dispensingUnit: string | null;
   tradeName: string | null;
+  registrationNumber: string | null;
+  registrationConflict: boolean;
 }
 
 export interface LatestTmtValues {

@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test, vi } from "vitest";
 import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
+import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { loadV2SavedIdentity } from "@/components/mappings/v2-saved-identity";
 import { TmtBrowser } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
 
@@ -32,6 +33,36 @@ test("level badge always exposes text while its color marker is decorative", () 
   assert.match(unknown, /bg-slate/);
 });
 
+test("shared TMT result card keeps the approved field order and explicit RegNo conflict", () => {
+  const html = renderToStaticMarkup(createElement(TmtResultCard, {
+    result: {
+      level: "tpu", tmtId: "565818", name: "FSN FIRST", tradeName: "TRADE SECOND",
+      manufacturer: "MAKER THIRD", registrationNumber: null, registrationConflict: true,
+      status: "active", mappingEligible: true, mappingEligibilityReason: "ELIGIBLE",
+    },
+  }, createElement("button", { type: "button" }, "รายละเอียด")));
+
+  const ordered = ["TPU", "565818", "FSN FIRST", "TRADE SECOND", "MAKER THIRD", "เลขทะเบียนมีหลายค่า", "ใช้งานอยู่", "ELIGIBLE", "รายละเอียด"];
+  for (let index = 1; index < ordered.length; index += 1) {
+    assert.ok(html.indexOf(ordered[index - 1]!) < html.indexOf(ordered[index]!), `${ordered[index - 1]} must precede ${ordered[index]}`);
+  }
+});
+
+test("shared TMT result card leaves missing optional fields blank", () => {
+  const html = renderToStaticMarkup(createElement(TmtResultCard, {
+    result: {
+      level: "gpu", tmtId: "764169", name: "GPU FSN", tradeName: null,
+      manufacturer: null, registrationNumber: null, registrationConflict: false,
+      status: "unknown", mappingEligible: false, mappingEligibilityReason: "เลือก TPU",
+    },
+  }));
+
+  assert.doesNotMatch(html, /—|N\/A/i);
+  assert.match(html, /ชื่อการค้า<\/span><span[^>]*><\/span>/);
+  assert.match(html, /ผู้ผลิต<\/span><span[^>]*><\/span>/);
+  assert.match(html, /เลขทะเบียนยา<\/span><span[^>]*><\/span>/);
+});
+
 test("browser starts as a compact read-only search workspace", () => {
   const html = renderToStaticMarkup(createElement(TmtBrowser));
   assert.match(html, /ค้นหา TMT v2/);
@@ -43,15 +74,17 @@ test("browser starts as a compact read-only search workspace", () => {
 });
 
 test("admin browser and mapping pages label validated-unverified data as degraded", async () => {
-  const [browserPage, mappingPage] = await Promise.all([
+  const [browserPage, mappingPage, mappingWorkbench] = await Promise.all([
     readFile(new URL("../src/app/(dashboard)/admin/tmt-v2/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/(dashboard)/mappings/v2/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/mappings/v2-mapping-workbench.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(browserPage, /readiness\.assurance === "validated_unverified"/);
   assert.match(browserPage, /ข้อมูล TMT ผ่านการตรวจสอบแบบ degraded/);
   assert.match(mappingPage, /readiness\.assurance === "validated_unverified"/);
   assert.match(mappingPage, /กำลังใช้ข้อมูล TMT แบบ degraded/);
   assert.doesNotMatch(`${browserPage}\n${mappingPage}`, /validated-unverified[^\n]*verified succeeded/i);
+  assert.doesNotMatch(`${mappingPage}\n${mappingWorkbench}`, /ทดลองใน local เท่านั้น/);
 });
 
 test("mapping v2 reloads server truth for the newly selected source drug", async () => {

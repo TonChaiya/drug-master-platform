@@ -50,6 +50,20 @@ describe.runIf(dbIntegrationTestsEnabled()).sequential("TMT v2 browser on isolat
     assert.equal((await searchTmt(pool, { query: "lidocaine", limit: 2 })).length, 2);
   });
 
+  test("search exposes latest RegNo without choosing conflicts or inventing missing values", async () => {
+    const conflict = (await searchTmt(pool, { query: TPU_IDS[0], limit: 20 }))[0];
+    assert.equal(conflict?.registrationNumber, null);
+    assert.equal(conflict?.registrationConflict, true);
+
+    const single = (await searchTmt(pool, { query: TPU_IDS[1], limit: 20 }))[0];
+    assert.equal(single?.registrationNumber, "1A 200/67");
+    assert.equal(single?.registrationConflict, false);
+
+    const missing = (await searchTmt(pool, { query: TPU_IDS[2], limit: 20 }))[0];
+    assert.equal(missing?.registrationNumber, null);
+    assert.equal(missing?.registrationConflict, false);
+  });
+
   test("empty search and unknown stored levels are safe", async () => {
     assert.deepEqual(await searchTmt(pool, { query: "does-not-exist", limit: 20 }), []);
     const unknown = await searchTmt(pool, { query: "999999", limit: 20 });
@@ -75,6 +89,9 @@ describe.runIf(dbIntegrationTestsEnabled()).sequential("TMT v2 browser on isolat
     assert.equal(detail?.direct.outbound.filter((edge) => edge.relatedLevel === "gpp").length, 3);
     assert.equal(detail?.relatedTpu.length, 9);
     assert.ok(detail?.relatedTpu.every((row) => row.status === "active" && row.mappingEligible));
+    assert.equal(detail?.relatedTpu.find((row) => row.tmtId === TPU_IDS[0])?.registrationConflict, true);
+    assert.equal(detail?.relatedTpu.find((row) => row.tmtId === TPU_IDS[1])?.registrationNumber, "1A 200/67");
+    assert.equal(detail?.relatedTpu.find((row) => row.tmtId === TPU_IDS[2])?.registrationNumber, null);
     assert.ok(detail?.warnings.includes("ไม่พบรายละเอียด concept ในข้อมูล TMT ที่ซิงก์ปัจจุบัน"));
 
     const direct = await loadDirectTmtRelationships(pool, GPU_ID, 50);
@@ -95,7 +112,7 @@ describe.runIf(dbIntegrationTestsEnabled()).sequential("TMT v2 browser on isolat
     assert.ok(detail?.warnings.includes("พบหลายค่า ATC ในวันที่ล่าสุด"));
     assert.ok(detail?.warnings.includes("พบหลายเลขทะเบียนยาในวันที่ล่าสุด"));
 
-    const missing = await getTmtConceptDetail(pool, TPU_IDS[1], { graphDepth: 1, maxNodes: 30 });
+    const missing = await getTmtConceptDetail(pool, TPU_IDS[2], { graphDepth: 1, maxNodes: 30 });
     assert.equal(missing?.nlem, null);
     assert.equal(missing?.atc, null);
     assert.equal(missing?.regno, null);

@@ -76,5 +76,6 @@ export async function resetTmtBrowserFixture(pool: Pool): Promise<void> {
     [TPU_IDS[0], "lidocaine", "1A 123/67", "1a12367", "2026-01-01", version, timestamp],
     [TPU_IDS[0], "lidocaine", "1A 124/67", "1a12467", "2026-02-01", version, timestamp],
     [TPU_IDS[0], "lidocaine", "1A 125/67", "1a12567", "2026-02-01", version, timestamp],
+    [TPU_IDS[1], "lidocaine", "1A 200/67", "1a20067", "2026-02-01", version, timestamp],
   ]);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
+import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -86,7 +86,7 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
   }
 
   return <div className="space-y-3.5">
-    <Card><CardHeader title="Mapping v2 (ทดลองใน local เท่านั้น)" description="เส้นทางนี้แยกจาก mapping legacy และต้องเปิด feature gate อย่างชัดเจน" /><CardBody className="space-y-3">
+    <Card><CardHeader title="Mapping v2" description="จับคู่ด้วย identity TMT/TTMT แบบแยก source และ level" /><CardBody className="space-y-3">
       <Field label="รายการยา JHCIS" htmlFor="mapping-v2-source"><SelectInput id="mapping-v2-source" value={sourceDrugId} onChange={(event) => { setSourceDrugId(event.target.value); setQuery(""); setTmtRows([]); setTtmtRows([]); setDetail(null); setSavedIdentity(null); setMessage(null); }}>
         {sourceDrugs.map((drug) => <option key={drug.id} value={drug.id}>{drug.drugcode} · {drug.drugname ?? drug.drugnamethai ?? "—"} ({drug.drugtype})</option>)}
       </SelectInput></Field>
@@ -96,8 +96,18 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
       {savedIdentity ? <div className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2 text-xs"><Badge tone="info">{savedIdentity.source}</Badge><span className="cell-code">{savedIdentity.code}</span><Badge>{savedIdentity.level.toUpperCase()}</Badge><Button size="sm" disabled={busy} onClick={() => void save(savedIdentity.source, savedIdentity.code, savedIdentity.level, true)}>บันทึกและยืนยันว่าตรวจสอบแล้ว</Button></div> : null}
     </CardBody></Card>
     {standardSource === "TMT" ? <Card><CardHeader title="ผลค้นหา TMT" description="ทุกระดับแสดงได้ แต่ backend อนุญาตเฉพาะ TPU ที่ active สำหรับ PRODUCTCAT 1" /><CardBody className="space-y-2">
-      {tmtRows.map((row) => <div key={row.tmtId} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5"><TmtLevelBadge level={row.level} /><span className="cell-code">{row.tmtId}</span><span className="min-w-48 flex-1 text-xs">{row.endpointFsn ?? row.conceptFsn}</span><Badge tone={row.mappingEligible ? "success" : "warning"}>{row.mappingEligibilityReason}</Badge><Button size="sm" onClick={() => void openDetail(row.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!row.mappingEligible || busy} onClick={() => void save("TMT", row.tmtId, row.level)}>เลือก</Button></div>)}
-      {detail?.concept.level === "gpu" ? <section className="rounded-md border border-border p-3"><h3 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง ({detail.relatedTpu.length})</h3><p className="type-help">{detail.concept.mappingEligibilityReason}</p><div className="mt-2 space-y-2">{detail.relatedTpu.map((row) => <div key={row.tmtId} className="flex flex-wrap items-center gap-2"><TmtLevelBadge level="tpu" /><span className="cell-code">{row.tmtId}</span><span className="min-w-48 flex-1 text-xs">{row.tradeName ?? row.endpointFsn ?? row.conceptFsn}{row.manufacturer ? <span className="mt-0.5 block text-muted">ผู้ผลิต: {row.manufacturer}</span> : null}</span><Badge tone={row.mappingEligible ? "success" : "warning"}>{row.mappingEligibilityReason}</Badge><Button size="sm" variant="primary" disabled={!row.mappingEligible || busy} onClick={() => void save("TMT", row.tmtId, "tpu")}>เลือก TPU</Button></div>)}</div></section> : null}
+      {tmtRows.map((row) => <TmtResultCard key={row.tmtId} result={{
+        level: row.level, tmtId: row.tmtId, name: row.endpointFsn ?? row.conceptFsn,
+        tradeName: row.tradeName, manufacturer: row.manufacturer,
+        registrationNumber: row.registrationNumber, registrationConflict: row.registrationConflict,
+        status: row.status, mappingEligible: row.mappingEligible, mappingEligibilityReason: row.mappingEligibilityReason,
+      }}><Button size="sm" onClick={() => void openDetail(row.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!row.mappingEligible || busy} onClick={() => void save("TMT", row.tmtId, row.level)}>เลือก</Button></TmtResultCard>)}
+      {detail?.concept.level === "gpu" ? <section className="rounded-md border border-border p-3"><h3 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง ({detail.relatedTpu.length})</h3><p className="type-help">{detail.concept.mappingEligibilityReason}</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((row) => <TmtResultCard key={row.tmtId} result={{
+        level: "tpu", tmtId: row.tmtId, name: row.endpointFsn ?? row.conceptFsn,
+        tradeName: row.tradeName, manufacturer: row.manufacturer,
+        registrationNumber: row.registrationNumber, registrationConflict: row.registrationConflict,
+        status: row.status, mappingEligible: row.mappingEligible, mappingEligibilityReason: row.mappingEligibilityReason,
+      }}><Button size="sm" onClick={() => void openDetail(row.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!row.mappingEligible || busy} onClick={() => void save("TMT", row.tmtId, "tpu")}>เลือก TPU</Button></TmtResultCard>)}</div></section> : null}
     </CardBody></Card> : <Card><CardHeader title="ผลค้นหา TTMT" description="TTMT เป็นผลิตภัณฑ์ ไม่มี graph หรือสีระดับ GP/GPU/TP/TPU" /><CardBody className="space-y-2">{ttmtRows.map((row) => <div key={row.code} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5"><Badge tone="success">TTMT</Badge><span className="cell-code">{row.code}</span><span className="min-w-48 flex-1 text-xs">{row.activeIngredient ?? row.fsn ?? "—"}</span><span className="type-help">version {row.sourceVersion}</span><Badge tone={row.active ? "success" : "warning"}>{row.active ? "ใช้งานอยู่" : "ไม่ใช้งาน"}</Badge><Button size="sm" variant="primary" disabled={!row.active || busy} onClick={() => void save("TTMT", row.code, "product")}>เลือก</Button></div>)}</CardBody></Card>}
   </div>;
 }

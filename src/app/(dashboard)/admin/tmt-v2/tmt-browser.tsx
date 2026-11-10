@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
+import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -165,17 +166,15 @@ export function TmtBrowser() {
           <CardHeader title="ผลการค้นหา" description={loading ? "กำลังค้นหา…" : `${rows.length.toLocaleString("th-TH")} รายการ`} />
           <CardBody className="space-y-2 pt-3">
             {!loading && rows.length === 0 ? <EmptyState compact title="ยังไม่มีผลการค้นหา" description="ค้นหาด้วยรหัส TMT หรือ FSN เพื่อดูรายละเอียด" /> : rows.map((row) => (
-              <button
-                key={row.tmtId}
-                type="button"
-                className="w-full min-w-0 rounded-lg border border-border p-3 text-left hover:border-primary-300 hover:bg-primary-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
-                onClick={() => void openDetail(row.tmtId)}
-              >
-                <div className="flex flex-wrap items-center gap-2"><TmtLevelBadge level={row.level} /><span className="cell-code">{row.tmtId}</span><Badge tone={row.status === "active" ? "success" : row.status === "cancelled" ? "warning" : "neutral"}>{statusLabel(row.status)}</Badge></div>
-                <p className="mt-1.5 break-words text-xs font-medium text-ink">{row.endpointFsn ?? row.conceptFsn}</p>
-                {row.manufacturer ? <p className="type-help mt-1 break-words">{row.manufacturer}</p> : null}
-                <p className="type-help mt-1">ก่อนหน้า {row.relationships.inbound.toLocaleString("th-TH")} · ถัดไป {row.relationships.outbound.toLocaleString("th-TH")}</p>
-              </button>
+              <TmtResultCard key={row.tmtId} result={{
+                level: row.level, tmtId: row.tmtId, name: row.endpointFsn ?? row.conceptFsn,
+                tradeName: row.tradeName, manufacturer: row.manufacturer,
+                registrationNumber: row.registrationNumber, registrationConflict: row.registrationConflict,
+                status: row.status, mappingEligible: row.mappingEligible, mappingEligibilityReason: row.mappingEligibilityReason,
+              }}>
+                <span className="type-help mr-auto self-center">ก่อนหน้า {row.relationships.inbound.toLocaleString("th-TH")} · ถัดไป {row.relationships.outbound.toLocaleString("th-TH")}</span>
+                <Button size="sm" onClick={() => void openDetail(row.tmtId)}>รายละเอียด</Button>
+              </TmtResultCard>
             ))}
           </CardBody>
         </Card>
@@ -201,7 +200,12 @@ export function TmtBrowser() {
 
                 {detail.warnings.length > 0 ? <Alert tone="warning" title="ข้อสังเกตคุณภาพข้อมูล"><ul className="list-inside list-disc">{detail.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></Alert> : null}
 
-                {detail.relatedTpu.length > 0 ? <section><h3 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง</h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((tpu) => <button key={tpu.tmtId} type="button" className="min-w-0 rounded-md border border-border p-2.5 text-left hover:bg-slate-50" onClick={() => void openDetail(tpu.tmtId)}><div className="flex flex-wrap items-center gap-2"><TmtLevelBadge level="tpu" /><span className="cell-code">{tpu.tmtId}</span><Badge tone={tpu.status === "active" ? "success" : "warning"}>{statusLabel(tpu.status)}</Badge></div><p className="mt-1 break-words text-xs font-medium">{tpu.tradeName ?? tpu.endpointFsn ?? tpu.conceptFsn}</p>{tpu.manufacturer ? <p className="type-help mt-0.5 break-words">{tpu.manufacturer}</p> : null}<p className="type-help mt-1">{tpu.mappingEligibilityReason}</p></button>)}</div></section> : null}
+                {detail.relatedTpu.length > 0 ? <section><h3 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง</h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((tpu) => <TmtResultCard key={tpu.tmtId} result={{
+                  level: "tpu", tmtId: tpu.tmtId, name: tpu.endpointFsn ?? tpu.conceptFsn,
+                  tradeName: tpu.tradeName, manufacturer: tpu.manufacturer,
+                  registrationNumber: tpu.registrationNumber, registrationConflict: tpu.registrationConflict,
+                  status: tpu.status, mappingEligible: tpu.mappingEligible, mappingEligibilityReason: tpu.mappingEligibilityReason,
+                }}><Button size="sm" onClick={() => void openDetail(tpu.tmtId)}>รายละเอียด</Button></TmtResultCard>)}</div></section> : null}
 
                 <div className="grid gap-4 lg:grid-cols-2"><RelationshipList title="ความสัมพันธ์ก่อนหน้า" rows={detail.direct.inbound} onOpen={(id) => void openDetail(id)} /><RelationshipList title="ความสัมพันธ์ถัดไป" rows={detail.direct.outbound} onOpen={(id) => void openDetail(id)} /></div>
                 <p className="type-help">กราฟที่โหลด: {detail.graph.nodes.length.toLocaleString("th-TH")} concept · {detail.graph.edges.length.toLocaleString("th-TH")} relationship{detail.graph.truncated ? " · แสดงถึงขีดจำกัดที่กำหนด" : ""}</p>

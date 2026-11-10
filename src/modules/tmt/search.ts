@@ -40,6 +40,61 @@ function emptyRelationships(): TmtRelationshipCounts {
   return { inbound: 0, outbound: 0, inboundByLevel: {}, outboundByLevel: {} };
 }
 
+export interface LatestRegnoProjection {
+  value: string | null;
+  conflict: boolean;
+}
+
+interface LatestRegnoRow {
+  tmtId: string;
+  regno: string;
+  changeDate: string | Date;
+}
+
+function dateText(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
+export function collapseLatestRegnoRows(rows: LatestRegnoRow[], ids: string[]): Map<string, LatestRegnoProjection> {
+  const result = new Map<string, LatestRegnoProjection>(ids.map((id) => [id, { value: null, conflict: false }]));
+  const latest = new Map<string, { changeDate: string; values: Set<string> }>();
+  for (const row of rows) {
+    const changeDate = dateText(row.changeDate);
+    const regno = row.regno.trim() === "" ? null : row.regno;
+    const current = latest.get(row.tmtId);
+    if (!current || changeDate > current.changeDate) {
+      latest.set(row.tmtId, { changeDate, values: new Set(regno === null ? [] : [regno]) });
+    } else if (changeDate === current.changeDate && regno !== null) {
+      current.values.add(regno);
+    }
+  }
+  for (const [id, item] of latest) {
+    const values = [...item.values];
+    result.set(id, { value: values.length === 1 ? values[0] : null, conflict: values.length > 1 });
+  }
+  return result;
+}
+
+export async function latestRegnoByTmtIds(pool: Pool, ids: string[]): Promise<Map<string, LatestRegnoProjection>> {
+  if (ids.length === 0) return new Map();
+  const placeholders = ids.map(() => "?").join(",");
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT r.tpuid AS tmt_id,r.regno,r.change_date
+     FROM tmt_regno r
+     INNER JOIN (
+       SELECT tpuid,MAX(change_date) AS latest_date FROM tmt_regno
+       WHERE tpuid IN (${placeholders}) GROUP BY tpuid
+     ) latest ON latest.tpuid=r.tpuid AND latest.latest_date=r.change_date
+     WHERE r.tpuid IN (${placeholders}) ORDER BY r.tpuid,r.regno`,
+    [...ids, ...ids],
+  );
+  return collapseLatestRegnoRows(rows.map((row) => ({
+    tmtId: String(row.tmt_id),
+    regno: String(row.regno),
+    changeDate: row.change_date instanceof Date ? row.change_date : String(row.change_date),
+  })), ids);
+}
+
 async function relationshipCounts(pool: Pool, ids: string[]): Promise<Map<string, TmtRelationshipCounts>> {
   const result = new Map(ids.map((id) => [id, emptyRelationships()]));
   if (ids.length === 0) return result;
@@ -156,7 +211,10 @@ export async function searchTmt(pool: Pool, filters: TmtSearchFilters): Promise<
   );
 
   const ids = rows.map((row) => String(row.tmtid));
-  const counts = await relationshipCounts(pool, ids);
+  const [counts, regnoById] = await Promise.all([
+    relationshipCounts(pool, ids),
+    latestRegnoByTmtIds(pool, ids),
+  ]);
   return rows.map((row) => {
     const level = String(row.level_name);
     const masterStatus = row.master_status === null || row.master_status === undefined ? null : Number(row.master_status);
@@ -186,6 +244,8 @@ export async function searchTmt(pool: Pool, filters: TmtSearchFilters): Promise<
       contentUnit: row.contunit === null ? null : String(row.contunit),
       dispensingUnit: row.dispunit === null ? null : String(row.dispunit),
       tradeName: row.tradename === null ? null : String(row.tradename),
+      registrationNumber: regnoById.get(String(row.tmtid))?.value ?? null,
+      registrationConflict: regnoById.get(String(row.tmtid))?.conflict ?? false,
     };
   });
 }
