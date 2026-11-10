@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, test } from "vitest";
 import type { Pool } from "mysql2/promise";
-import { TmtSyncRepository } from "@/modules/tmt/persistence";
+import { TMT_WRITE_CHUNK, TmtSyncRepository } from "@/modules/tmt/persistence";
 import { resumeTmtSyncRun, type TmtSyncSource } from "@/modules/tmt/sync";
 import { createIntegrationTestPool, dbIntegrationTestsEnabled, integrationTestDbConfig } from "./helpers/db-integration";
 
@@ -99,6 +99,46 @@ describe.runIf(enabled).sequential("TMT v2 persistence on isolated local MySQL",
     assert.equal(relationship.duplicateRows, 1);
     const replay = await repository.persistWindow({ runId, endpoint: "relationship", window, version: "20261105", syncedAt: now, rows: [edge] });
     assert.equal(replay.writtenRows, 0);
+  });
+
+  test("relationship existing-row reads are bounded by write chunks", async () => {
+    const batchWindow = { begindate: "2025-01-01", enddate: "2025-12-31" };
+    await repository.ensureCheckpoint({ runId, endpoint: "relationship", window: batchWindow });
+    let relationshipReads = 0;
+    const countingPool = {
+      async getConnection() {
+        const connection = await pool.getConnection();
+        return new Proxy(connection, {
+          get(target, property) {
+            if (property === "query") {
+              return (sql: string, values?: unknown[]) => {
+                if (/FROM tmt_relationship\s+WHERE/i.test(sql)) relationshipReads += 1;
+                return target.query(sql, values);
+              };
+            }
+            const value = Reflect.get(target, property, target);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+      },
+    } as unknown as Pool;
+    const rows = Array.from({ length: TMT_WRITE_CHUNK + 1 }, (_, index) => ({
+      concept1: String(1_000_000 + index),
+      concept2: String(2_000_000 + index),
+      changeDate: "2025-01-01",
+      levelName1: "gpu",
+      levelName2: "tpu",
+    }));
+    const result = await new TmtSyncRepository(countingPool).persistWindow({
+      runId,
+      endpoint: "relationship",
+      window: batchWindow,
+      version: "20261104",
+      syncedAt: now,
+      rows,
+    });
+    assert.equal(result.writtenRows, rows.length);
+    assert.equal(relationshipReads, Math.ceil(rows.length / TMT_WRITE_CHUNK));
   });
 
   test("temporal enrichment preserves distinct same-date values and replay is idempotent", async () => {

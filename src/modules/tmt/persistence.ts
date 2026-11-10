@@ -383,9 +383,15 @@ export class TmtSyncRepository {
     const unique = deduplicate(rows, (row) => `${row.concept1}:${row.concept2}`, "relationship", (left, right) => left.changeDate.localeCompare(right.changeDate));
     let writtenRows = 0;
     for (const chunk of chunks(unique.rows)) {
+      const tuplePlaceholders = chunk.map(() => "(?,?)").join(",");
+      const [existingRows] = await connection.query<RowDataPacket[]>(
+        `SELECT concept1,concept2,change_date,level_name1,level_name2 FROM tmt_relationship
+         WHERE (concept1,concept2) IN (${tuplePlaceholders})`,
+        chunk.flatMap((row) => [row.concept1, row.concept2]),
+      );
+      const existingByKey = new Map(existingRows.map((row) => [`${row.concept1}:${row.concept2}`, row]));
       for (const row of chunk) {
-        const [existing] = await connection.query<RowDataPacket[]>("SELECT change_date,level_name1,level_name2 FROM tmt_relationship WHERE concept1=? AND concept2=?", [row.concept1,row.concept2]);
-        const previous = existing[0];
+        const previous = existingByKey.get(`${row.concept1}:${row.concept2}`);
         if (!previous || row.changeDate > databaseDate(previous.change_date)) writtenRows += 1;
         else if (row.changeDate === databaseDate(previous.change_date) && (row.levelName1 !== previous.level_name1 || row.levelName2 !== previous.level_name2)) unique.warnings.push({ code: "SAME_DATE_CONFLICT", endpoint: "relationship", key: `${row.concept1}:${row.concept2}` });
       }
