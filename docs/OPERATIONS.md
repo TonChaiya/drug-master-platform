@@ -399,6 +399,14 @@ DB integration tests เป็น fail-closed operational invariant: ต้อ�
 - persistence ไม่ prune จาก absence, ไม่ regress change date, เก็บ temporal NLEM/ATC/RegNo และรายงาน same-date conflict
 - controlled local live verification ใช้ version `20261102`, core ready และ incremental replay เขียนใหม่ 0; production migration/cutover ยังเป็น **NO**
 
+#### Degraded full sync preparation
+
+`pnpm tmt:v2:sync -- --mode full-unverified` เป็น one-shot recovery mode สำหรับกรณี `/version` ว่างเท่านั้น ไม่ใช่ fallback ของ `resume`. Execution ยังคงต้องผ่าน production fingerprint, maintenance, `--execute` และ `--confirm-db <exact database>` ตาม guard เดิม และ engine จะปฏิเสธก่อนสร้าง run หากตาราง TMT v2 source/run/checkpoint/version ใดมีข้อมูล ดังนั้นต้องมี reset ที่อนุมัติแยกก่อนเสมอ.
+
+Run ใช้ `mode=full_unverified`, marker `unverified:<20 hex>` และ terminal `status=unverified`/`TMT_VERSION_UNVERIFIED`; ไม่มีการเขียน `tmt_version` observation, ไม่สามารถ resume และไม่รายงาน `coreReady`. ทุก endpoint รวม ATC/ImageList ต้องผ่าน retries/checkpoints ภายใน process เดียว จากนั้น blocking invariants และ acceptance ของ GPU `764169` ต้องผ่าน. แม้สำเร็จ ห้าม import TTMT, เปิด v2 flags หรือปิด maintenance จนกว่าจะได้รับ approval หลัง review counts/invariants แยกต่างหาก.
+
+Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม่ execute production reset/sync**.
+
 ### TMT Browser v2 activation gate
 
 `TMT_V2_BROWSER_ENABLED` default-off และต้องมีค่า exact `1` จึงเปิด hidden `/admin/tmt-v2` กับ API read-only. ก่อนเปิดใน environment ใดต้องยืนยันครบ: migrations 0014/0015 ถูก apply ด้วย runner เดิม, v2 sync สำเร็จ, invariant report ได้ review แล้ว และผู้รับผิดชอบอนุมัติ enable flag. การเปิด flag ก่อน schema พร้อมจะทำให้ browser ใช้งานไม่ได้ จึงห้ามเพิ่ม production env ใน Phase 4. ปิด flag เป็น rollback ของ browser โดยไม่เปลี่ยน legacy standards/mapping/export/catalog paths.

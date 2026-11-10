@@ -5,6 +5,7 @@ import { runOperationalTmtSync, type TmtRunnerDependencies } from "@/modules/pha
 function dependencies(calls: string[]): TmtRunnerDependencies {
   return {
     full: async () => { calls.push("full"); return { status: "succeeded", runId: "full-run", coreReady: true }; },
+    fullUnverified: async () => { calls.push("full-unverified"); return { status: "unverified", runId: "unverified-run", coreReady: false }; },
     incremental: async () => { calls.push("incremental"); return { status: "succeeded", runId: "inc-run", coreReady: true }; },
     resume: async (runId) => { calls.push(`resume:${runId}`); return { status: "succeeded", runId, coreReady: true }; },
   };
@@ -29,4 +30,12 @@ test("TMT operational runner dispatches full incremental and resume to Phase 3 e
   await runOperationalTmtSync({ mode: "incremental", dryRun: false, credentialPresent: true }, dependencies(calls));
   await runOperationalTmtSync({ mode: "resume", runId: "resume-run", dryRun: false, credentialPresent: true }, dependencies(calls));
   assert.deepEqual(calls, ["full", "incremental", "resume:resume-run"]);
+});
+
+test("TMT operational runner dispatches only the explicit full-unverified mode", async () => {
+  const calls: string[] = [];
+  const result = await runOperationalTmtSync({ mode: "full-unverified", dryRun: false, credentialPresent: true }, dependencies(calls));
+  assert.deepEqual(calls, ["full-unverified"]);
+  assert.equal(result.result?.status, "unverified");
+  assert.equal(result.result?.coreReady, false);
 });

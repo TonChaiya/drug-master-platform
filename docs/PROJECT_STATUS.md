@@ -10,7 +10,7 @@
 - Production source checkpoint: `5fd6da3e7a8577ca82941fb5452f7d542a470364`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
-- Latest applied migration: `0013_shared_rate_limits.sql`
+- Latest applied migration: `0016_mapping_v2_identity.sql`
 - Windows Agent baseline: `1.3.0`
 
 ## Major completed areas
@@ -37,7 +37,7 @@ Migration สำคัญล่าสุด:
 
 ## Verified production state
 
-- production migrations `0010`–`0013` applied แล้ว
+- production migrations `0010`–`0016` applied แล้ว
 - login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
 - expired rate-limit bucket cleanup เปิดใช้บน production ผ่าน Vercel Cron เวลา `30 19 * * *` UTC และ controlled invocation ผ่านโดยไม่แตะ business tables
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
@@ -55,7 +55,7 @@ Migration สำคัญล่าสุด:
 - Phase 1 ตรวจคู่มือและ live TMT API แบบ read-only รวมถึงพิสูจน์รหัส `764169`; ไม่มี production data change, migration หรือ deployment
 - Phase 2 persistence/parser foundation สร้างแล้ว: Drizzle schema, additive migrations `0014_tmt_data_model_v2.sql`/`0015_ttmt_data_model_v2.sql`, typed parsers/client ครบ 18 endpoints และ targeted contracts
 - Phase 2 recovery gates ผ่าน: production fixture cleanup ยืนยันแบบ read-only ว่าไม่เหลือข้อมูล, DB integration tests ใช้ fail-closed local-only guard และ full suite ไม่โหลด `.env.local`
-- migrations 0014/0015 ผ่าน controlled Laragon MySQL จากฐานว่างถึง migration 0015 แต่ **ยังไม่ apply production**
+- migrations 0014/0015 ผ่าน controlled Laragon MySQL ก่อน apply production ใน Phase 7; migration 0016 apply production แล้วเช่นกัน
 - Phase 3 TMT v2 sync engine สร้างแล้ว: full/incremental/resume, version-bound run, endpoint checkpoint, bounded retry, optional isolation, idempotent persistence และ bounded invariant report
 - Phase 4 TMT Browser/Search v2 สร้างแล้ว: authenticated exact/prefix/FSN search, filters, concept detail, MasterTMT/enrichment, bounded relationship graph และ mapping eligibility preview ที่ `/admin/tmt-v2`
 - Phase 4 เป็น hidden/default-off (`TMT_V2_BROWSER_ENABLED` ต้องเท่ากับ `1` เท่านั้น) และเมื่อปิดจะไม่ query ตาราง v2; ไม่ได้เพิ่ม migration และไม่แตะ legacy navigation/search/mapping/export/catalog
@@ -68,11 +68,11 @@ Migration สำคัญล่าสุด:
 - Catalog/export v2 ยัง default-off (`TMT_V2_CATALOG_ENABLED=1` และ `TMT_V2_EXPORT_ENABLED=1` ต้องเปิดแยกกัน) จึงไม่มี production cutover, migration หรือ environment change; production ยังใช้ legacy `standard_products`
 - controlled live backfill ลง local MySQL ผ่านด้วย TMT version `20261102`: core ready, incremental replay 1,625 rowsเขียนใหม่ 0, และ `764169` ยืนยัน 1 GP / 9 TPU / 3 GPP โดย TPU ทั้ง 9 status 0
 - `/imagelist` ล้มเหลวแบบ isolated 3 historical windows; invariant report พบ dangling relationship concepts 106, self relationships 16, ATC same-date conflicts 1,446 และ RegNo same-date conflicts 803 โดยไม่มี missing level/concept counterpart หรือ unknown status/level
-- production application ยังใช้ `standard_products`, `standard_imports`, `standard_sync_runs` และ TTMT importer เดิม; migrations 0014/0015/0016 ยังไม่ production-applied
-- ขั้นถัดไปหลัง Phase 6 คือ Phase 7 production reset/cutover ซึ่งต้องได้รับอนุมัติแยกและห้ามเริ่มโดยอัตโนมัติ
-- Phase 7A เพิ่ม readiness tooling แล้ว: operational TMT v2 runner, TTMT v2 file importer, persistent maintenance boundary, read-only preflight และ allowlisted transactional reset; ผ่าน local MySQL rehearsal บน `drug_master_phase7_readiness_test`
-- Phase 7A **ยังไม่ใช่ production cutover**: production writes = 0, migrations ยังถึง 0013, flags v2 ยัง OFF และ legacy production path ยัง active
-- Production MasterTTMT file ยังไม่มีใน approved repository/Desktop/Downloads (`MASTER_TTMT_FILE = MISSING`) จึงยัง block Phase 7 production cutover แม้ readiness code จะพร้อม
+- production migrations 0014–0016 apply แล้วและ maintenance ยัง ON; v2 flags ทั้งหมด OFF และ legacy tables ยังอยู่
+- approved reset ถูก execute แล้ว แต่ TMT full run `466e9ee9-8a61-4a59-b7a4-a662f108a09c` หยุดที่ 168 succeeded / 42 pending เพราะ `/version` ปัจจุบันคืน `tmt_version=""`; ห้าม resume run นี้ขณะ version ว่าง
+- Phase 7C แก้ relationship persistence N+1 แล้ว แต่ยังไม่มี relationship rows, TTMT import หรือ production activation
+- Phase 7I เพิ่ม explicit `full-unverified` one-shot mode แบบ default-unused: ต้องเริ่มจาก TMT v2 tables ว่าง, สร้าง run ใหม่, ห้าม resume, require ทุก endpoint และจบเป็น `unverified`/not-ready แม้ invariant ผ่าน
+- Phase 7I **ยังไม่ execute production reset/sync**; maintenance คง ON, v2 flags OFF และต้องได้รับ approval แยกก่อนใช้งาน degraded mode หรือดำเนิน cutover ต่อ
 
 ## Known improvement backlog
 

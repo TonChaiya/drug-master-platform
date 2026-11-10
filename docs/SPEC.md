@@ -195,6 +195,8 @@ token cache อยู่ใน memory หรือ encrypted DB **ห้าม�
 
 run ต้องผูก `/version` ก่อนและหลัง; version drift ทำให้ run stale ห้าม publish core readiness Retry timeout/network/429/5xx สูงสุด 3 attempts และ refresh tokenหลัง 401/403 ได้ครั้งเดียว Core readiness ต้องครบ SUBS/VTM/GP/GPU/GPP/TP/TPU/TPP/NLEM/RegNo/MasterTMT/Concept/Relationship; ATC และ ImageList failure เป็น warning ส่วน Image ใช้ on-demand เท่านั้น
 
+เมื่อ `/version` คืนค่าว่าง อนุญาตเฉพาะ operational mode `full-unverified` ที่ระบุชัดเจนและเริ่มจาก TMT v2 source/run/checkpoint/version tables ว่างทั้งหมดเท่านั้น mode นี้ต้องสร้าง run/checkpoint ใหม่, ใช้ marker `unverified:<run-id-prefix>` แทน version, ห้ามสร้าง version observation, ห้าม resume หลัง process หยุด และถือทุก endpoint รวม ATC/ImageList เป็น required แบบ one-shot. เมื่อข้อมูลและ invariant ผ่านให้จบด้วยสถานะ `unverified` และ `coreReady=false`; ห้ามใช้ผลนี้เปิด feature flags หรือปิด maintenance โดยไม่มี approval แยก. Full/incremental/resume ปกติยังต้องใช้ `/version` ที่ไม่ว่างและ resume ต้องตรงกับ pinned version เสมอ.
+
 **TTMT** — คู่มือ API ไม่ยืนยัน MasterTTMT endpoint ระบบจึงนำเข้า MasterTTMT จากไฟล์ที่อนุมัติ
 และแยก version/import history ของ TTMT ออกจาก TMT API **ห้ามถือว่าเป็นข้อมูลเดียวกัน**
 

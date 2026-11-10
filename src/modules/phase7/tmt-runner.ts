@@ -1,4 +1,4 @@
-export type TmtOperationalMode = "full" | "incremental" | "resume";
+export type TmtOperationalMode = "full" | "full-unverified" | "incremental" | "resume";
 
 export interface TmtOperationalResult {
   status: string;
@@ -8,6 +8,7 @@ export interface TmtOperationalResult {
 
 export interface TmtRunnerDependencies {
   full(): Promise<TmtOperationalResult>;
+  fullUnverified(): Promise<TmtOperationalResult>;
   incremental(): Promise<TmtOperationalResult>;
   resume(runId: string): Promise<TmtOperationalResult>;
 }
@@ -36,8 +37,10 @@ export async function runOperationalTmtSync(
   if (input.dryRun) return plan;
   const result = input.mode === "full"
     ? await dependencies.full()
-    : input.mode === "incremental"
-      ? await dependencies.incremental()
-      : await dependencies.resume(input.runId!);
+    : input.mode === "full-unverified"
+      ? await dependencies.fullUnverified()
+      : input.mode === "incremental"
+        ? await dependencies.incremental()
+        : await dependencies.resume(input.runId!);
   return { ...plan, result };
 }

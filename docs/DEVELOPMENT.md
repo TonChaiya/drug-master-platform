@@ -156,7 +156,7 @@ pnpm phase7:preflight -- --environment local --env-file <local-test.env> --maste
 pnpm phase7:reset -- --environment local --env-file <local-test.env> --backup-reference <local-backup> --dry-run
 ```
 
-Integration rehearsal ใช้ `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1`, `127.0.0.1:3307` และฐาน exact `drug_master_phase7_readiness_test`:
+Integration rehearsal ใช้ `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1`, `127.0.0.1` บนพอร์ต Laragon MySQL ที่กำหนด explicit (`3306` หรือ `3307`) และฐาน exact `drug_master_phase7_readiness_test`:
 
 ```powershell
 pnpm exec vitest run tests/phase7-readiness-mysql.test.ts

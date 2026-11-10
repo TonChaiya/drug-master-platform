@@ -21,6 +21,9 @@ import type { TmtDateWindow } from "./windows";
 
 export const TMT_WRITE_CHUNK = 500;
 
+export type TmtRunMode = "full" | "incremental" | "full_unverified";
+export type TmtRunStatus = "succeeded" | "failed" | "stale" | "unverified";
+
 export type TmtDataEndpoint =
   | "subs" | "vtm" | "gp" | "gpu" | "gpp" | "tp" | "tpu" | "tpp"
   | "nlem" | "atc" | "regno" | "mastertmt" | "concept" | "relationship" | "imagelist";
@@ -60,7 +63,7 @@ export interface PersistWindowResult {
 export interface TmtRunRow {
   id: string;
   tmtVersion: string;
-  mode: "full" | "incremental";
+  mode: TmtRunMode;
   status: string;
   startedAt: Date;
 }
@@ -180,11 +183,44 @@ function databaseDate(value: unknown): string {
 export class TmtSyncRepository {
   constructor(private readonly pool: Pool) {}
 
-  async createRun(input: { id: string; version: string; mode: "full" | "incremental"; startedAt: Date; startedBy?: string | null }): Promise<void> {
-    await this.pool.execute(
-      "INSERT INTO tmt_sync_runs (id,tmt_version,mode,status,started_by,started_at) VALUES (?,?,?,'running',?,?)",
-      [input.id, input.version, input.mode, input.startedBy ?? null, input.startedAt],
-    );
+  async createRun(input: { id: string; version: string; mode: TmtRunMode; startedAt: Date; startedBy?: string | null }): Promise<void> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [lock] = await connection.query<RowDataPacket[]>(
+        "SELECT filename FROM schema_migrations WHERE filename='0014_tmt_data_model_v2.sql' FOR UPDATE",
+      );
+      if (!lock[0]) throw new Error("TMT v2 migration lock row is missing");
+      if (input.mode !== "full_unverified") {
+        const [unverified] = await connection.query<RowDataPacket[]>(
+          "SELECT id FROM tmt_sync_runs WHERE mode='full_unverified' LIMIT 1",
+        );
+        if (unverified[0]) throw new Error("An unverified run exists; an approved reset is required before another TMT sync");
+      }
+      if (input.mode === "full_unverified") {
+        const tables = [
+          "tmt_sync_checkpoints", "tmt_version", "tmt_relationship", "tmt_concept", "tmt_mastertmt", "tmt_regno",
+          "tmt_atc", "tmt_nlem", "tmt_tpp", "tmt_tpu", "tmt_tp", "tmt_gpp", "tmt_gpu", "tmt_gp", "tmt_vtm",
+          "tmt_subs", "tmt_sync_runs",
+        ] as const;
+        const nonEmpty: string[] = [];
+        for (const table of tables) {
+          const [[row]] = await connection.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``);
+          if (Number(row?.total ?? 0) !== 0) nonEmpty.push(table);
+        }
+        if (nonEmpty.length > 0) throw new Error(`TMT v2 target must be empty before an unverified full sync: ${nonEmpty.join(", ")}`);
+      }
+      await connection.execute(
+        "INSERT INTO tmt_sync_runs (id,tmt_version,mode,status,started_by,started_at) VALUES (?,?,?,'running',?,?)",
+        [input.id, input.version, input.mode, input.startedBy ?? null, input.startedAt],
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   async observeVersion(input: { id: string; version: string; observedAt: Date; runId: string; latencyMs?: number | null }): Promise<void> {
@@ -237,7 +273,7 @@ export class TmtSyncRepository {
     );
   }
 
-  async finishRun(input: { runId: string; status: "succeeded" | "failed" | "stale"; receivedRows: number; writtenRows: number; warningsCount: number; errorCode: string | null; finishedAt: Date }): Promise<void> {
+  async finishRun(input: { runId: string; status: TmtRunStatus; receivedRows: number; writtenRows: number; warningsCount: number; errorCode: string | null; finishedAt: Date }): Promise<void> {
     await this.pool.execute(
       "UPDATE tmt_sync_runs SET status=?,received_rows=?,written_rows=?,warnings_count=?,error_code=?,finished_at=? WHERE id=?",
       [input.status, input.receivedRows, input.writtenRows, input.warningsCount, input.errorCode, input.finishedAt, input.runId],
@@ -259,7 +295,7 @@ export class TmtSyncRepository {
     );
     const row = rows[0];
     if (!row) throw new Error("TMT sync run not found");
-    if (row.mode !== "full" && row.mode !== "incremental") throw new Error("TMT sync run mode is invalid");
+    if (row.mode !== "full" && row.mode !== "incremental" && row.mode !== "full_unverified") throw new Error("TMT sync run mode is invalid");
     return { id: row.id, tmtVersion: row.tmt_version, mode: row.mode, status: row.status, startedAt: row.started_at };
   }
 

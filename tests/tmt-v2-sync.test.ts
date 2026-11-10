@@ -7,6 +7,7 @@ import {
   resumeTmtSyncRun,
   runIncrementalTmtSync,
   runInitialTmtSync,
+  runUnverifiedInitialTmtSync,
   type TmtSyncSource,
   type TmtSyncStore,
 } from "@/modules/tmt/sync";
@@ -115,11 +116,17 @@ class FakeStore implements TmtSyncStore {
   readonly checkpoints: Array<{ runId: string; endpoint: TmtDataEndpoint; window: { begindate: string; enddate: string }; status: string }> = [];
   readonly persisted: Array<{ endpoint: TmtDataEndpoint; window: { begindate: string; enddate: string } }> = [];
   readonly finished: Array<{ status: string; errorCode: string | null }> = [];
+  readonly createdRuns: Array<{ id: string; version: string; mode: string }> = [];
+  versionObservations = 0;
+  emptyForUnverifiedFull = true;
   cursors = new Map<TmtDataEndpoint, string>();
   run = { id: "resume-run", tmtVersion: "20261104", mode: "full" as const, status: "failed", startedAt: new Date("2026-11-04T00:00:00Z") };
 
-  async createRun(): Promise<void> {}
-  async observeVersion(): Promise<void> {}
+  async createRun(input: { id: string; version: string; mode: string }): Promise<void> {
+    if (input.mode === "full_unverified" && !this.emptyForUnverifiedFull) throw new Error("TMT v2 target must be empty");
+    this.createdRuns.push(input);
+  }
+  async observeVersion(): Promise<void> { this.versionObservations += 1; }
   async ensureCheckpoint(input: { runId: string; endpoint: TmtDataEndpoint; window: { begindate: string; enddate: string } }): Promise<void> {
     if (!this.checkpoints.some((row) => row.runId === input.runId && row.endpoint === input.endpoint && row.window.begindate === input.window.begindate)) {
       this.checkpoints.push({ ...input, status: "pending" });
@@ -252,4 +259,74 @@ test("resume replays only incomplete checkpoints in the existing version-bound r
   });
   assert.equal(result.coreReady, true);
   assert.deepEqual(store.persisted.map((row) => row.endpoint), ["tpu"]);
+});
+
+test("unverified full sync never reads version and remains visibly not ready after validation", async () => {
+  const store = new FakeStore();
+  let versionCalls = 0;
+  let invariants = 0;
+  const source: TmtSyncSource = {
+    async version() { versionCalls += 1; return "20261102"; },
+    async fetch() { return []; },
+    async resetAuthentication() {},
+  };
+
+  const result = await runUnverifiedInitialTmtSync({
+    source,
+    store,
+    requiredEndpoints: ["gpu", "relationship"],
+    historyStart: "2026-11-04",
+    invariantCheck: async () => { invariants += 1; return { warningsCount: 2 }; },
+    ...orchestrationOptions,
+  });
+
+  assert.equal(versionCalls, 0);
+  assert.equal(store.versionObservations, 0);
+  assert.equal(store.createdRuns[0]?.mode, "full_unverified");
+  assert.match(store.createdRuns[0]?.version ?? "", /^unverified:[a-f0-9]{20}$/);
+  assert.deepEqual(store.persisted.map((row) => row.endpoint), ["gpu", "relationship"]);
+  assert.equal(invariants, 1);
+  assert.equal(result.status, "unverified");
+  assert.equal(result.errorCode, "TMT_VERSION_UNVERIFIED");
+  assert.equal(result.coreReady, false);
+});
+
+test("unverified full sync refuses a non-empty target before creating a run", async () => {
+  const store = new FakeStore();
+  store.emptyForUnverifiedFull = false;
+  await assert.rejects(
+    () => runUnverifiedInitialTmtSync({
+      source: fakeSource(), store, requiredEndpoints: ["gpu"], historyStart: "2026-11-04", ...orchestrationOptions,
+    }),
+    /must be empty/i,
+  );
+  assert.deepEqual(store.createdRuns, []);
+  assert.deepEqual(store.checkpoints, []);
+});
+
+test("unverified full sync treats every configured endpoint failure as fatal", async () => {
+  const store = new FakeStore();
+  const result = await runUnverifiedInitialTmtSync({
+    source: fakeSource({ fail: ["imagelist"] }),
+    store,
+    requiredEndpoints: ["gpu", "imagelist"],
+    historyStart: "2026-11-04",
+    ...orchestrationOptions,
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(result.coreReady, false);
+  assert.equal(result.errorCode, "TMT_HTTP_500");
+});
+
+test("versioned resume rejects an unverified run before calling the source", async () => {
+  const store = new FakeStore();
+  store.run = { ...store.run, mode: "full_unverified" as never };
+  let versionCalls = 0;
+  const source = fakeSource();
+  const guardedSource: TmtSyncSource = { ...source, async version() { versionCalls += 1; return source.version(); } };
+  await assert.rejects(
+    () => resumeTmtSyncRun({ runId: "resume-run", source: guardedSource, store, ...orchestrationOptions }),
+    /cannot be resumed/i,
+  );
+  assert.equal(versionCalls, 0);
 });

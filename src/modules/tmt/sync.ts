@@ -22,7 +22,7 @@ import {
   TmtApiError,
 } from "@/modules/standards/tmt-client";
 import type { TmtCredentials } from "@/modules/standards/tmt-credentials";
-import type { PersistWindowInput, PersistWindowResult, TmtCheckpointRow, TmtDataEndpoint, TmtEndpointRows, TmtRunRow } from "./persistence";
+import type { PersistWindowInput, PersistWindowResult, TmtCheckpointRow, TmtDataEndpoint, TmtEndpointRows, TmtRunMode, TmtRunRow, TmtRunStatus } from "./persistence";
 import { runWithRetry } from "./retry";
 import { bangkokDate, incrementalWindow, partitionHistoricalWindows, TMT_HISTORY_START, type TmtDateWindow } from "./windows";
 
@@ -38,12 +38,12 @@ export interface TmtSyncSource {
 }
 
 export interface TmtSyncStore {
-  createRun(input: { id: string; version: string; mode: "full" | "incremental"; startedAt: Date; startedBy?: string | null }): Promise<void>;
+  createRun(input: { id: string; version: string; mode: TmtRunMode; startedAt: Date; startedBy?: string | null }): Promise<void>;
   observeVersion(input: { id: string; version: string; observedAt: Date; runId: string; latencyMs?: number | null }): Promise<void>;
   ensureCheckpoint(input: { runId: string; endpoint: TmtDataEndpoint; window: TmtDateWindow }): Promise<void>;
   persistWindow<E extends TmtDataEndpoint>(input: PersistWindowInput<E>): Promise<PersistWindowResult>;
   failCheckpoint(input: { runId: string; endpoint: TmtDataEndpoint; window: TmtDateWindow; attempts: number; errorCode: string; finishedAt: Date }): Promise<void>;
-  finishRun(input: { runId: string; status: "succeeded" | "failed" | "stale"; receivedRows: number; writtenRows: number; warningsCount: number; errorCode: string | null; finishedAt: Date }): Promise<void>;
+  finishRun(input: { runId: string; status: TmtRunStatus; receivedRows: number; writtenRows: number; warningsCount: number; errorCode: string | null; finishedAt: Date }): Promise<void>;
   latestSuccessfulEnd(endpoint: TmtDataEndpoint): Promise<string | null>;
   loadRun(runId: string): Promise<TmtRunRow>;
   incompleteCheckpoints(runId: string): Promise<TmtCheckpointRow[]>;
@@ -52,7 +52,7 @@ export interface TmtSyncStore {
 export interface TmtSyncResult {
   runId: string;
   version: string;
-  status: "succeeded" | "failed" | "stale";
+  status: TmtRunStatus;
   errorCode: string | null;
   coreReady: boolean;
   receivedRows: number;
@@ -185,6 +185,7 @@ async function executeCheckpoints(
   version: string,
   checkpoints: TmtCheckpointRow[],
   state: RunState,
+  completion: "versioned" | "unverified" = "versioned",
 ): Promise<TmtSyncResult> {
   const core = new Set(options.coreEndpoints ?? TMT_CORE_ENDPOINTS);
   for (const checkpoint of checkpoints.filter((row) => core.has(row.endpoint))) {
@@ -201,6 +202,15 @@ async function executeCheckpoints(
     } catch (error) {
       state.optionalWarnings.push({ endpoint: checkpoint.endpoint, window: checkpoint.window, errorCode: errorCode(error) });
     }
+  }
+  if (completion === "unverified") {
+    try {
+      const invariants = await options.invariantCheck?.(runId);
+      state.warningsCount += invariants?.warningsCount ?? 0;
+    } catch (error) {
+      return finish(options, runId, version, state, "failed", errorCode(error));
+    }
+    return finish(options, runId, version, state, "unverified", "TMT_VERSION_UNVERIFIED");
   }
   let finalVersion: Awaited<ReturnType<typeof readVersion>>;
   try {
@@ -253,8 +263,39 @@ export async function runIncrementalTmtSync(options: CommonOptions): Promise<Tmt
   });
 }
 
+export async function runUnverifiedInitialTmtSync(
+  options: Omit<CommonOptions, "store" | "coreEndpoints" | "optionalEndpoints"> & {
+    store: TmtSyncStore;
+    historyStart?: string;
+    requiredEndpoints?: readonly TmtDataEndpoint[];
+  },
+): Promise<TmtSyncResult> {
+  const runId = randomUUID();
+  const version = `unverified:${runId.replaceAll("-", "").slice(0, 20)}`;
+  const startedAt = options.now();
+  await options.store.createRun({ id: runId, version, mode: "full_unverified", startedAt, startedBy: options.startedBy });
+  const endpoints = [...(options.requiredEndpoints ?? [...TMT_CORE_ENDPOINTS, ...TMT_OPTIONAL_ENDPOINTS])];
+  const checkpoints: TmtCheckpointRow[] = [];
+  const endDate = bangkokDate(startedAt);
+  for (const endpoint of endpoints) {
+    for (const window of partitionHistoricalWindows(options.historyStart ?? TMT_HISTORY_START, endDate)) {
+      await options.store.ensureCheckpoint({ runId, endpoint, window });
+      checkpoints.push({ runId, endpoint, window, status: "pending" });
+    }
+  }
+  return executeCheckpoints(
+    { ...options, coreEndpoints: endpoints, optionalEndpoints: [] },
+    runId,
+    version,
+    checkpoints,
+    initialState(),
+    "unverified",
+  );
+}
+
 export async function resumeTmtSyncRun(options: CommonOptions & { runId: string }): Promise<TmtSyncResult> {
   const run = await options.store.loadRun(options.runId);
+  if (run.mode === "full_unverified") throw new Error("Unverified TMT sync runs cannot be resumed");
   const currentVersion = await readVersion(options);
   const state = initialState();
   state.totalAttempts = currentVersion.attempts;

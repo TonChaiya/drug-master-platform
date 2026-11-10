@@ -16,6 +16,7 @@ const enabled = process.env.ALLOW_DB_INTEGRATION_TESTS === "1";
 const expectedDatabase = "drug_master_phase7_readiness_test";
 let server: Connection;
 let pool: Pool;
+let testPort: number;
 
 function cells(values: string[]): CellValue[] { return values.map((value) => ({ kind: "text", value })); }
 function fixture(): Buffer {
@@ -29,10 +30,11 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
   beforeAll(async () => {
     assert.equal(process.env.NODE_ENV, "test");
     assert.equal(process.env.DB_HOST, "127.0.0.1");
-    assert.equal(Number(process.env.DB_PORT), 3307);
+    testPort = Number(process.env.DB_PORT);
+    assert.ok(testPort === 3306 || testPort === 3307, "Phase 7 local test port must be the configured Laragon MySQL port");
     assert.equal(process.env.DB_DATABASE, expectedDatabase);
     assert.equal(process.env.DB_USERNAME, "root");
-    server = await mysql.createConnection({ host: "127.0.0.1", port: 3307, user: "root", password: process.env.DB_PASSWORD ?? "", multipleStatements: true });
+    server = await mysql.createConnection({ host: "127.0.0.1", port: testPort, user: "root", password: process.env.DB_PASSWORD ?? "", multipleStatements: true });
     await server.query(`DROP DATABASE IF EXISTS \`${expectedDatabase}\``);
     await server.query(`CREATE DATABASE \`${expectedDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     await server.query(`USE \`${expectedDatabase}\``);
@@ -45,7 +47,7 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
       await server.execute("INSERT INTO schema_migrations (filename,content_hash) VALUES (?,?)", [filename, createHash("sha256").update(migration).digest("hex")]);
     }
     assert.equal(filenames.at(-1), "0016_mapping_v2_identity.sql");
-    pool = mysql.createPool({ host: "127.0.0.1", port: 3307, user: "root", password: process.env.DB_PASSWORD ?? "", database: expectedDatabase, timezone: "Z" });
+    pool = mysql.createPool({ host: "127.0.0.1", port: testPort, user: "root", password: process.env.DB_PASSWORD ?? "", database: expectedDatabase, timezone: "Z" });
     installIntegrationTestPool(pool);
     process.env.APP_ENCRYPTION_KEY = randomBytes(32).toString("base64");
   }, 60_000);
@@ -60,7 +62,7 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     const repository = new TmtSyncRepository(pool);
     const [before] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM tmt_sync_runs");
     const dry = await runOperationalTmtSync({ mode: "full", dryRun: true, credentialPresent: true }, {
-      full: async () => { throw new Error("dry-run must not call engine"); }, incremental: async () => { throw new Error("not called"); }, resume: async () => { throw new Error("not called"); },
+      full: async () => { throw new Error("dry-run must not call engine"); }, fullUnverified: async () => { throw new Error("not called"); }, incremental: async () => { throw new Error("not called"); }, resume: async () => { throw new Error("not called"); },
     });
     assert.equal(dry.dryRun, true);
     const [afterDry] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM tmt_sync_runs");
@@ -74,12 +76,16 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     let clockTick = 0;
     const executed = await runOperationalTmtSync({ mode: "full", dryRun: false, credentialPresent: true }, {
       full: () => runInitialTmtSync({ source, store: repository, now: () => new Date(Date.parse("2026-11-09T00:00:00Z") + clockTick++), sleep: async () => undefined, coreEndpoints: ["gpu"], optionalEndpoints: [], historyStart: "2026-11-09" }),
-      incremental: async () => { throw new Error("not called"); }, resume: async () => { throw new Error("not called"); },
+      fullUnverified: async () => { throw new Error("not called"); }, incremental: async () => { throw new Error("not called"); }, resume: async () => { throw new Error("not called"); },
     });
     assert.equal(executed.result?.coreReady, true);
     assert.equal(versionCalls, 2);
     const [gpu] = await pool.query<RowDataPacket[]>("SELECT fsn FROM tmt_gpu WHERE gpuid=764169");
     assert.equal(gpu[0]?.fsn, "fixture GPU");
+    await assert.rejects(
+      () => repository.createRun({ id: randomUUID(), version: "unverified:0123456789abcdef0123", mode: "full_unverified", startedAt: new Date() }),
+      /must be empty/i,
+    );
   });
 
   test("TTMT v2 import is atomic, idempotent, and isolated from legacy/TMT namespaces", async () => {
@@ -134,5 +140,18 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     }
     const [tables] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('standard_products','ttmt_products','tmt_gpu')");
     assert.equal(Number(tables[0]?.total), 3);
+    const unverifiedRunId = randomUUID();
+    await new TmtSyncRepository(pool).createRun({
+      id: unverifiedRunId,
+      version: "unverified:0123456789abcdef0123",
+      mode: "full_unverified",
+      startedAt: new Date("2026-11-10T00:00:00.000Z"),
+    });
+    const [unverified] = await pool.query<RowDataPacket[]>("SELECT mode,tmt_version,status FROM tmt_sync_runs WHERE id=?", [unverifiedRunId]);
+    assert.deepEqual(unverified[0], { mode: "full_unverified", tmt_version: "unverified:0123456789abcdef0123", status: "running" });
+    await assert.rejects(
+      () => new TmtSyncRepository(pool).createRun({ id: randomUUID(), version: "20261110", mode: "full", startedAt: new Date() }),
+      /unverified run exists.*reset/i,
+    );
   });
 });
