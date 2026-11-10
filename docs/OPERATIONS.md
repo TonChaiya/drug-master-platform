@@ -403,7 +403,7 @@ DB integration tests เป็น fail-closed operational invariant: ต้อ�
 
 `pnpm tmt:v2:sync -- --mode full-unverified` เป็น one-shot recovery mode สำหรับกรณี `/version` ว่างเท่านั้น ไม่ใช่ fallback ของ `resume`. Execution ยังคงต้องผ่าน production fingerprint, maintenance, `--execute` และ `--confirm-db <exact database>` ตาม guard เดิม และ engine จะปฏิเสธก่อนสร้าง run หากตาราง TMT v2 source/run/checkpoint/version ใดมีข้อมูล ดังนั้นต้องมี reset ที่อนุมัติแยกก่อนเสมอ.
 
-Run ใช้ `mode=full_unverified`, marker `unverified:<20 hex>` และ terminal `status=unverified`/`TMT_VERSION_UNVERIFIED`; ไม่มีการเขียน `tmt_version` observation, ไม่สามารถ resume และไม่รายงาน `coreReady`. ทุก endpoint รวม ATC/ImageList ต้องผ่าน retries/checkpoints ภายใน process เดียว จากนั้น blocking invariants และ acceptance ของ GPU `764169` ต้องผ่าน. แม้สำเร็จ ห้าม import TTMT, เปิด v2 flags หรือปิด maintenance จนกว่าจะได้รับ approval หลัง review counts/invariants แยกต่างหาก.
+Run ใช้ `mode=full_unverified`, marker `unverified:<20 hex>` และ terminal `status=unverified`/`TMT_VERSION_UNVERIFIED`; ไม่มีการเขียน `tmt_version` observation, ไม่สามารถ resume และไม่รายงาน `coreReady`. Core 13 endpoints และ ATC ต้องผ่าน retries/checkpoints ภายใน process เดียว; ImageList retry ตามปกติแต่ failure ถูกเก็บเป็น failed checkpoint/optional warning และไม่ปิด run. หลังจากนั้น blocking invariants และ acceptance ของ GPU `764169` ต้องผ่าน. แม้สำเร็จ ห้าม import TTMT, เปิด v2 flags หรือปิด maintenance จนกว่าจะได้รับ approval หลัง review counts/invariants แยกต่างหาก.
 
 Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม่ execute production reset/sync**.
 

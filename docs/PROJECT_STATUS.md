@@ -71,10 +71,11 @@ Migration สำคัญล่าสุด:
 - production migrations 0014–0016 apply แล้วและ maintenance ยัง ON; v2 flags ทั้งหมด OFF และ legacy tables ยังอยู่
 - approved reset ถูก execute แล้ว แต่ TMT full run `466e9ee9-8a61-4a59-b7a4-a662f108a09c` หยุดที่ 168 succeeded / 42 pending เพราะ `/version` ปัจจุบันคืน `tmt_version=""`; ห้าม resume run นี้ขณะ version ว่าง
 - Phase 7C แก้ relationship persistence N+1 แล้ว แต่ยังไม่มี relationship rows, TTMT import หรือ production activation
-- Phase 7I เพิ่ม explicit `full-unverified` one-shot mode แบบ default-unused: ต้องเริ่มจาก TMT v2 tables ว่าง, สร้าง run ใหม่, ห้าม resume, require ทุก endpoint และจบเป็น `unverified`/not-ready แม้ invariant ผ่าน
-- Phase 7I **ยังไม่ execute production reset/sync**; maintenance คง ON, v2 flags OFF และต้องได้รับ approval แยกก่อนใช้งาน degraded mode หรือดำเนิน cutover ต่อ
+- Phase 7I เพิ่ม explicit `full-unverified` one-shot mode: ต้องเริ่มจาก TMT v2 tables ว่าง, สร้าง run ใหม่, ห้าม resume และจบเป็น `unverified`/not-ready แม้ invariant ผ่าน
 - Phase 7K เพิ่ม `tmt-v2-only` reset mode ที่ลบเฉพาะ 17 ตาราง `tmt_*`/run/checkpoint/version และ runtime readiness guard; latest run ต้อง `status=succeeded` และไม่ใช่ `full_unverified` ก่อน consumer v2 ทุกชุดจะทำงาน แม้ env flag ถูกเปิด
-- Phase 7K ไม่มี production reset/sync/write และยังไม่เปิด flags; maintenance คงสถานะเดิม
+- Phase 7L/M ผ่าน production dry-run และ execute TMT-v2-only reset โดย KEEP/business/TTMT/legacy คงเดิม; maintenance ยัง ON และ v2 flags OFF
+- Phase 7N run `fc46d0ed-3624-49dc-8bd7-53bd32671df3` โหลด core และ ATC ครบ แต่จบ `failed` เพราะ ImageList historical window ตอบ HTTP 500 หลัง retry; partial TMT data คงอยู่, TTMT ยังไม่ import และยังไม่เปิด flags
+- Phase 7O แยก policy ของ degraded sync ให้ core 13 endpoints + ATC เป็น required ส่วน ImageList เป็น optional warning; blocking invariant และ GPU `764169` acceptance ยังคง required. การเปลี่ยนนี้ยังไม่ reset/resync production
 
 ## Known improvement backlog
 

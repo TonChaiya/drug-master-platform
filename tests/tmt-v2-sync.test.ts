@@ -275,6 +275,7 @@ test("unverified full sync never reads version and remains visibly not ready aft
     source,
     store,
     requiredEndpoints: ["gpu", "relationship"],
+    optionalEndpoints: [],
     historyStart: "2026-11-04",
     invariantCheck: async () => { invariants += 1; return { warningsCount: 2 }; },
     ...orchestrationOptions,
@@ -304,18 +305,63 @@ test("unverified full sync refuses a non-empty target before creating a run", as
   assert.deepEqual(store.checkpoints, []);
 });
 
-test("unverified full sync treats every configured endpoint failure as fatal", async () => {
+test("unverified full sync records imagelist HTTP 500 as optional and completes validation", async () => {
   const store = new FakeStore();
+  let invariants = 0;
   const result = await runUnverifiedInitialTmtSync({
     source: fakeSource({ fail: ["imagelist"] }),
     store,
-    requiredEndpoints: ["gpu", "imagelist"],
     historyStart: "2026-11-04",
+    invariantCheck: async () => { invariants += 1; return { warningsCount: 0 }; },
     ...orchestrationOptions,
   });
+
+  assert.equal(invariants, 1);
+  assert.equal(store.checkpoints.find((row) => row.endpoint === "imagelist")?.status, "failed");
+  assert.deepEqual(result.optionalWarnings, [{
+    endpoint: "imagelist",
+    window: { begindate: "2026-11-04", enddate: "2026-11-04" },
+    errorCode: "TMT_HTTP_500",
+  }]);
+  assert.equal(result.status, "unverified");
+  assert.equal(result.coreReady, false);
+  assert.equal(result.errorCode, "TMT_VERSION_UNVERIFIED");
+});
+
+test("unverified full sync keeps ATC failure fatal", async () => {
+  const store = new FakeStore();
+  const result = await runUnverifiedInitialTmtSync({
+    source: fakeSource({ fail: ["atc"] }), store, historyStart: "2026-11-04", ...orchestrationOptions,
+  });
+
   assert.equal(result.status, "failed");
   assert.equal(result.coreReady, false);
   assert.equal(result.errorCode, "TMT_HTTP_500");
+  assert.deepEqual(result.optionalWarnings, []);
+});
+
+test("unverified full sync keeps core endpoint failure fatal", async () => {
+  const store = new FakeStore();
+  const result = await runUnverifiedInitialTmtSync({
+    source: fakeSource({ fail: ["relationship"] }), store, historyStart: "2026-11-04", ...orchestrationOptions,
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.coreReady, false);
+  assert.equal(result.errorCode, "TMT_HTTP_500");
+});
+
+test("unverified full sync still fails when blocking invariants fail", async () => {
+  const store = new FakeStore();
+  const result = await runUnverifiedInitialTmtSync({
+    source: fakeSource(), store, historyStart: "2026-11-04",
+    invariantCheck: async () => { throw new Error("blocking invariant"); },
+    ...orchestrationOptions,
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.coreReady, false);
+  assert.equal(result.errorCode, "Error");
 });
 
 test("versioned resume rejects an unverified run before calling the source", async () => {

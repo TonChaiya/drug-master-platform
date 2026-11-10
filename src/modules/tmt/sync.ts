@@ -30,6 +30,8 @@ export const TMT_CORE_ENDPOINTS: readonly TmtDataEndpoint[] = [
   "subs", "vtm", "gp", "gpu", "gpp", "tp", "tpu", "tpp", "nlem", "regno", "mastertmt", "concept", "relationship",
 ];
 export const TMT_OPTIONAL_ENDPOINTS: readonly TmtDataEndpoint[] = ["atc", "imagelist"];
+export const TMT_UNVERIFIED_REQUIRED_ENDPOINTS: readonly TmtDataEndpoint[] = [...TMT_CORE_ENDPOINTS, "atc"];
+export const TMT_UNVERIFIED_OPTIONAL_ENDPOINTS: readonly TmtDataEndpoint[] = ["imagelist"];
 
 export interface TmtSyncSource {
   version(): Promise<string>;
@@ -268,13 +270,16 @@ export async function runUnverifiedInitialTmtSync(
     store: TmtSyncStore;
     historyStart?: string;
     requiredEndpoints?: readonly TmtDataEndpoint[];
+    optionalEndpoints?: readonly TmtDataEndpoint[];
   },
 ): Promise<TmtSyncResult> {
   const runId = randomUUID();
   const version = `unverified:${runId.replaceAll("-", "").slice(0, 20)}`;
   const startedAt = options.now();
   await options.store.createRun({ id: runId, version, mode: "full_unverified", startedAt, startedBy: options.startedBy });
-  const endpoints = [...(options.requiredEndpoints ?? [...TMT_CORE_ENDPOINTS, ...TMT_OPTIONAL_ENDPOINTS])];
+  const requiredEndpoints = options.requiredEndpoints ?? TMT_UNVERIFIED_REQUIRED_ENDPOINTS;
+  const optionalEndpoints = options.optionalEndpoints ?? TMT_UNVERIFIED_OPTIONAL_ENDPOINTS;
+  const endpoints = [...requiredEndpoints, ...optionalEndpoints];
   const checkpoints: TmtCheckpointRow[] = [];
   const endDate = bangkokDate(startedAt);
   for (const endpoint of endpoints) {
@@ -284,7 +289,7 @@ export async function runUnverifiedInitialTmtSync(
     }
   }
   return executeCheckpoints(
-    { ...options, coreEndpoints: endpoints, optionalEndpoints: [] },
+    { ...options, coreEndpoints: requiredEndpoints, optionalEndpoints },
     runId,
     version,
     checkpoints,

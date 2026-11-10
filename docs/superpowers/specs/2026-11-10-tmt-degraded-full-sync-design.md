@@ -11,7 +11,7 @@ Allow an explicitly requested, one-shot full TMT sync while `/version` is unavai
 - It creates a new run and checkpoints; it never reuses a previous run.
 - It never substitutes a previous or database-stored version.
 - A stopped degraded run cannot be resumed.
-- Every endpoint, including ATC and imagelist, is required for the one-shot degraded run; any contract/data failure fails the run.
+- The 13 core endpoints and ATC are required for the one-shot degraded run. Imagelist is retried and checkpointed but remains optional because image metadata is not an input to hierarchy, mapping/export eligibility, or blocking invariants.
 - Completion runs the normal blocking invariants plus the GPU `764169` acceptance check.
 - Completion remains visibly unverified and is never `coreReady`; flags and maintenance require separate approval.
 
