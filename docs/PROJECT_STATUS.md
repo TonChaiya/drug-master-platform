@@ -27,6 +27,7 @@
 - facility-scoped authorization จาก verified session
 - shared persistent rate limiting สำหรับ login/signup/Agent enrollment โดยไม่เก็บ raw IP
 - TMT sync/enrichment และ TTMT file import พร้อม version history
+- UX workflow ปัจจุบันเรียง JHCIS → Standards Hub (TMT v2/TTMT) → Drug Catalog → Mapping v2 → Export; หน้า `/standards` ไม่แสดง legacy `standard_products` sync เป็นแหล่งมาตรฐานปัจจุบันอีกต่อไป
 
 Migration สำคัญล่าสุด:
 

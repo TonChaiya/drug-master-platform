@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Alert, Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Choice } from "@/components/ui/form";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -29,12 +29,12 @@ const SELECTIONS: Array<{ value: Selection; label: string; description: string }
   {
     value: "all-mapped",
     label: "ทั้งหมดที่จับคู่แล้ว",
-    description: "ทุกรายการยาของสถานบริการนี้ที่มีรหัสมาตรฐานแล้ว",
+    description: "ทุกรายการที่ lifecycle เป็นจับคู่แล้วและผ่านเงื่อนไข TMT active TPU หรือ TTMT product ปัจจุบัน",
   },
   {
     value: "manual-changes",
     label: "เฉพาะที่จับคู่ใหม่หรือแก้ไข",
-    description: "ส่งเฉพาะส่วนต่างตั้งแต่การส่งออกครั้งก่อน",
+    description: "เฉพาะ mapping ที่สร้างหรือแก้หลัง checkpoint ของการส่งออกสำเร็จครั้งก่อน",
   },
 ];
 
@@ -139,6 +139,9 @@ export function ExportPanel() {
 
   return (
     <div className="space-y-3.5">
+      <Alert tone="info" title="ส่งออกเฉพาะรายการที่พร้อม">
+        รายการคงค้าง ต้องตรวจสอบ มาตรฐาน inactive หรือ identity ผิดระดับจะไม่ถูกใส่ในไฟล์ Full และ Delta; การดูตัวอย่างยังไม่เลื่อน checkpoint
+      </Alert>
       <Card>
         <CardHeader
           title="เลือกชุดข้อมูลที่จะส่งออก"

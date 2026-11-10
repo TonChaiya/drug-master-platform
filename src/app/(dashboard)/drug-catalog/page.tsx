@@ -4,6 +4,7 @@ import { requireUser } from "@/modules/auth/session";
 import { latestImport, listImports, previewImportRows } from "@/modules/catalog/service";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
@@ -32,7 +33,7 @@ export default async function DrugCatalogPage() {
       <PageHeader
         eyebrow={`${facility.code} · ${facility.name}`}
         title="Drug Catalog"
-        description="ไฟล์ที่ผ่านการประมวลผลจากระบบกลาง ใช้เป็นแหล่งอ้างอิงเดียวของ NDC24 และรหัส TMT ในการจับคู่"
+        description="snapshot ที่สถานบริการยืนยันแล้ว ใช้อ้างอิง NDC24 และตรวจสถานะ source drug เทียบกับ TMT/TTMT identity ที่เลือกใน Mapping v2"
         actions={
           snapshot ? (
             <Badge tone="success" dot>
@@ -45,6 +46,19 @@ export default async function DrugCatalogPage() {
           )
         }
       />
+
+      <Card>
+        <CardHeader
+          title="Drug Catalog อยู่ตรงไหนใน workflow"
+          description="JHCIS เป็นแหล่งรายการยา ส่วน snapshot ล่าสุดใช้ตรวจว่าการจับคู่ปัจจุบันยังสอดคล้องหรือควรให้ผู้ใช้ทบทวน"
+          actions={<ButtonLink href="/mappings/v2" size="sm">เปิด Mapping v2</ButtonLink>}
+        />
+        <CardBody className="grid gap-3 sm:grid-cols-3">
+          <div><Badge tone="warning">คงค้าง</Badge><p className="type-help mt-1">source drug ที่ใช้งานอยู่ยังไม่มี TMT/TTMT identity</p></div>
+          <div><Badge tone="warning">ต้องตรวจสอบ</Badge><p className="type-help mt-1">catalog เปลี่ยนหรือหายไป หรือมาตรฐานที่เลือกต้องให้ผู้ใช้ยืนยันอีกครั้ง</p></div>
+          <div><Badge tone="success">จับคู่แล้ว</Badge><p className="type-help mt-1">identity ปัจจุบันผ่าน lifecycle และพร้อมประเมินเงื่อนไขส่งออก</p></div>
+        </CardBody>
+      </Card>
 
       <CatalogImportPanel />
 

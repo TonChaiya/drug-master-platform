@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test, vi } from "vitest";
 import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
 import { TmtResultCard } from "@/components/tmt/tmt-result-card";
+import { TtmtResultCard } from "@/components/ttmt/ttmt-result-card";
 import { loadV2SavedIdentity } from "@/components/mappings/v2-saved-identity";
 import { TmtBrowser } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
 
@@ -61,6 +62,18 @@ test("shared TMT result card leaves missing optional fields blank", () => {
   assert.match(html, /ชื่อการค้า<\/span><span[^>]*><\/span>/);
   assert.match(html, /ผู้ผลิต<\/span><span[^>]*><\/span>/);
   assert.match(html, /เลขทะเบียนยา<\/span><span[^>]*><\/span>/);
+});
+
+test("TTMT result stays in its own product namespace and leaves optional fields blank", () => {
+  const html = renderToStaticMarkup(createElement(TtmtResultCard, { result: {
+    source: "TTMT", code: "TTMT-001", level: "product", fsn: "TTMT PRODUCT",
+    activeIngredient: "ingredient", tradeName: null, manufacturer: null,
+    registrationNumber: null, active: true, sourceVersion: "20261001",
+  } }));
+
+  assert.match(html, /TTMT-001/);
+  assert.match(html, /TTMT PRODUCT/);
+  assert.doesNotMatch(html, /GP|GPU|TPU|MasterTMT|—|N\/A/);
 });
 
 test("browser starts as a compact read-only search workspace", () => {

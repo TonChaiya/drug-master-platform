@@ -1,14 +1,16 @@
 import type { Route } from "next";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   agentSyncSessions,
   drugCatalogImports,
   facilities,
-  standardProducts,
+  ttmtImports,
+  ttmtProducts,
 } from "@/db/schema";
 import { agentFacilitySummaries } from "@/modules/agent/queries";
 import { emptyMappingLifecycleSummary, mappingLifecycleSummaries } from "@/modules/mappings/summary";
+import { readTmtV2Readiness } from "@/modules/tmt/readiness";
 
 export interface ReadinessItem {
   key: "jhcis" | "catalog" | "standards";
@@ -51,7 +53,7 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
    * milliseconds, the trip to TiDB takes tens — hundreds if the function is not
    * in the same region as the database.
    */
-  const [mappingSummaries, agentSummaries, lastSync, latestImport, standardCountRows] = await Promise.all([
+  const [mappingSummaries, agentSummaries, lastSync, latestImport, tmtReadiness, latestTtmtImport, ttmtCountRows] = await Promise.all([
     mappingLifecycleSummaries(facilityId),
     agentFacilitySummaries(facilityId),
     db
@@ -68,24 +70,24 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
       .orderBy(desc(drugCatalogImports.createdAt))
       .limit(1),
 
+    readTmtV2Readiness(),
     db
-      .select({
-        tmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
-        ttmt: sql<number>`SUM(CASE WHEN ${standardProducts.standardType} = 'TTMT' AND ${standardProducts.status} = 'active' THEN 1 ELSE 0 END)`,
-      })
-      .from(standardProducts),
+      .select({ version: ttmtImports.version, rowCount: ttmtImports.rowCount })
+      .from(ttmtImports)
+      .where(eq(ttmtImports.status, "succeeded"))
+      .orderBy(desc(ttmtImports.completedAt))
+      .limit(1),
+    db.select({ total: count() }).from(ttmtProducts),
   ]);
 
   const mappingSummary = mappingSummaries.get(facilityId) ?? emptyMappingLifecycleSummary(facilityId);
   const agentSummary = agentSummaries.get(facilityId);
-  const standardCount = standardCountRows[0];
 
   const sourceTotal = mappingSummary.sourceTotal;
   const mappedTotal = mappingSummary.mappedTotal;
   const agentCount = agentSummary?.agentCount ?? 0;
   const installationCount = agentSummary?.installationCount ?? 0;
-  const tmtTotal = Number(standardCount?.tmt ?? 0);
-  const ttmtTotal = Number(standardCount?.ttmt ?? 0);
+  const ttmtTotal = Number(ttmtCountRows[0]?.total ?? 0);
   const lastSyncAt = lastSync[0]?.finishedAt ?? null;
 
   return {
@@ -144,13 +146,15 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
       {
         key: "standards",
         label: "TMT / TTMT",
-        ready: tmtTotal > 0 && ttmtTotal > 0,
+        ready: tmtReadiness.ready && latestTtmtImport.length > 0 && ttmtTotal > 0,
         detail:
-          tmtTotal === 0 && ttmtTotal === 0
-            ? "ยังไม่ได้ sync มาตรฐาน"
-            : `TMT ${tmtTotal.toLocaleString("th-TH")} · TTMT ${ttmtTotal.toLocaleString("th-TH")}`,
+          !tmtReadiness.ready
+            ? "TMT v2 ยังไม่ผ่าน readiness"
+            : latestTtmtImport.length === 0 || ttmtTotal === 0
+              ? "TMT v2 พร้อม · ยังไม่มี TTMT ที่นำเข้าสำเร็จ"
+              : `TMT ${tmtReadiness.assurance === "validated_unverified" ? "พร้อมแบบ degraded" : "ยืนยันเวอร์ชันแล้ว"} · TTMT ${ttmtTotal.toLocaleString("th-TH")} (เวอร์ชัน ${latestTtmtImport[0]?.version})`,
         href: "/standards",
-        actionLabel: "ตั้งค่า",
+        actionLabel: "เปิด Standards Hub",
       },
     ],
   };

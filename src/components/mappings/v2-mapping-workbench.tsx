@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { TmtResultCard } from "@/components/tmt/tmt-result-card";
+import { TtmtResultCard, type TtmtResult } from "@/components/ttmt/ttmt-result-card";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -11,7 +12,6 @@ import type { TmtConceptDetail } from "@/modules/tmt/detail";
 import type { TmtSearchResult } from "@/modules/tmt/browser";
 
 type SourceDrug = { id: string; drugcode: string; drugname: string | null; drugnamethai: string | null; drugtype: string };
-type TtmtRow = { source: "TTMT"; code: string; level: "product"; fsn: string | null; activeIngredient: string | null; tradeName: string | null; active: boolean; sourceVersion: string };
 
 export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] }) {
   const [sourceDrugId, setSourceDrugId] = useState(sourceDrugs[0]?.id ?? "");
@@ -19,7 +19,7 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
   const standardSource = selectedDrug?.drugtype === "10" ? "TTMT" : "TMT";
   const [query, setQuery] = useState("");
   const [tmtRows, setTmtRows] = useState<TmtSearchResult[]>([]);
-  const [ttmtRows, setTtmtRows] = useState<TtmtRow[]>([]);
+  const [ttmtRows, setTtmtRows] = useState<TtmtResult[]>([]);
   const [detail, setDetail] = useState<TmtConceptDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
         setTmtRows(payload.rows ?? []); setTtmtRows([]);
       } else {
         const response = await fetch(`/api/v1/mappings/v2/standards?source=TTMT&q=${encodeURIComponent(query.trim())}`);
-        const payload = (await response.json()) as { ok?: boolean; rows?: TtmtRow[]; message?: string };
+        const payload = (await response.json()) as { ok?: boolean; rows?: TtmtResult[]; message?: string };
         if (!response.ok || !payload.ok) throw new Error(payload.message ?? "ค้นหา TTMT ไม่สำเร็จ");
         setTtmtRows(payload.rows ?? []); setTmtRows([]);
       }
@@ -108,6 +108,6 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
         registrationNumber: row.registrationNumber, registrationConflict: row.registrationConflict,
         status: row.status, mappingEligible: row.mappingEligible, mappingEligibilityReason: row.mappingEligibilityReason,
       }}><Button size="sm" onClick={() => void openDetail(row.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!row.mappingEligible || busy} onClick={() => void save("TMT", row.tmtId, "tpu")}>เลือก TPU</Button></TmtResultCard>)}</div></section> : null}
-    </CardBody></Card> : <Card><CardHeader title="ผลค้นหา TTMT" description="TTMT เป็นผลิตภัณฑ์ ไม่มี graph หรือสีระดับ GP/GPU/TP/TPU" /><CardBody className="space-y-2">{ttmtRows.map((row) => <div key={row.code} className="flex flex-wrap items-center gap-2 rounded-md border border-border p-2.5"><Badge tone="success">TTMT</Badge><span className="cell-code">{row.code}</span><span className="min-w-48 flex-1 text-xs">{row.activeIngredient ?? row.fsn ?? "—"}</span><span className="type-help">version {row.sourceVersion}</span><Badge tone={row.active ? "success" : "warning"}>{row.active ? "ใช้งานอยู่" : "ไม่ใช้งาน"}</Badge><Button size="sm" variant="primary" disabled={!row.active || busy} onClick={() => void save("TTMT", row.code, "product")}>เลือก</Button></div>)}</CardBody></Card>}
+    </CardBody></Card> : <Card><CardHeader title="ผลค้นหา TTMT" description="TTMT เป็นผลิตภัณฑ์ ไม่มี graph หรือสีระดับ GP/GPU/TP/TPU" /><CardBody className="space-y-2">{ttmtRows.map((row) => <TtmtResultCard key={row.code} result={row}><Button size="sm" variant="primary" disabled={!row.active || busy} onClick={() => void save("TTMT", row.code, "product")}>เลือก</Button></TtmtResultCard>)}</CardBody></Card>}
   </div>;
 }

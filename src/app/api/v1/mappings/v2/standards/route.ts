@@ -22,14 +22,14 @@ export async function GET(request: Request) {
   const query = parsed.data.q;
   try {
     const rows = await db
-      .select({ code: ttmtProducts.ttmtcode, fsn: ttmtProducts.fsn, activeIngredient: ttmtProducts.activeingredient, tradeName: ttmtProducts.tradename, status: ttmtProducts.status, sourceVersion: ttmtProducts.sourceVersion, importStatus: ttmtImports.status })
+      .select({ code: ttmtProducts.ttmtcode, fsn: ttmtProducts.fsn, activeIngredient: ttmtProducts.activeingredient, tradeName: ttmtProducts.tradename, manufacturer: ttmtProducts.manufacturer, registrationNumber: ttmtProducts.registrationNumber, status: ttmtProducts.status, sourceVersion: ttmtProducts.sourceVersion, importStatus: ttmtImports.status })
       .from(ttmtProducts)
       .innerJoin(ttmtImports, eq(ttmtImports.id, ttmtProducts.sourceImportId))
-      .where(and(eq(ttmtImports.status, "succeeded"), or(like(ttmtProducts.ttmtcode, `${query}%`), like(ttmtProducts.normalizedGeneric, `${query.toLowerCase()}%`), like(ttmtProducts.normalizedTrade, `${query.toLowerCase()}%`))))
+      .where(and(eq(ttmtImports.status, "succeeded"), or(like(ttmtProducts.ttmtcode, `${query}%`), like(ttmtProducts.normalizedGeneric, `${query.toLowerCase()}%`), like(ttmtProducts.normalizedTrade, `${query.toLowerCase()}%`), like(ttmtProducts.normalizedManufacturer, `${query.toLowerCase()}%`), like(ttmtProducts.normalizedRegno, `${query.toLowerCase()}%`))))
       .limit(30);
     return apiJson({
       ok: true,
-      rows: rows.map((row) => ({ source: "TTMT", code: row.code, level: "product", fsn: row.fsn, activeIngredient: row.activeIngredient, tradeName: row.tradeName, active: row.status === "active", sourceVersion: row.sourceVersion })),
+      rows: rows.map((row) => ({ source: "TTMT", code: row.code, level: "product", fsn: row.fsn, activeIngredient: row.activeIngredient, tradeName: row.tradeName, manufacturer: row.manufacturer, registrationNumber: row.registrationNumber, active: row.status === "active", sourceVersion: row.sourceVersion })),
     });
   } catch {
     console.error("mapping_v2.ttmt_search_failed");

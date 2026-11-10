@@ -4,6 +4,7 @@ import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, fa
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
+import { readTmtV2Readiness } from "@/modules/tmt/readiness";
 import { facilityCondition, mappedPercent } from "@/modules/admin/condition";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -26,7 +27,7 @@ export default async function AdminPage() {
   }
   if (user.role !== "admin") redirect("/dashboard");
 
-  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus, installerLink] = await Promise.all([
+  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus, installerLink, tmtReadiness] = await Promise.all([
     facilitySummaries(),
     listUsers(),
     countPendingUsers(),
@@ -34,6 +35,7 @@ export default async function AdminPage() {
     countFacilitylessUsers(),
     readTmtCredentialStatus(),
     readInstallerLink(),
+    readTmtV2Readiness(),
   ]);
 
   const rows: AdminUserRow[] = users.map((row) => ({
@@ -155,9 +157,15 @@ export default async function AdminPage() {
         </Card>
 
         <Card>
-          <CardHeader icon={<IconLink size={16} />} title="TMT API" description="บัญชีที่ใช้ดึงคลังมาตรฐานจาก สมสท" />
+          <CardHeader
+            icon={<IconLink size={16} />}
+            title="TMT API และ readiness"
+            description="credential ใช้ติดต่อ upstream ส่วน readiness ของชุดข้อมูล production ประเมินแยกจากผลทดสอบ /version"
+            actions={<Badge tone={tmtReadiness.assurance === "validated_unverified" ? "warning" : tmtReadiness.ready ? "success" : "danger"}>{tmtReadiness.ready ? tmtReadiness.assurance : "not ready"}</Badge>}
+          />
           <CardBody>
-            <TmtApiPanel initial={tmtStatus} />
+            {tmtReadiness.assurance === "validated_unverified" ? <Alert tone="warning" className="mb-3" title="พร้อมใช้แบบ validated_unverified">ข้อมูลผ่านหลักฐาน validation ที่บันทึกไว้ แต่ยังไม่ใช่ verified จาก upstream</Alert> : null}
+            <TmtApiPanel initial={tmtStatus} readiness={tmtReadiness.ready ? tmtReadiness.assurance : null} />
           </CardBody>
         </Card>
       </div>

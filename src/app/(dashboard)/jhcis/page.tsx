@@ -5,11 +5,12 @@ import { readInstallerLink } from "@/modules/agent/installer-link";
 import { listInstallations, recentCommands, recentSyncSessions } from "@/modules/agent/queries";
 import { formatBangkok } from "@/modules/facilities/queries";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
-import { IconLink, IconMonitor, IconRefresh } from "@/components/ui/icons";
+import { IconCatalog, IconLink, IconMonitor, IconRefresh, IconStandards } from "@/components/ui/icons";
 import { EnrollmentPanel } from "./enrollment-panel";
 import { AgentActions } from "./agent-actions";
 
@@ -45,8 +46,13 @@ export default async function JhcisPage() {
       <PageHeader
         eyebrow={`${facility.code} · ${facility.name}`}
         title="เชื่อมต่อ JHCIS"
-        description="Agent เปิดเฉพาะขาออก HTTPS ไม่มีการเปิดพอร์ต MySQL ออกอินเทอร์เน็ต และรหัสฐานข้อมูลอยู่ที่เครื่องปลายทางเท่านั้น"
+        description="ขั้นตอนแรกของ workflow: Agent ดึง source drug จาก JHCIS ผ่านขาออก HTTPS โดยไม่เปิด MySQL สู่อินเทอร์เน็ต"
+        actions={<><ButtonLink href="/standards" icon={<IconStandards size={14} />}>ดูมาตรฐาน</ButtonLink><ButtonLink href="/drug-catalog" icon={<IconCatalog size={14} />}>Drug Catalog</ButtonLink></>}
       />
+
+      <Alert tone="info" title="ลำดับงานหลังดึงข้อมูล">
+        ตรวจคลัง TMT/TTMT และนำเข้า Drug Catalog ล่าสุด จากนั้นจึงจับคู่ใน Mapping v2 และส่งออก DrugCat
+      </Alert>
 
       {mismatched.length > 0 ? (
         <Alert tone="danger" title="รหัสสถานบริการไม่ตรงกัน">

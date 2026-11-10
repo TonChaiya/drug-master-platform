@@ -3,6 +3,7 @@ import { NoFacilityNotice, PageHeader } from "@/components/ui/page-header";
 import { resolveEffectiveFacility } from "@/lib/authorization/effective-facility";
 import { requireUser } from "@/modules/auth/session";
 import { latestImport } from "@/modules/catalog/service";
+import { tmtV2BrowserEnabled, tmtV2MappingEnabled } from "@/modules/tmt/feature";
 import { MappingWorkbench } from "./mapping-workbench";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export default async function MappingsPage() {
   } catch {
     redirect("/login");
   }
+
+  if (tmtV2MappingEnabled() && tmtV2BrowserEnabled()) redirect("/mappings/v2");
 
   const facility = await resolveEffectiveFacility(user);
   if (!facility) return <NoFacilityNotice title="จับคู่รายการยา" isAdmin={user.role === "admin"} />;

@@ -24,7 +24,7 @@ const SOURCE_LABEL: Record<TmtCredentialStatus["source"], string> = {
  * TMT API credential management. The stored password is never sent back to the
  * browser, so the field is always blank and saving requires re-entering it.
  */
-export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
+export function TmtApiPanel({ initial, readiness }: { initial: TmtCredentialStatus; readiness: "verified" | "validated_unverified" | null }) {
   const [status, setStatus] = useState(initial);
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl);
   const [username, setUsername] = useState(initial.username);
@@ -74,9 +74,14 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
         setMessage({ ok: false, text: "ทดสอบไม่สำเร็จ" });
         return;
       }
+      const readinessNote = readiness === "validated_unverified"
+        ? "ชุดข้อมูล production ยังพร้อมใช้แบบ validated_unverified"
+        : readiness === "verified" ? "ชุดข้อมูล production มี verified readiness" : "ชุดข้อมูล production ยังไม่ ready";
       setMessage({
         ok: result.ok,
-        text: result.ok ? `${result.message} · TMT version ${result.tmtVersion} · ${result.latencyMs} ms` : result.message,
+        text: result.ok
+          ? `${result.message}${result.tmtVersion ? ` · TMT version ${result.tmtVersion}` : " · upstream ไม่ส่งเวอร์ชัน"} · ${result.latencyMs} ms · ${readinessNote}`
+          : `${result.message} · ผลทดสอบ upstream นี้ไม่เปลี่ยน readiness ที่บันทึกไว้ · ${readinessNote}`,
       });
     } finally {
       setBusy(null);
@@ -212,6 +217,7 @@ export function TmtApiPanel({ initial }: { initial: TmtCredentialStatus }) {
       )}
 
       {message ? <Alert tone={message.ok ? "success" : "danger"}>{message.text}</Alert> : null}
+      <p className="type-help">การทดสอบ credential ตรวจการเชื่อมต่อปัจจุบันเท่านั้น; ค่า /version ว่างไม่ลบหลักฐาน validated_unverified ที่ผ่านการตรวจรับแล้ว</p>
     </div>
   );
 }

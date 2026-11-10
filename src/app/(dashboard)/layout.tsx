@@ -25,17 +25,12 @@ import { LogoutButton } from "./dashboard/logout-button";
 const SECTIONS: NavSection[] = [
   { items: [{ href: "/dashboard", label: "ภาพรวม", icon: <IconOverview size={16} /> }] },
   {
-    title: "ข้อมูลตั้งต้น",
+    title: "ขั้นตอนงาน",
     items: [
       { href: "/jhcis", label: "เชื่อมต่อ JHCIS", icon: <IconPlug size={16} /> },
       { href: "/standards", label: "มาตรฐาน TMT/TTMT", icon: <IconStandards size={16} /> },
       { href: "/drug-catalog", label: "Drug Catalog", icon: <IconCatalog size={16} /> },
-    ],
-  },
-  {
-    title: "งานประจำวัน",
-    items: [
-      { href: "/mappings", label: "จับคู่รายการยา", icon: <IconMappings size={16} /> },
+      { href: "/mappings/v2", label: "จับคู่รายการยา", icon: <IconMappings size={16} /> },
       { href: "/exports", label: "ส่งออก DrugCat", icon: <IconExport size={16} /> },
     ],
   },

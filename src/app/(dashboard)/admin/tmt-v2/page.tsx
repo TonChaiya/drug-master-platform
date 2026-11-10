@@ -22,7 +22,7 @@ export default async function TmtV2BrowserPage() {
   const ready = readiness?.ready === true;
   return (
     <div className="space-y-3.5">
-      <PageHeader eyebrow="Experimental · internal" title="TMT Browser" description="ค้นหา concept ทุกระดับ ดู MasterTMT enrichment และสำรวจความสัมพันธ์โดยไม่แก้ข้อมูล" />
+      <PageHeader eyebrow="ผู้ดูแลระบบ · TMT v2" title="TMT Browser" description="ค้นหา concept ทุกระดับ ดู MasterTMT enrichment และสำรวจความสัมพันธ์โดยไม่แก้ข้อมูล" />
       {ready && readiness.assurance === "validated_unverified" ? (
         <Alert tone="warning" title="ข้อมูล TMT ผ่านการตรวจสอบแบบ degraded">
           ชุดข้อมูล full-unverified ผ่าน checkpoint, invariants, GPU 764169 และ TTMT validation แล้ว แต่ยังไม่มีเวอร์ชันยืนยันจาก upstream
