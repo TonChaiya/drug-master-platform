@@ -12,6 +12,7 @@ import { buildExportCandidates, type ExportCandidate, type ExportSelection } fro
 import { buildExportCandidatesV2 } from "./rows-v2";
 import { buildDrugCatWorkbook, exportFilename } from "./writer";
 import { tmtV2ExportEnabled } from "@/modules/tmt/feature";
+import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 export interface ExportBundle {
   filename: string;
@@ -30,15 +31,17 @@ export class ExportPreviewStaleError extends Error {
 
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
-function exportCandidateBuilder() {
-  return tmtV2ExportEnabled() ? buildExportCandidatesV2 : buildExportCandidates;
+async function exportCandidateBuilder() {
+  if (!tmtV2ExportEnabled()) return buildExportCandidates;
+  await requireTmtV2Ready();
+  return buildExportCandidatesV2;
 }
 
 export async function createExportPreview(
   facilityId: string,
   selection: ExportSelection,
 ): Promise<{ candidates: ExportCandidate[]; previewToken: string }> {
-  const candidates = await exportCandidateBuilder()(facilityId, selection);
+  const candidates = await (await exportCandidateBuilder())(facilityId, selection);
   const previewToken = randomBytes(32).toString("hex");
   const now = new Date();
   await db.insert(exportPreviewTokens).values({
@@ -78,7 +81,7 @@ export async function createExport(options: {
     const token = tokenRows[0];
     if (!token) throw new ExportPreviewStaleError();
 
-    const candidates = await exportCandidateBuilder()(options.facilityId, options.selection, tx, true);
+    const candidates = await (await exportCandidateBuilder())(options.facilityId, options.selection, tx, true);
     const now = new Date();
     if (
       !isExportPreviewTokenValid(token, {

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ context: vi.fn(), save: vi.fn(), maintenance: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: vi.fn(), save: vi.fn(), maintenance: vi.fn(), requireReady: vi.fn() }));
 vi.mock("@/lib/authorization/require-context", () => ({ withFacilityContext: mocks.context }));
 vi.mock("@/modules/mappings/v2-service", () => ({ saveV2Mapping: mocks.save }));
 vi.mock("@/modules/maintenance/route-guard", () => ({ maintenanceMutationResponse: mocks.maintenance }));
+vi.mock("@/modules/tmt/readiness", () => ({ requireTmtV2Ready: mocks.requireReady }));
 
 import { POST } from "@/app/api/v1/mappings/v2/route";
 
@@ -12,8 +13,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("TMT_V2_MAPPING_ENABLED", "1");
   mocks.maintenance.mockResolvedValue(null);
+  mocks.requireReady.mockResolvedValue(undefined);
   mocks.context.mockResolvedValue({ ok: true, context: { facilityId: "00000000-0000-4000-8000-000000000001", actorUserId: "00000000-0000-4000-8000-000000000002" } });
   mocks.save.mockResolvedValue({ mappingId: "mapping", updateFlag: "A", reviewConfirmed: false, reviewNoop: false });
+});
+
+test("enabled mapping fails closed after auth and maintenance but before write access when TMT is not ready", async () => {
+  mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
+  const response = await POST(new Request("https://example.test/api/v1/mappings/v2", { method: "POST", body: "{}" }));
+  assert.equal(response.status, 503);
+  assert.equal(mocks.context.mock.calls.length, 1);
+  assert.equal(mocks.maintenance.mock.calls.length, 1);
+  assert.equal(mocks.save.mock.calls.length, 0);
 });
 afterEach(() => vi.unstubAllEnvs());
 

@@ -12,6 +12,7 @@ import {
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
 import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
+import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 export interface MappingLifecycleSummaryInput {
   facilityId: string;
@@ -97,7 +98,10 @@ export async function mappingLifecycleSummaries(
   facilityId?: string,
   database: MappingSummaryDb = db,
 ): Promise<Map<string, MappingLifecycleSummary>> {
-  if (tmtV2CatalogEnabled()) return mappingLifecycleSummariesV2(facilityId, database);
+  if (tmtV2CatalogEnabled()) {
+    await requireTmtV2Ready();
+    return mappingLifecycleSummariesV2(facilityId, database);
+  }
   const importScope = facilityId
     ? eq(drugCatalogImports.facilityId, facilityId)
     : eq(facilities.status, "active");

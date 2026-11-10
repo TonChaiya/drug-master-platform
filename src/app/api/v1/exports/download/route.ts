@@ -4,6 +4,7 @@ import { withFacilityContext } from "@/lib/authorization/require-context";
 import { createExport, ExportPreviewStaleError } from "@/modules/exports/service";
 import { ExportContractError } from "@/modules/exports/writer";
 import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
+import { TmtV2NotReadyError } from "@/modules/tmt/readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +42,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof TmtV2NotReadyError) {
+      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
+    }
     if (error instanceof ExportPreviewStaleError) {
       return apiJson({ ok: false, errorCode: error.code, message: error.message }, 409);
     }

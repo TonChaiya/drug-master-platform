@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import mysql, { type Connection, type Pool, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, test } from "vitest";
 import { writeXls, type CellValue } from "@/lib/excel/biff-writer";
-import { mysqlResetStore, runPhase7Reset } from "@/modules/phase7/reset";
+import { mysqlResetStore, preservedTablesForMode, runPhase7Reset } from "@/modules/phase7/reset";
 import { runOperationalTmtSync } from "@/modules/phase7/tmt-runner";
 import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 import { setMaintenanceMode } from "@/modules/maintenance/service";
@@ -123,15 +123,32 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     await pool.execute("INSERT INTO facilities (id,facility_code,facility_name,status) VALUES (?,?,?,'active')", [facilityId, "P7001", "Phase 7 fixture"]);
     await pool.execute("INSERT INTO users (id,facility_id,username,username_normalized,full_name,position_name,password_hash,role,status) VALUES (?,?,?,?,?,?,?,'admin','active')", [userId, facilityId, "phase7", "phase7", "Phase 7", "Tester", "fixture"]);
     await pool.execute("INSERT INTO standard_imports (id,kind,version,row_count,status,started_at) VALUES (?,'TTMT','legacy-fixture',0,'succeeded',NOW(3))", [randomUUID()]);
-    const store = mysqlResetStore(pool);
+    const tmtOnlyStore = mysqlResetStore(pool, "tmt-v2-only");
+    const preservedBefore = await Promise.all(preservedTablesForMode("tmt-v2-only").map(async (table) => {
+      const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``);
+      return [table, Number(rows[0]?.total)] as const;
+    }));
+    const tmtDry = await runPhase7Reset({ mode: "tmt-v2-only", execute: false, backupReference: "local-fixture-backup" }, tmtOnlyStore);
+    assert.equal(tmtDry.executed, false);
+    const [tmtBefore] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM tmt_sync_runs");
+    assert.ok(Number(tmtBefore[0]?.total) > 0);
+    const tmtDone = await runPhase7Reset({ mode: "tmt-v2-only", execute: true, backupReference: "local-fixture-backup" }, tmtOnlyStore);
+    assert.equal(tmtDone.executed, true);
+    assert.ok(Object.values(tmtDone.after ?? {}).every((count) => count === 0));
+    for (const [table, count] of preservedBefore) {
+      const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``);
+      assert.equal(Number(rows[0]?.total), count, `${table} must be preserved by TMT-v2-only reset`);
+    }
+
+    const store = mysqlResetStore(pool, "full");
     const keepBefore = await Promise.all(["users", "facilities", "app_settings", "audit_logs", "schema_migrations"].map(async (table) => {
       const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``); return [table, Number(rows[0]?.total)] as const;
     }));
-    const dry = await runPhase7Reset({ execute: false, backupReference: "local-fixture-backup" }, store);
+    const dry = await runPhase7Reset({ mode: "full", execute: false, backupReference: "local-fixture-backup" }, store);
     assert.equal(dry.executed, false);
     const [legacyBefore] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM standard_imports");
     assert.ok(Number(legacyBefore[0]?.total) > 0);
-    const done = await runPhase7Reset({ execute: true, backupReference: "local-fixture-backup" }, store);
+    const done = await runPhase7Reset({ mode: "full", execute: true, backupReference: "local-fixture-backup" }, store);
     assert.equal(done.executed, true);
     assert.ok(Object.values(done.after ?? {}).every((count) => count === 0));
     for (const [table, count] of keepBefore) {

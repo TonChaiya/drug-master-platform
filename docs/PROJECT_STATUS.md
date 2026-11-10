@@ -73,6 +73,8 @@ Migration สำคัญล่าสุด:
 - Phase 7C แก้ relationship persistence N+1 แล้ว แต่ยังไม่มี relationship rows, TTMT import หรือ production activation
 - Phase 7I เพิ่ม explicit `full-unverified` one-shot mode แบบ default-unused: ต้องเริ่มจาก TMT v2 tables ว่าง, สร้าง run ใหม่, ห้าม resume, require ทุก endpoint และจบเป็น `unverified`/not-ready แม้ invariant ผ่าน
 - Phase 7I **ยังไม่ execute production reset/sync**; maintenance คง ON, v2 flags OFF และต้องได้รับ approval แยกก่อนใช้งาน degraded mode หรือดำเนิน cutover ต่อ
+- Phase 7K เพิ่ม `tmt-v2-only` reset mode ที่ลบเฉพาะ 17 ตาราง `tmt_*`/run/checkpoint/version และ runtime readiness guard; latest run ต้อง `status=succeeded` และไม่ใช่ `full_unverified` ก่อน consumer v2 ทุกชุดจะทำงาน แม้ env flag ถูกเปิด
+- Phase 7K ไม่มี production reset/sync/write และยังไม่เปิด flags; maintenance คงสถานะเดิม
 
 ## Known improvement backlog
 

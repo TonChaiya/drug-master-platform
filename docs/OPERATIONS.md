@@ -382,7 +382,7 @@ Phase 6 ไม่เพิ่ม migration 0017 และไม่เปลี�
 - `pnpm tmt:v2:sync` reuse Phase 3 full/incremental/resume engine และ full เริ่ม `2013-01-01`; `pnpm ttmt:v2:import` เขียนเฉพาะ `ttmt_imports`/`ttmt_products`
 - TMT runner fail run เมื่อ invariant โครงสร้างผิด (counterpart/level/MasterTMT/unknown/duplicate edge); FSN, dangling/self edge และ enrichment conflicts เป็น reviewable warnings ตาม source behavior ที่ยืนยันแล้ว
 - `pnpm phase7:preflight` เป็น SELECT-only และคืน non-zero เมื่อ migration/maintenance/credential/table/MasterTTMT/flag gate ไม่พร้อม
-- `pnpm phase7:reset` default dry-run, ใช้ exact DELETE allowlist ใน transaction, hard-deny KEEP tables, ต้องมี backup reference และ execute ต้องเพิ่ม `--execute --confirm-db <exact database>`
+- `pnpm phase7:reset` default dry-run และต้องระบุ `--mode full|tmt-v2-only`; โหมด `tmt-v2-only` ใช้ exact 17-table DELETE allowlist ใน transaction และตรวจ counts ของ KEEP/business/TTMT/legacy tables ว่าไม่เปลี่ยน ต้องมี backup reference และ execute ต้องเพิ่ม `--execute --confirm-db <exact database>`
 - production execution ของ runner/import/reset ต้องยืนยัน TiDB Cloud host, port 4000, database `drug_master_platform`, migrations 0014–0016 ตามที่ command ต้องใช้, maintenance ON และ env file explicit; ห้ามพิมพ์ credential
 
 Rollback ของ maintenance boundary คือ disable ผ่าน CLI ที่ guard แล้วหลังตรวจ cutover state; reset ไม่มี automatic rollback หลัง commit จึงต้องอาศัย verified backup reference และ maintenance window. Phase 7A ไม่ apply migration, ไม่ reset, ไม่ sync/import และไม่เปิด flags บน production. Production MasterTTMT ของจริงยังต้องมาจาก owner ก่อน cutover.
@@ -410,6 +410,8 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 ### TMT Browser v2 activation gate
 
 `TMT_V2_BROWSER_ENABLED` default-off และต้องมีค่า exact `1` จึงเปิด hidden `/admin/tmt-v2` กับ API read-only. ก่อนเปิดใน environment ใดต้องยืนยันครบ: migrations 0014/0015 ถูก apply ด้วย runner เดิม, v2 sync สำเร็จ, invariant report ได้ review แล้ว และผู้รับผิดชอบอนุมัติ enable flag. การเปิด flag ก่อน schema พร้อมจะทำให้ browser ใช้งานไม่ได้ จึงห้ามเพิ่ม production env ใน Phase 4. ปิด flag เป็น rollback ของ browser โดยไม่เปลี่ยน legacy standards/mapping/export/catalog paths.
+
+ตั้งแต่ Phase 7K การมี env flag เพียงอย่างเดียวไม่พอ: Browser, Mapping, Catalog/lifecycle และ Export v2 อ่าน latest `tmt_sync_runs` และตอบ `503 TMT_V2_NOT_READY`/fail closed หาก run ล่าสุดไม่มี, ไม่ใช่ `succeeded` หรือเป็น `full_unverified`. `pnpm phase7:preflight` รายงาน blocker เดียวกันเป็น `TMT_V2_NOT_READY`; ระบบไม่แก้หรือปิด env flag ให้อัตโนมัติ.
 
 การล้าง Agent test data ใช้ `scripts/purge-agent-test-data.mjs --env <ไฟล์>` เพื่อดูจำนวนแบบ dry-run ก่อนเท่านั้น
 การลบจริงต้องเพิ่ม `--execute-agent-test-data --confirm-database <ชื่อฐานตรงกัน>` และต้องได้รับอนุมัติฐาน/ขอบเขตก่อน สคริปต์ไม่ลบ `source_drugs`

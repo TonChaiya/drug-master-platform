@@ -4,6 +4,7 @@ import { apiJson, unauthorized } from "@/lib/api-response";
 import { currentUser } from "@/modules/auth/session";
 import { getTmtConceptDetail } from "@/modules/tmt/detail";
 import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
+import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +19,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!(await currentUser())) return unauthorized();
   if (!tmtV2BrowserEnabled()) {
     return apiJson({ ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser v2 ยังไม่เปิดใช้งาน" }, 503);
+  }
+  try {
+    await requireTmtV2Ready(dbPool());
+  } catch {
+    return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
   }
 
   const params = paramsSchema.safeParse(await context.params);

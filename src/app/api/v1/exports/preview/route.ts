@@ -3,6 +3,7 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { createExportPreview } from "@/modules/exports/service";
 import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
+import { TmtV2NotReadyError } from "@/modules/tmt/readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,16 @@ export async function GET(request: Request) {
   const parsed = schema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_QUERY", message: "ตัวเลือกไม่ถูกต้อง" }, 400);
 
-  const { candidates, previewToken } = await createExportPreview(context.context.facilityId, parsed.data.selection);
+  let preview;
+  try {
+    preview = await createExportPreview(context.context.facilityId, parsed.data.selection);
+  } catch (error) {
+    if (error instanceof TmtV2NotReadyError) {
+      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
+    }
+    throw error;
+  }
+  const { candidates, previewToken } = preview;
   const rows = candidates.map((candidate) => candidate.row);
   const limit = parsed.data.limit ?? 100;
   return apiJson({

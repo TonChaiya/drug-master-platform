@@ -204,7 +204,7 @@ TTMT v2 importer ใช้ known MasterTTMT column aliases เดียวกั
 
 **Phase 7 maintenance boundary** — สถานะเก็บแบบ persistent/encrypted ใน `app_settings`. เมื่อ ON ทุก domain mutation ที่เปลี่ยน source/catalog/mapping/review/export/sync, Agent command state หรือ facility business data ต้องถูกปฏิเสธหลัง authentication แต่ก่อน service write ด้วย HTTP 503; read-only/login/admin และ guarded operational tooling ยังใช้ได้. สถานะอ่านไม่ได้ต้อง fail closed สำหรับ domain mutation. การ enable/disable ที่เปลี่ยน state จริงต้อง audit และ same-state เป็น no-op.
 
-**Controlled reset** — ใช้ exact table allowlist และ transaction เท่านั้น ห้าม wildcard/drop และห้ามแตะ users/facilities/sessions/app settings/audit/Agent identity+credentials+commands+tokens/rate limits/migration journal. Dry-run เป็น default; execution ต้องมี maintenance ON, verified backup reference, explicit execute และ exact database confirmation.
+**Controlled reset** — ใช้ exact table allowlist และ transaction เท่านั้น ห้าม wildcard/drop และห้ามแตะ users/facilities/sessions/app settings/audit/Agent identity+credentials+commands+tokens/rate limits/migration journal. Dry-run เป็น default; execution ต้องมี maintenance ON, verified backup reference, explicit mode/execute และ exact database confirmation. โหมด `tmt-v2-only` ลบได้เฉพาะ 17 ตาราง TMT source/run/checkpoint/version ที่ระบุไว้ และต้อง preserve business mapping/catalog/source/export, TTMT และ legacy `standard_*`.
 
 ---
 
@@ -248,7 +248,7 @@ TTMT v2 importer ใช้ known MasterTTMT column aliases เดียวกั
 - mapping v2 export-ready เมื่อ lifecycle เป็น `mapped`, acknowledgement (ถ้าต้องใช้) ยัง current, source-specific standard valid และไม่มี conflict ที่ทำให้คอลัมน์ contract กำกวม
 - delta/checkpoint ใช้ version จาก `drug_mappings.updatedAt`; การ refresh metadata ของ TMT/TTMT เพียงอย่างเดียวห้ามทำให้ mapping กลับเข้า delta
 - preview hash ต้องรวม source/code/level เพื่อให้ token stale เมื่อ identity เปลี่ยน และ failed export ห้ามเลื่อน checkpoint
-- v2 Catalog/Export เปิดใช้เฉพาะ feature flag explicit; เมื่อปิดต้องใช้ legacy resolver เดิมและไม่ query v2 tables
+- v2 Browser/Mapping/Catalog/Export เปิดใช้เฉพาะ feature flag explicit และ latest TMT run ต้อง `status=succeeded` โดยไม่ใช่ `full_unverified`; run ที่ missing/unverified/failed/stale/running ต้อง fail closed ด้วย `TMT_V2_NOT_READY`. เมื่อ flag ปิดต้องใช้ legacy resolver เดิมและไม่ query v2 tables
 
 ### ที่มาของแต่ละคอลัมน์
 

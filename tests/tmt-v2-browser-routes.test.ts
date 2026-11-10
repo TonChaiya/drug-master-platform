@@ -6,12 +6,17 @@ const mocks = vi.hoisted(() => ({
   dbPool: vi.fn(),
   search: vi.fn(),
   detail: vi.fn(),
+  requireReady: vi.fn(),
 }));
 
 vi.mock("@/modules/auth/session", () => ({ currentUser: mocks.currentUser }));
 vi.mock("@/db/client", () => ({ dbPool: mocks.dbPool }));
 vi.mock("@/modules/tmt/search", () => ({ searchTmt: mocks.search }));
 vi.mock("@/modules/tmt/detail", () => ({ getTmtConceptDetail: mocks.detail }));
+vi.mock("@/modules/tmt/readiness", () => ({
+  requireTmtV2Ready: mocks.requireReady,
+  TmtV2NotReadyError: class TmtV2NotReadyError extends Error {},
+}));
 
 import { GET as search } from "@/app/api/v1/tmt-v2/search/route";
 import { GET as detail } from "@/app/api/v1/tmt-v2/concepts/[id]/route";
@@ -26,6 +31,14 @@ beforeEach(() => {
   mocks.dbPool.mockReturnValue(pool);
   mocks.search.mockResolvedValue([]);
   mocks.detail.mockResolvedValue(null);
+  mocks.requireReady.mockResolvedValue(undefined);
+});
+
+test("enabled browser fails closed before search when TMT is not ready", async () => {
+  mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
+  const response = await search(new Request("https://example.test/api/v1/tmt-v2/search?q=764169"));
+  assert.equal(response.status, 503);
+  assert.equal(mocks.search.mock.calls.length, 0);
 });
 
 afterEach(() => vi.unstubAllEnvs());

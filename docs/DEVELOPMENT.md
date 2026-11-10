@@ -153,8 +153,10 @@ pnpm phase7:maintenance -- --environment local --env-file <local-test.env> --sta
 pnpm tmt:v2:sync -- --environment local --env-file <local-test.env> --mode full --dry-run
 pnpm ttmt:v2:import -- --environment local --env-file <local-test.env> --file <approved-fixture.xls> --version <version> --dry-run
 pnpm phase7:preflight -- --environment local --env-file <local-test.env> --master-ttmt <approved-fixture.xls>
-pnpm phase7:reset -- --environment local --env-file <local-test.env> --backup-reference <local-backup> --dry-run
+pnpm phase7:reset -- --environment local --env-file <local-test.env> --mode tmt-v2-only --backup-reference <local-backup> --dry-run
 ```
+
+`--mode` เป็นค่าบังคับเพื่อป้องกันการเลือก reset scope โดยปริยาย: ใช้ `tmt-v2-only` เมื่อต้องล้างเฉพาะ TMT v2 และใช้ `full` เฉพาะ cutover reset แบบกว้างที่อนุมัติไว้แล้ว ทั้งสองโหมดยังคง dry-run ถ้าไม่ส่ง `--execute`.
 
 Integration rehearsal ใช้ `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1`, `127.0.0.1` บนพอร์ต Laragon MySQL ที่กำหนด explicit (`3306` หรือ `3307`) และฐาน exact `drug_master_phase7_readiness_test`:
 

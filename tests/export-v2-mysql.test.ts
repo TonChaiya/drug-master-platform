@@ -20,13 +20,13 @@ describe.runIf(enabled)("catalog and export v2 on isolated Laragon MySQL", () =>
   beforeAll(async () => {
     assert.equal(process.env.NODE_ENV, "test");
     assert.equal(host, "127.0.0.1");
-    assert.equal(port, 3307);
+    assert.ok(port === 3306 || port === 3307, "Export v2 test requires the configured Laragon MySQL port");
     assert.equal(process.env.EXPORT_V2_TEST_DATABASE, expectedDatabase);
     assert.equal(user, "root");
     assert.notEqual(process.env.DB_DATABASE, "jhcisdb");
     server = await mysql.createConnection({ host, port, user, password: process.env.EXPORT_V2_TEST_PASSWORD ?? "", multipleStatements: true });
     const [[identity]] = await server.query<mysql.RowDataPacket[]>("SELECT @@hostname AS hostname, @@port AS port");
-    assert.equal(Number(identity?.port), 3307);
+    assert.equal(Number(identity?.port), port);
     await server.query(`DROP DATABASE IF EXISTS \`${expectedDatabase}\``);
     await server.query(`CREATE DATABASE \`${expectedDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     await server.query(`USE \`${expectedDatabase}\``);
@@ -98,6 +98,9 @@ describe.runIf(enabled)("catalog and export v2 on isolated Laragon MySQL", () =>
       { id: randomUUID(), importId, facilityId: facilityA, sourceRowNumber: 5, hospdrugcode: "GPU-ONLY", productcat: "1", tmtid: "764169" },
     ]);
     const at = new Date("2026-11-05T00:00:00Z");
+    await db.insert(schema.tmtSyncRuns).values({
+      id: randomUUID(), tmtVersion: "v1", mode: "full", status: "succeeded", startedAt: at, finishedAt: at,
+    });
     await db.insert(schema.tmtConcept).values([
       { tmtid: 764169n, fsn: "GPU 764169", changeDate: "2026-11-01", levelName: "gpu", sourceVersion: "v1", lastSeenVersion: "v1", syncedAt: at },
       { tmtid: 565818n, fsn: "TPU 565818", changeDate: "2026-11-01", levelName: "tpu", sourceVersion: "v1", lastSeenVersion: "v1", syncedAt: at },

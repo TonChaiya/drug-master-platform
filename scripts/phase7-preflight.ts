@@ -9,6 +9,7 @@ import { createOperationalPool, inspectOperationalTarget, tableCounts } from "@/
 import { evaluatePhase7Preflight } from "@/modules/phase7/inventory";
 import { loadExplicitEnvFile } from "@/modules/phase7/env";
 import { KEEP_TABLES, RESET_TABLES } from "@/modules/phase7/reset";
+import { readTmtV2Readiness } from "@/modules/tmt/readiness";
 
 const args = parseArgs({ options: {
   environment: { type: "string" }, "env-file": { type: "string" }, "master-ttmt": { type: "string" }, "backup-reference": { type: "string" },
@@ -36,18 +37,19 @@ try {
     catalog: process.env.TMT_V2_CATALOG_ENABLED === "1", export: process.env.TMT_V2_EXPORT_ENABLED === "1",
   };
   const credentialPresent = (await resolveTmtCredentialsFromPool(pool)) !== null;
+  const tmtReadiness = existing.has("tmt_sync_runs") ? await readTmtV2Readiness(pool) : { ready: false as const, reason: "RUN_MISSING" as const, run: null };
   const report = evaluatePhase7Preflight({
     missingMigrations, maintenanceEnabled: target.maintenanceEnabled, credentialPresent,
     tmtTablesPresent: existing.has("tmt_sync_runs") && existing.has("tmt_mastertmt"),
     ttmtTablesPresent: existing.has("ttmt_imports") && existing.has("ttmt_products"),
-    masterTtmtPresent, featureFlags: flags,
+    masterTtmtPresent, tmtReady: tmtReadiness.ready, featureFlags: flags,
   });
   const gitSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   console.log(JSON.stringify({
     environment, database: target.database, serverVersion: target.serverVersion, migrations: target.appliedMigrations,
     maintenance: target.maintenanceEnabled, backupReference: args.values["backup-reference"] ?? null,
     keepCounts, resetCounts, credentialPresent,
-    masterTtmt: { present: masterTtmtPresent, hash: masterTtmtHash }, featureFlags: flags, gitSha, ...report,
+    masterTtmt: { present: masterTtmtPresent, hash: masterTtmtHash }, tmtReadiness, featureFlags: flags, gitSha, ...report,
   }));
   if (!report.ready) process.exitCode = 1;
 } finally {
