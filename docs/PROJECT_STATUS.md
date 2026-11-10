@@ -76,6 +76,8 @@ Migration สำคัญล่าสุด:
 - Phase 7L/M ผ่าน production dry-run และ execute TMT-v2-only reset โดย KEEP/business/TTMT/legacy คงเดิม; maintenance ยัง ON และ v2 flags OFF
 - Phase 7N run `fc46d0ed-3624-49dc-8bd7-53bd32671df3` โหลด core และ ATC ครบ แต่จบ `failed` เพราะ ImageList historical window ตอบ HTTP 500 หลัง retry; partial TMT data คงอยู่, TTMT ยังไม่ import และยังไม่เปิด flags
 - Phase 7O แยก policy ของ degraded sync ให้ core 13 endpoints + ATC เป็น required ส่วน ImageList เป็น optional warning; blocking invariant และ GPU `764169` acceptance ยังคง required. การเปลี่ยนนี้ยังไม่ reset/resync production
+- production full-unverified run `ae95225a-4d58-47f9-a170-a5ccc6cac7b9` จบด้วย required endpoints/invariants/GPU acceptance ผ่าน, ImageList ล้มเหลวเฉพาะ optional windows; TTMT import `20261001` สำเร็จ 9,654 rows. Run ยังคง `unverified`, maintenance ON และ flags OFF
+- Phase 7X เพิ่ม migration `0017_tmt_run_validations.sql`, guarded revalidation command และ central assurance `validated_unverified`; evidence ผูก run/checkpoint snapshot/invariants/GPU/approved TTMT ด้วย SHA-256 และ fail closed เมื่อ stale/mismatch. Migration 0017 ยังไม่ apply production และยังไม่มี production validation row
 
 ## Known improvement backlog
 

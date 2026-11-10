@@ -17,6 +17,7 @@
     "keys:generate": "node scripts/generate-keys.mjs",
     "phase7:maintenance": "tsx scripts/phase7-maintenance.ts",
     "tmt:v2:sync": "tsx scripts/tmt-v2-sync.ts",
+    "tmt:v2:validate": "tsx scripts/tmt-v2-validate.ts",
     "ttmt:v2:import": "tsx scripts/ttmt-v2-import.ts",
     "phase7:preflight": "tsx scripts/phase7-preflight.ts",
     "phase7:reset": "tsx scripts/phase7-reset.ts"

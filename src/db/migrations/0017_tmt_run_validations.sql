@@ -1,0 +1,20 @@
+CREATE TABLE tmt_run_validations (
+  run_id CHAR(36) NOT NULL,
+  policy_version VARCHAR(32) NOT NULL,
+  status VARCHAR(24) NOT NULL,
+  validated_at DATETIME(3) NOT NULL,
+  required_checkpoint_count INT UNSIGNED NOT NULL,
+  required_succeeded_count INT UNSIGNED NOT NULL,
+  optional_failure_count INT UNSIGNED NOT NULL,
+  blocking_invariant_count INT UNSIGNED NOT NULL,
+  invariant_evidence TEXT NOT NULL,
+  gpu_764169_passed TINYINT(1) NOT NULL,
+  ttmt_import_id CHAR(36) NOT NULL,
+  ttmt_content_hash CHAR(64) NOT NULL,
+  ttmt_row_count INT UNSIGNED NOT NULL,
+  evidence_sha256 CHAR(64) NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (run_id),
+  CONSTRAINT fk_tmt_run_validation_run FOREIGN KEY (run_id) REFERENCES tmt_sync_runs(id) ON DELETE CASCADE,
+  CONSTRAINT fk_tmt_run_validation_ttmt_import FOREIGN KEY (ttmt_import_id) REFERENCES ttmt_imports(id)
+);

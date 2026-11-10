@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { bigint, date, datetime, index, int, mysqlTable, primaryKey, text, tinyint, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { ttmtImports } from "./ttmt";
 
 const now = sql`CURRENT_TIMESTAMP(3)`;
 const tmtId = (name: string) => bigint(name, { mode: "bigint", unsigned: true });
@@ -339,3 +340,21 @@ export const tmtSyncCheckpoints = mysqlTable(
     index("idx_tmt_sync_checkpoint_resume").on(table.runId, table.status, table.endpoint),
   ],
 );
+
+export const tmtRunValidations = mysqlTable("tmt_run_validations", {
+  runId: varchar("run_id", { length: 36 }).primaryKey().references(() => tmtSyncRuns.id, { onDelete: "cascade" }),
+  policyVersion: varchar("policy_version", { length: 32 }).notNull(),
+  status: varchar("status", { length: 24 }).notNull(),
+  validatedAt: datetime("validated_at", { mode: "date", fsp: 3 }).notNull(),
+  requiredCheckpointCount: int("required_checkpoint_count", { unsigned: true }).notNull(),
+  requiredSucceededCount: int("required_succeeded_count", { unsigned: true }).notNull(),
+  optionalFailureCount: int("optional_failure_count", { unsigned: true }).notNull(),
+  blockingInvariantCount: int("blocking_invariant_count", { unsigned: true }).notNull(),
+  invariantEvidence: text("invariant_evidence").notNull(),
+  gpu764169Passed: tinyint("gpu_764169_passed", { unsigned: true }).notNull(),
+  ttmtImportId: varchar("ttmt_import_id", { length: 36 }).notNull().references(() => ttmtImports.id),
+  ttmtContentHash: varchar("ttmt_content_hash", { length: 64 }).notNull(),
+  ttmtRowCount: int("ttmt_row_count", { unsigned: true }).notNull(),
+  evidenceSha256: varchar("evidence_sha256", { length: 64 }).notNull(),
+  createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
+});

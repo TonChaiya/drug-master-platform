@@ -63,19 +63,33 @@ async function migrate(): Promise<string[]> {
   return applied;
 }
 
-test("clean local database migrates through 0016 and rerun is idempotent", async () => {
+test("clean local database migrates through 0017 and rerun is idempotent", async () => {
   const first = await migrate();
-  assert.equal(first.at(-3), "0014_tmt_data_model_v2.sql");
-  assert.equal(first.at(-2), "0015_ttmt_data_model_v2.sql");
-  assert.equal(first.at(-1), "0016_mapping_v2_identity.sql");
+  assert.equal(first.at(-4), "0014_tmt_data_model_v2.sql");
+  assert.equal(first.at(-3), "0015_ttmt_data_model_v2.sql");
+  assert.equal(first.at(-2), "0016_mapping_v2_identity.sql");
+  assert.equal(first.at(-1), "0017_tmt_run_validations.sql");
   assert.deepEqual(await migrate(), []);
 
   const [journal] = await connection.query<mysql.RowDataPacket[]>("SELECT filename, content_hash FROM schema_migrations ORDER BY filename");
-  assert.equal(journal.length, 16);
-  assert.equal(journal.at(-3)?.filename, "0014_tmt_data_model_v2.sql");
-  assert.equal(journal.at(-2)?.filename, "0015_ttmt_data_model_v2.sql");
-  assert.equal(journal.at(-1)?.filename, "0016_mapping_v2_identity.sql");
+  assert.equal(journal.length, 17);
+  assert.equal(journal.at(-4)?.filename, "0014_tmt_data_model_v2.sql");
+  assert.equal(journal.at(-3)?.filename, "0015_ttmt_data_model_v2.sql");
+  assert.equal(journal.at(-2)?.filename, "0016_mapping_v2_identity.sql");
+  assert.equal(journal.at(-1)?.filename, "0017_tmt_run_validations.sql");
   assert.match(String(journal.at(-1)?.content_hash), /^[a-f0-9]{64}$/);
+});
+
+test("validated-unverified evidence cascades with its TMT run", async () => {
+  const runId = "00000000-0000-4000-8000-000000000017";
+  const importId = "00000000-0000-4000-8000-000000000015";
+  await connection.execute("INSERT INTO ttmt_imports (id,version,filename,content_hash,row_count,status,started_at) VALUES (?,?,?,?,9654,'succeeded',NOW(3))", [importId, "20261001", "fixture.xls", "a".repeat(64)]);
+  await connection.execute("INSERT INTO tmt_sync_runs (id,tmt_version,mode,status,error_code,started_at,finished_at) VALUES (?,'unverified:00000000000040008000','full_unverified','unverified','TMT_VERSION_UNVERIFIED',NOW(3),NOW(3))", [runId]);
+  await connection.execute("INSERT INTO tmt_run_validations (run_id,policy_version,status,validated_at,required_checkpoint_count,required_succeeded_count,optional_failure_count,blocking_invariant_count,invariant_evidence,gpu_764169_passed,ttmt_import_id,ttmt_content_hash,ttmt_row_count,evidence_sha256) VALUES (?,'validated-unverified-v1','passed',NOW(3),14,14,0,0,'{}',1,?,?,9654,?)", [runId, importId, "a".repeat(64), "b".repeat(64)]);
+  await connection.execute("DELETE FROM tmt_sync_runs WHERE id=?", [runId]);
+  const [rows] = await connection.execute<mysql.RowDataPacket[]>("SELECT run_id FROM tmt_run_validations WHERE run_id=?", [runId]);
+  assert.equal(rows.length, 0);
+  await connection.execute("DELETE FROM ttmt_imports WHERE id=?", [importId]);
 });
 
 test("mapping v2 identity is nullable for legacy rows and indexed for new identities", async () => {
@@ -174,7 +188,7 @@ test("local MySQL exposes all v2 tables and required keys", async () => {
     [expectedDatabase],
   );
   assert.deepEqual(tables.map((row) => row.TABLE_NAME), [
-    "tmt_atc", "tmt_concept", "tmt_gp", "tmt_gpp", "tmt_gpu", "tmt_mastertmt", "tmt_nlem", "tmt_regno", "tmt_relationship",
+    "tmt_atc", "tmt_concept", "tmt_gp", "tmt_gpp", "tmt_gpu", "tmt_mastertmt", "tmt_nlem", "tmt_regno", "tmt_relationship", "tmt_run_validations",
     "tmt_subs", "tmt_sync_checkpoints", "tmt_sync_runs", "tmt_tp", "tmt_tpp", "tmt_tpu", "tmt_version", "tmt_vtm",
     "ttmt_imports", "ttmt_products",
   ]);

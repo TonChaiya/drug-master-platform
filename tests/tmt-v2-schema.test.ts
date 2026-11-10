@@ -48,8 +48,28 @@ test("v2 source tables use the exact owner-approved names", () => {
   );
   assert.equal(getTableName(tmt.tmtSyncRuns), "tmt_sync_runs");
   assert.equal(getTableName(tmt.tmtSyncCheckpoints), "tmt_sync_checkpoints");
+  assert.equal(getTableName(tmt.tmtRunValidations), "tmt_run_validations");
   assert.equal(getTableName(ttmt.ttmtImports), "ttmt_imports");
   assert.equal(getTableName(ttmt.ttmtProducts), "ttmt_products");
+});
+
+test("validated-unverified evidence has one row per run with cascade invalidation", async () => {
+  const config = getTableConfig(tmt.tmtRunValidations);
+  assert.equal(config.columns.find((column) => column.name === "run_id")?.primary, true);
+  assert.deepEqual(config.foreignKeys.map((foreignKey) => foreignKey.onDelete), ["cascade", undefined]);
+  assert.equal(config.indexes.length, 0);
+
+  const sql = await readFile(new URL("../src/db/migrations/0017_tmt_run_validations.sql", import.meta.url), "utf8");
+  for (const column of [
+    "run_id", "policy_version", "status", "validated_at", "required_checkpoint_count",
+    "required_succeeded_count", "optional_failure_count", "blocking_invariant_count",
+    "invariant_evidence", "gpu_764169_passed", "ttmt_import_id", "ttmt_content_hash",
+    "ttmt_row_count", "evidence_sha256",
+  ]) assert.match(sql, new RegExp(`\\b${column}\\b`, "i"));
+  assert.match(sql, /PRIMARY KEY \(run_id\)/i);
+  assert.match(sql, /FOREIGN KEY \(run_id\) REFERENCES tmt_sync_runs\(id\) ON DELETE CASCADE/i);
+  assert.match(sql, /FOREIGN KEY \(ttmt_import_id\) REFERENCES ttmt_imports\(id\)/i);
+  assert.doesNotMatch(sql, /^\s*(?:DROP|DELETE|TRUNCATE|UPDATE)\b/im);
 });
 
 test("temporal enrichment and relationship identities preserve replay and reverse lookup", () => {

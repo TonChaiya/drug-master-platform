@@ -10,6 +10,9 @@ import { maintenanceMutationResponse } from "@/modules/maintenance/route-guard";
 import { setMaintenanceMode } from "@/modules/maintenance/service";
 import { TmtSyncRepository } from "@/modules/tmt/persistence";
 import { runInitialTmtSync, type TmtSyncSource } from "@/modules/tmt/sync";
+import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "@/modules/tmt/sync";
+import { readTmtV2Readiness } from "@/modules/tmt/readiness";
+import { canonicalizeTmtValidationCheckpoints } from "@/modules/tmt/validation";
 import { clearIntegrationTestPool, installIntegrationTestPool } from "./helpers/db-integration";
 
 const enabled = process.env.ALLOW_DB_INTEGRATION_TESTS === "1";
@@ -46,7 +49,7 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
       await server.query(migration);
       await server.execute("INSERT INTO schema_migrations (filename,content_hash) VALUES (?,?)", [filename, createHash("sha256").update(migration).digest("hex")]);
     }
-    assert.equal(filenames.at(-1), "0016_mapping_v2_identity.sql");
+    assert.equal(filenames.at(-1), "0017_tmt_run_validations.sql");
     pool = mysql.createPool({ host: "127.0.0.1", port: testPort, user: "root", password: process.env.DB_PASSWORD ?? "", database: expectedDatabase, timezone: "Z" });
     installIntegrationTestPool(pool);
     process.env.APP_ENCRYPTION_KEY = randomBytes(32).toString("base64");
@@ -105,6 +108,49 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     assert.deepEqual(after[0], before[0]);
   });
 
+  test("persisted validated-unverified evidence is read fail-closed from MySQL", async () => {
+    const runId = "00000000-0000-4000-8000-000000000717";
+    const marker = `unverified:${runId.replaceAll("-", "").slice(0, 20)}`;
+    const [[ttmt]] = await pool.query<RowDataPacket[]>("SELECT id,version,content_hash,row_count,status FROM ttmt_imports WHERE status='succeeded' LIMIT 1");
+    await pool.execute(
+      "INSERT INTO tmt_sync_runs (id,tmt_version,mode,status,error_code,started_at,finished_at) VALUES (?,?,'full_unverified','unverified','TMT_VERSION_UNVERIFIED','2026-11-10 08:00:00.000','2026-11-10 09:00:00.000')",
+      [runId, marker],
+    );
+    for (const endpoint of TMT_UNVERIFIED_REQUIRED_ENDPOINTS) {
+      await pool.execute(
+        "INSERT INTO tmt_sync_checkpoints (run_id,endpoint,window_begin,window_end,status) VALUES (?,?, '2026-11-10','2026-11-10','succeeded')",
+        [runId, endpoint],
+      );
+    }
+    await pool.execute(
+      "INSERT INTO tmt_sync_checkpoints (run_id,endpoint,window_begin,window_end,status,error_code) VALUES (?,'imagelist','2026-11-10','2026-11-10','failed','REMOTE_HTTP_500')",
+      [runId],
+    );
+    const checkpointEvidence = canonicalizeTmtValidationCheckpoints([
+        ...TMT_UNVERIFIED_REQUIRED_ENDPOINTS.map((endpoint) => ({
+          endpoint, windowBegin: "2026-11-10", windowEnd: "2026-11-10", status: "succeeded",
+          errorCode: null, receivedRows: 0, writtenRows: 0,
+        })),
+        { endpoint: "imagelist", windowBegin: "2026-11-10", windowEnd: "2026-11-10", status: "failed", errorCode: "REMOTE_HTTP_500", receivedRows: 0, writtenRows: 0 },
+      ]);
+    const invariantEvidence = JSON.stringify({
+      policyVersion: "validated-unverified-v1",
+      run: { id: runId, mode: "full_unverified", status: "unverified", errorCode: "TMT_VERSION_UNVERIFIED", tmtVersion: marker },
+      checkpoints: checkpointEvidence,
+      blockingInvariants: { missingConceptCounterparts: 0, missingEndpointCounterparts: 0, levelMismatch: 0, masterTmtMissingTpu: 0, masterTmtMissingConcept: 0, tpuMissingMasterTmt: 0, unknownLevels: 0, duplicateRelationshipPairs: 0, unknownMasterStatuses: 0 },
+      gpu: { code: "764169", level: "gpu", outboundTpu: 1, relatedTpuPresent: 1, relatedMasterTmtPresent: 1, relatedConceptPresent: 1, activeMasterCount: 1 },
+      ttmt: { id: ttmt?.id, version: ttmt?.version, contentHash: ttmt?.content_hash, rowCount: Number(ttmt?.row_count), status: ttmt?.status, productCount: 2, activeCount: 1, inactiveCount: 1, foreignProductCount: 0 },
+    });
+    await pool.execute(
+      "INSERT INTO tmt_run_validations (run_id,policy_version,status,validated_at,required_checkpoint_count,required_succeeded_count,optional_failure_count,blocking_invariant_count,invariant_evidence,gpu_764169_passed,ttmt_import_id,ttmt_content_hash,ttmt_row_count,evidence_sha256) VALUES (?,'validated-unverified-v1','passed',NOW(3),?,?,1,0,?,1,?,?,?,?)",
+      [runId, TMT_UNVERIFIED_REQUIRED_ENDPOINTS.length, TMT_UNVERIFIED_REQUIRED_ENDPOINTS.length, invariantEvidence, ttmt?.id, ttmt?.content_hash, ttmt?.row_count, createHash("sha256").update(invariantEvidence).digest("hex")],
+    );
+    assert.equal((await readTmtV2Readiness(pool)).assurance, "validated_unverified");
+    await pool.execute("UPDATE tmt_sync_checkpoints SET status='failed' WHERE run_id=? AND endpoint=?", [runId, TMT_UNVERIFIED_REQUIRED_ENDPOINTS[0]]);
+    assert.equal((await readTmtV2Readiness(pool)).ready, false);
+    await pool.execute("UPDATE tmt_sync_checkpoints SET status='succeeded' WHERE run_id=?", [runId]);
+  });
+
   test("persistent maintenance boundary blocks mutations and resumes after disable", async () => {
     const actorUserId = randomUUID();
     assert.equal(await maintenanceMutationResponse(), null);
@@ -124,6 +170,15 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     await pool.execute("INSERT INTO users (id,facility_id,username,username_normalized,full_name,position_name,password_hash,role,status) VALUES (?,?,?,?,?,?,?,'admin','active')", [userId, facilityId, "phase7", "phase7", "Phase 7", "Tester", "fixture"]);
     await pool.execute("INSERT INTO standard_imports (id,kind,version,row_count,status,started_at) VALUES (?,'TTMT','legacy-fixture',0,'succeeded',NOW(3))", [randomUUID()]);
     const tmtOnlyStore = mysqlResetStore(pool, "tmt-v2-only");
+    const [[validationCount]] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM tmt_run_validations");
+    if (Number(validationCount?.total) === 0) {
+      const [[validationRun]] = await pool.query<RowDataPacket[]>("SELECT id FROM tmt_sync_runs ORDER BY started_at DESC LIMIT 1");
+      const [[validationImport]] = await pool.query<RowDataPacket[]>("SELECT id,content_hash,row_count FROM ttmt_imports WHERE status='succeeded' LIMIT 1");
+      await pool.execute(
+        "INSERT INTO tmt_run_validations (run_id,policy_version,status,validated_at,required_checkpoint_count,required_succeeded_count,optional_failure_count,blocking_invariant_count,invariant_evidence,gpu_764169_passed,ttmt_import_id,ttmt_content_hash,ttmt_row_count,evidence_sha256) VALUES (?,'validated-unverified-v1','passed',NOW(3),1,1,0,0,'{}',1,?,?,?,?)",
+        [validationRun?.id, validationImport?.id, validationImport?.content_hash, validationImport?.row_count, "b".repeat(64)],
+      );
+    }
     const preservedBefore = await Promise.all(preservedTablesForMode("tmt-v2-only").map(async (table) => {
       const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``);
       return [table, Number(rows[0]?.total)] as const;
@@ -135,6 +190,8 @@ describe.runIf(enabled).sequential("Phase 7A readiness on isolated local MySQL",
     const tmtDone = await runPhase7Reset({ mode: "tmt-v2-only", execute: true, backupReference: "local-fixture-backup" }, tmtOnlyStore);
     assert.equal(tmtDone.executed, true);
     assert.ok(Object.values(tmtDone.after ?? {}).every((count) => count === 0));
+    const [[validationsAfterReset]] = await pool.query<RowDataPacket[]>("SELECT COUNT(*) AS total FROM tmt_run_validations");
+    assert.equal(Number(validationsAfterReset?.total), 0, "TMT run deletion must cascade validation evidence");
     for (const [table, count] of preservedBefore) {
       const [rows] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM \`${table}\``);
       assert.equal(Number(rows[0]?.total), count, `${table} must be preserved by TMT-v2-only reset`);

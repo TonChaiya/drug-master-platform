@@ -44,7 +44,9 @@ function value(row: RowDataPacket): Record<string, string | number | null> {
   }));
 }
 
-async function issue(pool: Pool, body: string, parameters: unknown[], exampleLimit: number): Promise<InvariantIssue> {
+type QueryExecutor = Pick<Pool, "query">;
+
+async function issue(pool: QueryExecutor, body: string, parameters: unknown[], exampleLimit: number): Promise<InvariantIssue> {
   const [[count]] = await pool.query<RowDataPacket[]>(`SELECT COUNT(*) AS total FROM (${body}) AS invariant_rows`, parameters);
   const [examples] = await pool.query<RowDataPacket[]>(`${body} LIMIT ?`, [...parameters, exampleLimit]);
   return { count: Number(count?.total ?? 0), examples: examples.map(value) };
@@ -74,14 +76,14 @@ function unionFsnMismatch(): string {
   ).join(" UNION ALL ");
 }
 
-async function enrichmentConflict(pool: Pool, table: string, column: string, exampleLimit: number): Promise<InvariantIssue> {
+async function enrichmentConflict(pool: QueryExecutor, table: string, column: string, exampleLimit: number): Promise<InvariantIssue> {
   return issue(pool,
     `SELECT CAST(tpuid AS CHAR) AS tpuid,DATE_FORMAT(change_date,'%Y-%m-%d') AS change_date,COUNT(DISTINCT ${column}) AS value_count FROM ${table} GROUP BY tpuid,change_date HAVING COUNT(DISTINCT ${column})>1`,
     [], exampleLimit);
 }
 
 export async function buildTmtInvariantReport(
-  pool: Pool,
+  pool: QueryExecutor,
   options: { optionalFailures?: Array<{ endpoint: string; errorCode: string }>; versionDrift?: boolean; exampleLimit?: number } = {},
 ): Promise<TmtInvariantReport> {
   const exampleLimit = Math.max(1, Math.min(50, options.exampleLimit ?? 10));
@@ -161,7 +163,7 @@ export interface TmtGpuAcceptance {
   masterStatuses: Array<{ tpucode: string; status: number }>;
 }
 
-export async function verifyTmtGpuAcceptance(pool: Pool, code: string): Promise<TmtGpuAcceptance> {
+export async function verifyTmtGpuAcceptance(pool: QueryExecutor, code: string): Promise<TmtGpuAcceptance> {
   if (!/^\d+$/.test(code)) throw new Error("TMT code must be numeric");
   const [[gpu]] = await pool.query<RowDataPacket[]>("SELECT CAST(gpuid AS CHAR) AS gpuid,fsn FROM tmt_gpu WHERE gpuid=? LIMIT 1", [code]);
   const [[concept]] = await pool.query<RowDataPacket[]>("SELECT CAST(tmtid AS CHAR) AS tmtid,fsn,LOWER(level_name) AS level_name FROM tmt_concept WHERE tmtid=? LIMIT 1", [code]);

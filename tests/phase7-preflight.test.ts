@@ -6,7 +6,7 @@ test("Phase 7 preflight reports every blocker and returns not ready", () => {
   const report = evaluatePhase7Preflight({
     missingMigrations: ["0016_mapping_v2_identity.sql"], maintenanceEnabled: false, credentialPresent: false,
     tmtTablesPresent: false, ttmtTablesPresent: true, masterTtmtPresent: false,
-    tmtReady: false,
+    tmtReadiness: { ready: false, assurance: null },
     featureFlags: { browser: false, mapping: false, catalog: false, export: false },
   });
   assert.equal(report.ready, false);
@@ -21,8 +21,18 @@ test("Phase 7 preflight is ready only when operational prerequisites exist and f
   const report = evaluatePhase7Preflight({
     missingMigrations: [], maintenanceEnabled: true, credentialPresent: true,
     tmtTablesPresent: true, ttmtTablesPresent: true, masterTtmtPresent: true,
-    tmtReady: true,
+    tmtReadiness: { ready: true, assurance: "verified" },
     featureFlags: { browser: false, mapping: false, catalog: false, export: false },
   });
-  assert.deepEqual(report, { ready: true, blockers: [] });
+  assert.deepEqual(report, { ready: true, blockers: [], warnings: [] });
+});
+
+test("validated-unverified readiness is allowed with an explicit degraded warning", () => {
+  const report = evaluatePhase7Preflight({
+    missingMigrations: [], maintenanceEnabled: true, credentialPresent: true,
+    tmtTablesPresent: true, ttmtTablesPresent: true, masterTtmtPresent: true,
+    tmtReadiness: { ready: true, assurance: "validated_unverified" },
+    featureFlags: { browser: false, mapping: false, catalog: false, export: false },
+  });
+  assert.deepEqual(report, { ready: true, blockers: [], warnings: ["TMT_V2_VALIDATED_UNVERIFIED"] });
 });

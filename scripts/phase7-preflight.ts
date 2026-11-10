@@ -19,9 +19,9 @@ const environment = z.enum(["local", "production"]).parse(args.values.environmen
 const pool = createOperationalPool(environment);
 try {
   const target = await inspectOperationalTarget(pool, { environment, executeRequested: false });
-  const required = ["0014_tmt_data_model_v2.sql", "0015_ttmt_data_model_v2.sql", "0016_mapping_v2_identity.sql"];
+  const required = ["0014_tmt_data_model_v2.sql", "0015_ttmt_data_model_v2.sql", "0016_mapping_v2_identity.sql", "0017_tmt_run_validations.sql"];
   const missingMigrations = required.filter((migration) => !target.appliedMigrations.includes(migration));
-  const expectedTables = [...KEEP_TABLES, ...RESET_TABLES];
+  const expectedTables = [...KEEP_TABLES, ...RESET_TABLES, "tmt_run_validations"];
   const [tableRows] = await pool.query<RowDataPacket[]>(
     `SELECT table_name FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN (${expectedTables.map(() => "?").join(",")})`,
     expectedTables,
@@ -37,12 +37,14 @@ try {
     catalog: process.env.TMT_V2_CATALOG_ENABLED === "1", export: process.env.TMT_V2_EXPORT_ENABLED === "1",
   };
   const credentialPresent = (await resolveTmtCredentialsFromPool(pool)) !== null;
-  const tmtReadiness = existing.has("tmt_sync_runs") ? await readTmtV2Readiness(pool) : { ready: false as const, reason: "RUN_MISSING" as const, run: null };
+  const tmtReadiness = existing.has("tmt_sync_runs") && existing.has("tmt_run_validations")
+    ? await readTmtV2Readiness(pool)
+    : { ready: false as const, reason: "RUN_MISSING" as const, assurance: null, run: null };
   const report = evaluatePhase7Preflight({
     missingMigrations, maintenanceEnabled: target.maintenanceEnabled, credentialPresent,
-    tmtTablesPresent: existing.has("tmt_sync_runs") && existing.has("tmt_mastertmt"),
+    tmtTablesPresent: existing.has("tmt_sync_runs") && existing.has("tmt_mastertmt") && existing.has("tmt_run_validations"),
     ttmtTablesPresent: existing.has("ttmt_imports") && existing.has("ttmt_products"),
-    masterTtmtPresent, tmtReady: tmtReadiness.ready, featureFlags: flags,
+    masterTtmtPresent, tmtReadiness: { ready: tmtReadiness.ready, assurance: tmtReadiness.assurance }, featureFlags: flags,
   });
   const gitSha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
   console.log(JSON.stringify({

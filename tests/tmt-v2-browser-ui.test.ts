@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test, vi } from "vitest";
@@ -39,6 +40,18 @@ test("browser starts as a compact read-only search workspace", () => {
   assert.match(html, /ความพร้อมจับคู่/);
   assert.match(html, /ดูข้อมูลเท่านั้น/);
   assert.doesNotMatch(html, /api\/v1\/mappings\/save/);
+});
+
+test("admin browser and mapping pages label validated-unverified data as degraded", async () => {
+  const [browserPage, mappingPage] = await Promise.all([
+    readFile(new URL("../src/app/(dashboard)/admin/tmt-v2/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/(dashboard)/mappings/v2/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(browserPage, /readiness\.assurance === "validated_unverified"/);
+  assert.match(browserPage, /ข้อมูล TMT ผ่านการตรวจสอบแบบ degraded/);
+  assert.match(mappingPage, /readiness\.assurance === "validated_unverified"/);
+  assert.match(mappingPage, /กำลังใช้ข้อมูล TMT แบบ degraded/);
+  assert.doesNotMatch(`${browserPage}\n${mappingPage}`, /validated-unverified[^\n]*verified succeeded/i);
 });
 
 test("mapping v2 reloads server truth for the newly selected source drug", async () => {

@@ -102,7 +102,7 @@ Parser และ schema contracts ใช้ synthetic fixtures เท่าน�
 pnpm exec vitest run tests/tmt-api-client.test.ts tests/tmt-v2-schema.test.ts
 ```
 
-การตรวจ migrations 0001-0016 ต้องใช้ MySQL ของ Laragon ที่แยกจาก production/JHCIS และฐานชื่อ exact `drug_master_tmt_v2_test` เท่านั้น ห้ามโหลด `.env.local`:
+การตรวจ migrations 0001-0017 ต้องใช้ MySQL ของ Laragon ที่แยกจาก production/JHCIS และฐานชื่อ exact `drug_master_tmt_v2_test` เท่านั้น ห้ามโหลด `.env.local`:
 
 ```powershell
 $env:NODE_ENV = "test"
@@ -154,7 +154,10 @@ pnpm tmt:v2:sync -- --environment local --env-file <local-test.env> --mode full 
 pnpm ttmt:v2:import -- --environment local --env-file <local-test.env> --file <approved-fixture.xls> --version <version> --dry-run
 pnpm phase7:preflight -- --environment local --env-file <local-test.env> --master-ttmt <approved-fixture.xls>
 pnpm phase7:reset -- --environment local --env-file <local-test.env> --mode tmt-v2-only --backup-reference <local-backup> --dry-run
+pnpm tmt:v2:validate -- --environment local --env-file <local-test.env> --run-id <full-unverified-run-id> --dry-run
 ```
+
+Validation command จะ persist เฉพาะเมื่อเพิ่ม `--execute --confirm-db <exact test database>` และทุก checkpoint/invariant/GPU/TTMT gate ผ่าน; dry-run เปิด transaction อ่าน evidence แล้ว rollback โดยไม่สร้าง `tmt_run_validations`.
 
 `--mode` เป็นค่าบังคับเพื่อป้องกันการเลือก reset scope โดยปริยาย: ใช้ `tmt-v2-only` เมื่อต้องล้างเฉพาะ TMT v2 และใช้ `full` เฉพาะ cutover reset แบบกว้างที่อนุมัติไว้แล้ว ทั้งสองโหมดยังคง dry-run ถ้าไม่ส่ง `--execute`.
 
@@ -184,7 +187,7 @@ pnpm exec vitest run tests/tmt-v2-browser-mysql.test.ts tests/tmt-v2-browser-rou
 
 ### Mapping v2 (Phase 5, local only)
 
-Mapping v2 อยู่ที่ hidden route `/mappings/v2` และต้องตั้งทั้ง `TMT_V2_BROWSER_ENABLED=1` และ `TMT_V2_MAPPING_ENABLED=1` ใน process ของ dev server หลัง migrate 0001–0016 บนฐาน local ที่ guard อนุญาตเท่านั้น. Save API ปฏิเสธก่อน query เมื่อ mapping flag ปิด ส่วน TMT Browser API ปฏิเสธก่อน query เมื่อ browser flag ปิด; `/mappings` legacy ยังใช้ `standard_products` ตามเดิม.
+Mapping v2 อยู่ที่ hidden route `/mappings/v2` และต้องตั้งทั้ง `TMT_V2_BROWSER_ENABLED=1` และ `TMT_V2_MAPPING_ENABLED=1` ใน process ของ dev server หลัง migrate 0001–0017 บนฐาน local ที่ guard อนุญาตเท่านั้น. Save API ปฏิเสธก่อน query เมื่อ mapping flag ปิด ส่วน TMT Browser API ปฏิเสธก่อน query เมื่อ browser flag ปิด; `/mappings` legacy ยังใช้ `standard_products` ตามเดิม.
 
 รัน targeted contract tests โดยไม่ใช้ `.env.local`:
 
