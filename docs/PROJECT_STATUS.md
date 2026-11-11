@@ -7,10 +7,10 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production source checkpoint: `5fd6da3e7a8577ca82941fb5452f7d542a470364`
+- Production source checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
-- Latest applied migration: `0016_mapping_v2_identity.sql`
+- Latest applied migration: `0017_tmt_run_validations.sql`
 - Windows Agent baseline: `1.3.0`
 
 ## Major completed areas
@@ -27,7 +27,6 @@
 - facility-scoped authorization จาก verified session
 - shared persistent rate limiting สำหรับ login/signup/Agent enrollment โดยไม่เก็บ raw IP
 - TMT sync/enrichment และ TTMT file import พร้อม version history
-- UX workflow ปัจจุบันเรียง JHCIS → Standards Hub (TMT v2/TTMT) → Drug Catalog → Mapping v2 → Export; หน้า `/standards` ไม่แสดง legacy `standard_products` sync เป็นแหล่งมาตรฐานปัจจุบันอีกต่อไป
 
 Migration สำคัญล่าสุด:
 
@@ -35,10 +34,13 @@ Migration สำคัญล่าสุด:
 - `0011_mapping_review_acknowledgements.sql` — current review acknowledgement ต่อ mapping
 - `0012_agent_identity_management.sql` — Agent identity, heartbeat/JHCIS telemetry และ targeted re-enrollment
 - `0013_shared_rate_limits.sql` — shared fixed-window counters สำหรับ public endpoints
+- `0014_tmt_data_model_v2.sql` / `0015_ttmt_data_model_v2.sql` — TMT/TTMT v2 persistence
+- `0016_mapping_v2_identity.sql` — source-aware mapping identity
+- `0017_tmt_run_validations.sql` — persisted evidence สำหรับ validated-unverified readiness
 
 ## Verified production state
 
-- production migrations `0010`–`0016` applied แล้ว
+- production migrations `0010`–`0017` applied แล้ว
 - login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
 - expired rate-limit bucket cleanup เปิดใช้บน production ผ่าน Vercel Cron เวลา `30 19 * * *` UTC และ controlled invocation ผ่านโดยไม่แตะ business tables
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
@@ -50,35 +52,92 @@ Migration สำคัญล่าสุด:
 
 ข้อมูลข้างต้นไม่ใช่คำรับรองว่า security/operations checklist ทุกข้อผ่าน ดูรายการค้างด้านล่างและ [OPERATIONS.md](OPERATIONS.md#5-production-verification-checklist)
 
-## Active redesign status
+## Current TMT/TTMT production state
 
-- TMT/TTMT Data Model v2 Phase 1 discovery/design เสร็จแล้วใน `docs/superpowers/specs/2026-11-04-tmt-data-model-v2-design.md`
-- Phase 1 ตรวจคู่มือและ live TMT API แบบ read-only รวมถึงพิสูจน์รหัส `764169`; ไม่มี production data change, migration หรือ deployment
-- Phase 2 persistence/parser foundation สร้างแล้ว: Drizzle schema, additive migrations `0014_tmt_data_model_v2.sql`/`0015_ttmt_data_model_v2.sql`, typed parsers/client ครบ 18 endpoints และ targeted contracts
-- Phase 2 recovery gates ผ่าน: production fixture cleanup ยืนยันแบบ read-only ว่าไม่เหลือข้อมูล, DB integration tests ใช้ fail-closed local-only guard และ full suite ไม่โหลด `.env.local`
-- migrations 0014/0015 ผ่าน controlled Laragon MySQL ก่อน apply production ใน Phase 7; migration 0016 apply production แล้วเช่นกัน
-- Phase 3 TMT v2 sync engine สร้างแล้ว: full/incremental/resume, version-bound run, endpoint checkpoint, bounded retry, optional isolation, idempotent persistence และ bounded invariant report
-- Phase 4 TMT Browser/Search v2 สร้างแล้ว: authenticated exact/prefix/FSN search, filters, concept detail, MasterTMT/enrichment, bounded relationship graph และ mapping eligibility preview ที่ `/admin/tmt-v2`
-- Phase 4 เป็น hidden/default-off (`TMT_V2_BROWSER_ENABLED` ต้องเท่ากับ `1` เท่านั้น) และเมื่อปิดจะไม่ query ตาราง v2; ไม่ได้เพิ่ม migration และไม่แตะ legacy navigation/search/mapping/export/catalog
-- Phase 5 Mapping v2 เพิ่ม additive migration `0016_mapping_v2_identity.sql`, identity `(standard_source, standard_code, standard_level)`, resolver TMT/TTMT แยกกัน และ hidden `/mappings/v2`; default-off ต้องตั้งทั้ง `TMT_V2_MAPPING_ENABLED=1` และ Browser flag ใน local เท่านั้น
-- Phase 5 ยังคง legacy `/mappings`, catalog reconcile, dashboard และ export ไว้ตาม `standard_products`; ไม่มี production migration/cutover/backfill และ legacy row ใช้ source/level `NULL` ได้
-- Phase 5 ผ่าน local E2E บนฐานแยก: GPU `764169` บันทึกตรงไม่ได้, active TPU/TTMT บันทึกและ GET คืน server truth, inactive standard ปฏิเสธ, facility scope fail-closed และ review confirm/repeat no-op/identity staleness ผ่าน; visual 1366/768/390 ไม่มี horizontal overflow
-- Phase 6 เพิ่ม consumer ฝั่ง Catalog/lifecycle/export สำหรับ identity v2 แบบ source-aware: TMT resolve เฉพาะ active TPU จาก MasterTMT พร้อม latest NLEM/RegNo และ TTMT resolve จาก `ttmt_products` โดยไม่ข้าม namespace
-- Phase 6 full/delta export ยังคงสัญญา DrugCat 22 ช่อง, checkpoint จาก `drug_mappings.updatedAt`, preview one-time/stale protection และ review acknowledgement เดิม; GPU `764169` ไม่ถูก export และ fixture ที่เลือก TPU `565818` ส่งออก `TMTID=565818`
-- Phase 6 ผ่าน local E2E บนฐาน exact `drug_master_export_v2_test` ถึง migration 0016 รวม full/delta/rollback/invalidation/tenant isolation และเปิดไฟล์ `.xls` จริงด้วย Microsoft Excel แล้ว; RegNo latest-date conflict ไม่เลือกค่าเองและ ATC ไม่ block export เพราะไม่อยู่ใน contract 22 ช่อง
-- Catalog/export v2 ยัง default-off (`TMT_V2_CATALOG_ENABLED=1` และ `TMT_V2_EXPORT_ENABLED=1` ต้องเปิดแยกกัน) จึงไม่มี production cutover, migration หรือ environment change; production ยังใช้ legacy `standard_products`
-- controlled live backfill ลง local MySQL ผ่านด้วย TMT version `20261102`: core ready, incremental replay 1,625 rowsเขียนใหม่ 0, และ `764169` ยืนยัน 1 GP / 9 TPU / 3 GPP โดย TPU ทั้ง 9 status 0
-- `/imagelist` ล้มเหลวแบบ isolated 3 historical windows; invariant report พบ dangling relationship concepts 106, self relationships 16, ATC same-date conflicts 1,446 และ RegNo same-date conflicts 803 โดยไม่มี missing level/concept counterpart หรือ unknown status/level
-- production migrations 0014–0016 apply แล้วและ maintenance ยัง ON; v2 flags ทั้งหมด OFF และ legacy tables ยังอยู่
-- approved reset ถูก execute แล้ว แต่ TMT full run `466e9ee9-8a61-4a59-b7a4-a662f108a09c` หยุดที่ 168 succeeded / 42 pending เพราะ `/version` ปัจจุบันคืน `tmt_version=""`; ห้าม resume run นี้ขณะ version ว่าง
-- Phase 7C แก้ relationship persistence N+1 แล้ว แต่ยังไม่มี relationship rows, TTMT import หรือ production activation
-- Phase 7I เพิ่ม explicit `full-unverified` one-shot mode: ต้องเริ่มจาก TMT v2 tables ว่าง, สร้าง run ใหม่, ห้าม resume และจบเป็น `unverified`/not-ready แม้ invariant ผ่าน
-- Phase 7K เพิ่ม `tmt-v2-only` reset mode ที่ลบเฉพาะ 17 ตาราง `tmt_*`/run/checkpoint/version และ runtime readiness guard; latest run ต้อง `status=succeeded` และไม่ใช่ `full_unverified` ก่อน consumer v2 ทุกชุดจะทำงาน แม้ env flag ถูกเปิด
-- Phase 7L/M ผ่าน production dry-run และ execute TMT-v2-only reset โดย KEEP/business/TTMT/legacy คงเดิม; maintenance ยัง ON และ v2 flags OFF
-- Phase 7N run `fc46d0ed-3624-49dc-8bd7-53bd32671df3` โหลด core และ ATC ครบ แต่จบ `failed` เพราะ ImageList historical window ตอบ HTTP 500 หลัง retry; partial TMT data คงอยู่, TTMT ยังไม่ import และยังไม่เปิด flags
-- Phase 7O แยก policy ของ degraded sync ให้ core 13 endpoints + ATC เป็น required ส่วน ImageList เป็น optional warning; blocking invariant และ GPU `764169` acceptance ยังคง required. การเปลี่ยนนี้ยังไม่ reset/resync production
-- production full-unverified run `ae95225a-4d58-47f9-a170-a5ccc6cac7b9` จบด้วย required endpoints/invariants/GPU acceptance ผ่าน, ImageList ล้มเหลวเฉพาะ optional windows; TTMT import `20261001` สำเร็จ 9,654 rows. Run ยังคง `unverified`, maintenance ON และ flags OFF
-- Phase 7X เพิ่ม migration `0017_tmt_run_validations.sql`, guarded revalidation command และ central assurance `validated_unverified`; evidence ผูก run/checkpoint snapshot/invariants/GPU/approved TTMT ด้วย SHA-256 และ fail closed เมื่อ stale/mismatch. Migration 0017 ยังไม่ apply production และยังไม่มี production validation row
+- TMT/TTMT Data Model v2 Phase 1–7 เสร็จแล้วและ production cutover เสร็จสมบูรณ์
+- TMT production dataset ปัจจุบันพร้อมใช้งานภายใต้ assurance `validated_unverified`; **ห้ามเรียกว่า verified**
+- successful TMT full-unverified run: `ae95225a-4d58-47f9-a170-a5ccc6cac7b9`
+- persisted validation policy: `validated-unverified-v1`
+- successful TTMT import: `46ac7956-4a52-43da-8f0a-c54fa392a70c`
+- เวอร์ชันข้อมูล TTMT: `20261001`
+- legacy `standard_*`/`standard_products` API และข้อมูลยังคงอยู่เพื่อ compatibility แต่ไม่ใช่แหล่งมาตรฐานหลักของ production workflow
+
+## Current UX workflow
+
+- UX-1 checkpoint: `e13e5530d40db3603955743ec3999207ac5e1aae`
+- UX-2 checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
+- workflow ปัจจุบัน: JHCIS → Standards Hub → Drug Catalog → Mapping v2 → Export
+- navigation หลักชี้ไป Mapping v2; `/mappings` redirect ไป `/mappings/v2` เมื่อ v2 mapping flag เปิด
+- `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็น TMT v2 sync
+
+## TMT result presentation contract
+
+เรียงข้อมูลผลค้นหาตามนี้เสมอ:
+
+1. ระดับ TMT พร้อมสีและข้อความ
+2. TMT ID
+3. FSN
+4. ชื่อการค้า
+5. ผู้ผลิต
+6. เลขทะเบียนยา
+7. สถานะ
+8. ความพร้อมจับคู่
+9. actions
+
+สีประจำระดับ: GP แดง, GPU เขียว, TP เหลือง, TPU น้ำเงิน และระดับอื่นใช้สีกลาง ต้องไม่ใช้สีอย่างเดียวโดยไม่มีข้อความระดับกำกับ
+
+- Trade Name, Manufacturer หรือ RegNo ที่ไม่มีข้อมูลต้องแสดงเป็นค่าว่าง ไม่ใช้ `-`, `N/A` หรือค่าที่เดา
+- RegNo ที่ latest state มีหลายค่าขัดแย้งต้องแสดง conflict และห้ามเลือกค่าหนึ่งโดยพลการ
+
+## Outstanding `/standards` regression
+
+หลัง UX-2 หน้า `/standards` reuse compact TMT Browser UI จึงเหลือ filter ที่มองเห็นเพียง:
+
+- query รวม TMT ID / ชื่อยา
+- ระดับ
+- สถานะ
+- ความพร้อมจับคู่
+
+backend TMT v2 ปัจจุบันรองรับ `q`, `level`, `status`, `mappingEligible`, `manufacturer`, `registration`, `atc` และ `nlem` แล้ว งานถัดไปต้องคืน independent filters บน `/standards` ดังนี้ และใช้ AND semantics เมื่อกรอกหลายช่อง:
+
+1. TMT ID
+2. ชื่อยา / FSN
+3. ชื่อสามัญ
+4. ชื่อการค้า
+5. ผู้ผลิต
+6. เลขทะเบียนยา
+7. ระดับ TMT
+8. สถานะ
+9. ความพร้อมจับคู่
+
+backend ที่ยังต้องเพิ่มคือ filter แยก `tmtId`, `fsn`, generic name และ trade name โดยใช้ authoritative TMT v2 data, รักษา `q` compatibility, query แบบไม่เกิด N+1 และห้าม fallback ไป `standard_products`
+
+## Official TMT Browser research reference
+
+- Reference: [Official TMT Browser](https://tmt.this.or.th/TMTBrowser.dll/dbWdv6Bwv060mydXh95Fpq/$/)
+- official browser ใช้ช่อง `KEYWORD` ช่องเดียว; search result แสดง level color, TMTID และ FSN
+- hierarchy ที่พบ: SUBS / VTM / GP / GPU / GPP / TP / TPU / TPP
+- Lidocaine regression reference:
+  - SUBS `224729` — lidocaine hydrochloride
+  - VTM `764148` — lidocaine hydrochloride
+  - GP `1147579` — lidocaine hydrochloride 400 mg/20 mL solution for injection
+  - GPU `764169` — lidocaine hydrochloride 400 mg/20 mL solution for injection, 20 mL vial
+  - TP `764176` — LIDOCAINE HYDROCHLORIDE — องค์การเภสัชกรรม
+  - TPU `764182` — LIDOCAINE HYDROCHLORIDE — องค์การเภสัชกรรม, 20 mL vial
+- Manufacturer: องค์การเภสัชกรรม; Strength: 400 mg/20 mL; NLEM: ED; ATC: C01BB01, N01BB02
+- หน้าผล/detail ที่ตรวจไม่แสดง RegNo จึงห้าม infer หรือเดาเลขทะเบียนยา
+
+## Next implementation checkpoint
+
+ทำเป็น implementation ขนาดเล็กหนึ่งงานเท่านั้น:
+
+- คืน full TMT v2 filters บน `/standards` ตามรายการด้านบน
+- แสดง application version ที่ shared global footer เพียงแห่งเดียว โดยใช้ authoritative source เดียว
+- ห้ามแสดง app version ใน dashboard, standards, mapping, catalog, exports, JHCIS, admin, page headers, cards หรือ status panels
+- เวอร์ชัน dataset แสดงในจุดที่มีประโยชน์ได้ แต่ต้องใช้ label ชัดเจนว่า `เวอร์ชันข้อมูล TMT` หรือ `เวอร์ชันข้อมูล TTMT`; ห้ามใช้ข้อความ `Version` ลอย ๆ
+- ไม่เพิ่ม schema/migration, ไม่แก้ production data, ไม่เปลี่ยน TTMT และต้องรักษา UX-1 result cards/colors/RegNo behavior
+
+ก่อนเริ่ม implementation ให้ยืนยันว่า `origin/main` ยังตรงกับ checkpoint ที่เอกสารนี้ระบุ หลัง Codex รายงานงานเสร็จต้องตรวจ GitHub commit/diff เทียบ `main` จริง ไม่เชื่อเฉพาะรายงาน
 
 ## Known improvement backlog
 
@@ -105,10 +164,12 @@ Migration สำคัญล่าสุด:
 
 ## Last verified checkpoint
 
-- Production source checkpoint: `5fd6da3e7a8577ca82941fb5452f7d542a470364`
-- Latest migration: `0013_shared_rate_limits.sql`
+- Repository checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
+- Production cutover: complete
+- TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
+- Latest migration: `0017_tmt_run_validations.sql`
 - Agent version: `1.3.0`
 - Expected worktree: clean
 
-ก่อนเริ่มงานใหม่ให้ตรวจ `git rev-parse HEAD`, `git status` และ deployment/migration ที่เกี่ยวข้องจริง
+ก่อนเริ่มงานใหม่ให้ตรวจ `git fetch origin main`, `git rev-parse HEAD`, `git rev-parse origin/main` และ `git status`
 อย่าเชื่อเอกสารนี้หรือ chat memory แบบ blind เพราะสถานะอาจเปลี่ยนหลัง checkpoint นี้
