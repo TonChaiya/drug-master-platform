@@ -7,7 +7,7 @@ import { TmtLevelBadge } from "@/components/tmt/tmt-level-badge";
 import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { TtmtResultCard } from "@/components/ttmt/ttmt-result-card";
 import { loadV2SavedIdentity } from "@/components/mappings/v2-saved-identity";
-import { TmtBrowser } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
+import { TmtBrowser, resetTmtBrowserFilters } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -78,13 +78,20 @@ test("TTMT result stays in its own product namespace and leaves optional fields 
 
 test("browser starts as a compact read-only search workspace", () => {
   const html = renderToStaticMarkup(createElement(TmtBrowser));
-  assert.match(html, /ค้นหา TMT v2/);
+  assert.match(html, /ค้นหา TMT/);
+  assert.doesNotMatch(html, /ค้นหา TMT v2/);
   assert.match(html, /ระดับ/);
   assert.match(html, /สถานะ MasterTMT/);
+  assert.match(html, /<option value="active" selected="">ใช้งานอยู่<\/option>/);
+  assert.match(html, /<option value="">ทั้งหมด<\/option>/);
   assert.match(html, /ความพร้อมจับคู่/);
   assert.match(html, /ดูข้อมูลเท่านั้น/);
   assert.doesNotMatch(html, /api\/v1\/mappings\/save/);
   assert.doesNotMatch(html, /ชื่อสามัญ|ชื่อการค้า|เลขทะเบียนยา|ล้างตัวกรอง/);
+});
+
+test("browser reset restores the active status while all remains selectable", () => {
+  assert.equal(resetTmtBrowserFilters().status, "active");
 });
 
 test("advanced standards browser exposes nine independent filters and a clear action", () => {
@@ -101,6 +108,17 @@ test("advanced standards browser exposes nine independent filters and a clear ac
     "ความพร้อมจับคู่",
   ]) assert.match(html, new RegExp(label.replace("/", "\\/")));
   assert.match(html, /ล้างตัวกรอง/);
+});
+
+test("normal production wording does not expose the internal v2 generation", async () => {
+  const pages = await Promise.all([
+    "../src/app/(dashboard)/standards/page.tsx",
+    "../src/app/(dashboard)/mappings/v2/page.tsx",
+    "../src/app/(dashboard)/admin/tmt-v2/page.tsx",
+    "../src/components/mappings/v2-mapping-workbench.tsx",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  const userVisibleSource = pages.join("\n");
+  assert.doesNotMatch(userVisibleSource, /TMT v2|Mapping v2|TMT Browser v2|จับคู่รายการยา v2|ข้อมูล TMT v2/);
 });
 
 test("admin browser and mapping pages label validated-unverified data as degraded", async () => {

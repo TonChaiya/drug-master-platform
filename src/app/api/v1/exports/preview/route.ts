@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     preview = await createExportPreview(context.context.facilityId, parsed.data.selection);
   } catch (error) {
     if (error instanceof TmtV2NotReadyError) {
-      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
+      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503);
     }
     throw error;
   }

@@ -4,7 +4,7 @@ import { test } from "vitest";
 
 const source = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("normal standards page is a TMT v2 and TTMT hub without legacy sync controls", async () => {
+test("normal standards page is a TMT and TTMT hub without legacy sync controls", async () => {
   const page = await source("src/app/(dashboard)/standards/page.tsx");
 
   assert.match(page, /readTmtV2Readiness/);
@@ -14,7 +14,7 @@ test("normal standards page is a TMT v2 and TTMT hub without legacy sync control
   assert.doesNotMatch(page, /StandardsPanel|standardCounts|readSyncProgress/);
 });
 
-test("mapping entry and workflow navigation lead to Mapping v2", async () => {
+test("mapping entry and workflow navigation lead to the current mapping workflow", async () => {
   const [mappingPage, layout] = await Promise.all([
     source("src/app/(dashboard)/mappings/page.tsx"),
     source("src/app/(dashboard)/layout.tsx"),

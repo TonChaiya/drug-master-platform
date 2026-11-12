@@ -86,7 +86,7 @@ export function V2MappingWorkbench({ sourceDrugs }: { sourceDrugs: SourceDrug[] 
   }
 
   return <div className="space-y-3.5">
-    <Card><CardHeader title="Mapping v2" description="จับคู่ด้วย identity TMT/TTMT แบบแยก source และ level" /><CardBody className="space-y-3">
+    <Card><CardHeader title="การจับคู่รายการยา" description="จับคู่ด้วย identity TMT/TTMT แบบแยก source และ level" /><CardBody className="space-y-3">
       <Field label="รายการยา JHCIS" htmlFor="mapping-v2-source"><SelectInput id="mapping-v2-source" value={sourceDrugId} onChange={(event) => { setSourceDrugId(event.target.value); setQuery(""); setTmtRows([]); setTtmtRows([]); setDetail(null); setSavedIdentity(null); setMessage(null); }}>
         {sourceDrugs.map((drug) => <option key={drug.id} value={drug.id}>{drug.drugcode} · {drug.drugname ?? drug.drugnamethai ?? "—"} ({drug.drugtype})</option>)}
       </SelectInput></Field>

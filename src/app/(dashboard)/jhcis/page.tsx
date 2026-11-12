@@ -51,7 +51,7 @@ export default async function JhcisPage() {
       />
 
       <Alert tone="info" title="ลำดับงานหลังดึงข้อมูล">
-        ตรวจคลัง TMT/TTMT และนำเข้า Drug Catalog ล่าสุด จากนั้นจึงจับคู่ใน Mapping v2 และส่งออก DrugCat
+        ตรวจคลัง TMT/TTMT และนำเข้า Drug Catalog ล่าสุด จากนั้นจึงจับคู่รายการยาและส่งออก DrugCat
       </Alert>
 
       {mismatched.length > 0 ? (

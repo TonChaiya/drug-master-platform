@@ -80,6 +80,15 @@ error handling ที่กันข้อมูลหาย · ความป�
 - ถ้าแตะโค้ด Excel: เปิดไฟล์ผลลัพธ์ด้วย Excel/LibreOffice จริงแล้ว
 - ถ้าแตะ Agent protocol: ตรวจว่า canonical string สองฝั่งยังตรงกัน
 
+## Application versioning
+
+- `package.json` คือ source of truth ของ application version สำหรับ Codex, Claude Code, coding agent อื่น และ human-assisted AI ทุกคน
+- งานที่เสร็จและเปลี่ยน application code, UI, runtime/API/business behavior หรือ shipped assets ต้องประเมินและ bump version ก่อน commit เสมอ; docs-only ที่ไม่เปลี่ยน shipped application ไม่ต้อง bump
+- ใช้ semantic versioning: PATCH `x.y.Z` สำหรับ fix/UX wording/backward-compatible adjustment, MINOR `x.Y.0` สำหรับ feature/workflow ใหม่ที่ compatible, MAJOR `X.0.0` สำหรับ breaking/incompatible release
+- ห้าม ship code โดย version ไม่เปลี่ยน; การเปลี่ยน AI tool ไม่เป็นข้อยกเว้น และทุก agent ต้องอ่านกฎนี้จาก `AGENTS.md`
+- normal user-facing application version แสดงได้เฉพาะ shared footer; ห้าม duplicate/hardcode version ใน page หรือ component อื่น
+- เมื่อเปลี่ยน version: update `package.json`, verify footer, update `docs/PROJECT_STATUS.md` version/checkpoint, update tests ตามจำเป็น และรายงาน old → new ในผลลัพธ์สุดท้าย
+
 ---
 
 ## ข้อผิดพลาดของระบบเดิมที่ห้ามทำซ้ำ

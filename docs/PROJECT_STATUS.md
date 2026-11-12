@@ -7,7 +7,8 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production source checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
+- Previous advanced TMT search checkpoint: `d60e91630652b4ea643663a7659fbdd929c85913`
+- Current application version: `0.3.1`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -66,9 +67,9 @@ Migration สำคัญล่าสุด:
 
 - UX-1 checkpoint: `e13e5530d40db3603955743ec3999207ac5e1aae`
 - UX-2 checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
-- workflow ปัจจุบัน: JHCIS → Standards Hub → Drug Catalog → Mapping v2 → Export
-- navigation หลักชี้ไป Mapping v2; `/mappings` redirect ไป `/mappings/v2` เมื่อ v2 mapping flag เปิด
-- `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็น TMT v2 sync
+- workflow ปัจจุบัน: JHCIS → Standards Hub → Drug Catalog → การจับคู่รายการยา → Export
+- navigation หลักชี้ไปการจับคู่รายการยา; `/mappings` redirect ไป `/mappings/v2` เมื่อ feature flag ภายในเปิด
+- `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็นข้อมูล TMT ปัจจุบัน
 
 ## TMT result presentation contract
 
@@ -91,7 +92,7 @@ Migration สำคัญล่าสุด:
 
 ## Standards search and application-version UX
 
-`/standards` ใช้ advanced TMT v2 search โดยมี independent filters ต่อไปนี้และใช้ AND semantics เมื่อกรอกหลายช่อง:
+`/standards` ใช้ advanced TMT search โดยมี independent filters ต่อไปนี้และใช้ AND semantics เมื่อกรอกหลายช่อง:
 
 1. TMT ID
 2. ชื่อยา / FSN
@@ -107,6 +108,9 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 - application version แสดงเฉพาะ shared global footer จาก authoritative `package.json` source
 - TMT/TTMT dataset version ต้องมี label `เวอร์ชันข้อมูล TMT` หรือ `เวอร์ชันข้อมูล TTMT` เสมอ ไม่ใช้ `Version` แบบกำกวม
+- TMT search status เริ่มต้นและการล้างตัวกรองกลับไป `ใช้งานอยู่`; ผู้ใช้ยังเลือก `ทั้งหมด` ได้เอง
+- user-facing workflow ไม่ใช้คำว่า “v2” โดยไม่จำเป็น แต่ internal identifiers/routes เช่น `/mappings/v2`, feature flags และ schema names คงไว้เพื่อ compatibility/stability
+- permanent application-version policy อยู่ใน [AGENTS.md](../AGENTS.md#application-versioning)
 
 ## Official TMT Browser research reference
 
@@ -154,7 +158,8 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Last verified checkpoint
 
-- Repository checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
+- Previous repository checkpoint: `d60e91630652b4ea643663a7659fbdd929c85913`
+- Current application version: `0.3.1`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest migration: `0017_tmt_run_validations.sql`

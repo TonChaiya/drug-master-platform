@@ -33,7 +33,7 @@ export default async function DrugCatalogPage() {
       <PageHeader
         eyebrow={`${facility.code} · ${facility.name}`}
         title="Drug Catalog"
-        description="snapshot ที่สถานบริการยืนยันแล้ว ใช้อ้างอิง NDC24 และตรวจสถานะ source drug เทียบกับ TMT/TTMT identity ที่เลือกใน Mapping v2"
+        description="snapshot ที่สถานบริการยืนยันแล้ว ใช้อ้างอิง NDC24 และตรวจสถานะ source drug เทียบกับ TMT/TTMT identity ที่เลือกในการจับคู่รายการยา"
         actions={
           snapshot ? (
             <Badge tone="success" dot>
@@ -51,7 +51,7 @@ export default async function DrugCatalogPage() {
         <CardHeader
           title="Drug Catalog อยู่ตรงไหนใน workflow"
           description="JHCIS เป็นแหล่งรายการยา ส่วน snapshot ล่าสุดใช้ตรวจว่าการจับคู่ปัจจุบันยังสอดคล้องหรือควรให้ผู้ใช้ทบทวน"
-          actions={<ButtonLink href="/mappings/v2" size="sm">เปิด Mapping v2</ButtonLink>}
+          actions={<ButtonLink href="/mappings/v2" size="sm">เปิดการจับคู่รายการยา</ButtonLink>}
         />
         <CardBody className="grid gap-3 sm:grid-cols-3">
           <div><Badge tone="warning">คงค้าง</Badge><p className="type-help mt-1">source drug ที่ใช้งานอยู่ยังไม่มี TMT/TTMT identity</p></div>

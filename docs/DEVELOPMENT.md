@@ -58,6 +58,14 @@ pnpm db:migrate
 
 รายละเอียด script ปัจจุบันดู [package.json](../package.json)
 
+## Release version workflow
+
+1. ตรวจ version ปัจจุบันใน `package.json`
+2. จัดประเภท PATCH/MINOR/MAJOR ตามกฎใน [AGENTS.md](../AGENTS.md#application-versioning)
+3. bump `package.json` สำหรับทุก shipped application change
+4. รัน checks ตาม scope และ verify shared footer อ่าน version ใหม่
+5. commit/push และอัปเดต `PROJECT_STATUS.md` ด้วย version/checkpoint ที่ตรวจได้
+
 ## Agent development
 
 - Source: [`agent/windows/`](../agent/windows/)

@@ -39,8 +39,8 @@ export default async function StandardsPage() {
     <div className="space-y-4">
       <PageHeader
         eyebrow="ขั้นตอนที่ 2 · คลังมาตรฐานส่วนกลาง"
-        title="Standards Hub · TMT v2 / TTMT"
-        description="ค้นหามาตรฐานปัจจุบันก่อนใช้ Drug Catalog และ Mapping v2 — TMT กับ TTMT แยก namespace ชัดเจน"
+        title="Standards Hub · TMT / TTMT"
+        description="ค้นหามาตรฐานปัจจุบันก่อนใช้ Drug Catalog และการจับคู่รายการยา — TMT กับ TTMT แยก namespace ชัดเจน"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={readiness.ready ? "success" : "danger"}>TMT {tmtCounts[0]?.total.toLocaleString("th-TH") ?? "0"}</Badge>
@@ -57,8 +57,8 @@ export default async function StandardsPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="tmt-v2-heading">
-        <div><h2 id="tmt-v2-heading" className="type-section-title">ค้นหา TMT v2</h2><p className="type-help mt-1">แสดงระดับ สี FSN ชื่อการค้า ผู้ผลิต เลขทะเบียน สถานะ และความพร้อมจับคู่จากข้อมูล TMT v2</p></div>
-        {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="TMT v2 ยังไม่พร้อมค้นหา">ตรวจ readiness และ feature configuration ก่อนใช้งาน โดยไม่ย้อนกลับไปใช้คลัง legacy แทน</Alert>}
+        <div><h2 id="tmt-v2-heading" className="type-section-title">ค้นหา TMT</h2><p className="type-help mt-1">แสดงระดับ สี FSN ชื่อการค้า ผู้ผลิต เลขทะเบียน สถานะ และความพร้อมจับคู่จากข้อมูล TMT</p></div>
+        {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="ข้อมูล TMT ยังไม่พร้อมค้นหา">ตรวจ readiness และ feature configuration ก่อนใช้งาน โดยไม่ย้อนกลับไปใช้คลัง legacy แทน</Alert>}
       </section>
 
       <TtmtSearch />
@@ -75,7 +75,7 @@ export default async function StandardsPage() {
       </Card>
 
       <Alert tone="info" title="เครื่องมือมาตรฐานเดิมถูกแยกออกจาก workflow ปัจจุบัน">
-        API และข้อมูล legacy ยังเก็บไว้เพื่อ compatibility แต่ปุ่ม sync standard_products ไม่แสดงใน Standards Hub และไม่ถูกนำเสนอว่าเป็น TMT v2
+        API และข้อมูล legacy ยังเก็บไว้เพื่อ compatibility แต่ปุ่ม sync standard_products ไม่แสดงใน Standards Hub และไม่ถูกนำเสนอว่าเป็นข้อมูล TMT ปัจจุบัน
       </Alert>
     </div>
   );

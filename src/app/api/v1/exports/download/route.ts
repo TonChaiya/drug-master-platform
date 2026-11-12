@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof TmtV2NotReadyError) {
-      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
+      return apiJson({ ok: false, errorCode: error.code, message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503);
     }
     if (error instanceof ExportPreviewStaleError) {
       return apiJson({ ok: false, errorCode: error.code, message: error.message }, 409);

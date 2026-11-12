@@ -17,6 +17,21 @@ type DetailResponse = { ok?: boolean; detail?: TmtConceptDetail; message?: strin
 
 const LEVELS = ["subs", "vtm", "gp", "gpu", "gpp", "tp", "tpu", "tpp"] as const;
 
+export function resetTmtBrowserFilters() {
+  return {
+    query: "",
+    tmtId: "",
+    fsn: "",
+    genericName: "",
+    tradeName: "",
+    manufacturer: "",
+    registration: "",
+    level: "",
+    status: "active",
+    eligibility: "",
+  };
+}
+
 function statusLabel(status: TmtSearchResult["status"]) {
   if (status === "active") return "ใช้งานอยู่";
   if (status === "cancelled") return "ยกเลิกแล้ว";
@@ -70,16 +85,16 @@ function RelationshipList({ title, rows, onOpen }: { title: string; rows: TmtRel
 }
 
 export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced" }) {
-  const [query, setQuery] = useState("");
-  const [tmtId, setTmtId] = useState("");
-  const [fsn, setFsn] = useState("");
-  const [genericName, setGenericName] = useState("");
-  const [tradeName, setTradeName] = useState("");
-  const [manufacturer, setManufacturer] = useState("");
-  const [registration, setRegistration] = useState("");
-  const [level, setLevel] = useState("");
-  const [status, setStatus] = useState("");
-  const [eligibility, setEligibility] = useState("");
+  const [query, setQuery] = useState(() => resetTmtBrowserFilters().query);
+  const [tmtId, setTmtId] = useState(() => resetTmtBrowserFilters().tmtId);
+  const [fsn, setFsn] = useState(() => resetTmtBrowserFilters().fsn);
+  const [genericName, setGenericName] = useState(() => resetTmtBrowserFilters().genericName);
+  const [tradeName, setTradeName] = useState(() => resetTmtBrowserFilters().tradeName);
+  const [manufacturer, setManufacturer] = useState(() => resetTmtBrowserFilters().manufacturer);
+  const [registration, setRegistration] = useState(() => resetTmtBrowserFilters().registration);
+  const [level, setLevel] = useState(() => resetTmtBrowserFilters().level);
+  const [status, setStatus] = useState(() => resetTmtBrowserFilters().status);
+  const [eligibility, setEligibility] = useState(() => resetTmtBrowserFilters().eligibility);
   const [rows, setRows] = useState<TmtSearchResult[]>([]);
   const [detail, setDetail] = useState<TmtConceptDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -131,17 +146,18 @@ export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced"
   }
 
   function clearFilters() {
+    const filters = resetTmtBrowserFilters();
     requestId.current += 1;
-    setQuery("");
-    setTmtId("");
-    setFsn("");
-    setGenericName("");
-    setTradeName("");
-    setManufacturer("");
-    setRegistration("");
-    setLevel("");
-    setStatus("");
-    setEligibility("");
+    setQuery(filters.query);
+    setTmtId(filters.tmtId);
+    setFsn(filters.fsn);
+    setGenericName(filters.genericName);
+    setTradeName(filters.tradeName);
+    setManufacturer(filters.manufacturer);
+    setRegistration(filters.registration);
+    setLevel(filters.level);
+    setStatus(filters.status);
+    setEligibility(filters.eligibility);
     setRows([]);
     setDetail(null);
     setError(null);
@@ -171,7 +187,7 @@ export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced"
       <Card>
         <CardBody>
           <form onSubmit={(event) => void search(event)}>
-            <FilterBar actions={<><Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT v2</Button>{advanced ? <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>ล้างตัวกรอง</Button> : null}</>}>
+            <FilterBar actions={<><Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT</Button>{advanced ? <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>ล้างตัวกรอง</Button> : null}</>}>
               {advanced ? (
                 <>
                   <Field label="TMT ID" htmlFor="tmt-v2-id" className="w-full sm:w-44">

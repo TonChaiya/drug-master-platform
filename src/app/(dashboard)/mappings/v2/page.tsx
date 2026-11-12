@@ -20,9 +20,9 @@ export default async function MappingV2Page() {
   if (!readiness.ready) {
     return (
       <div className="space-y-4">
-        <PageHeader title="จับคู่รายการยา v2" description="Mapping identity แบบแยก TMT/TTMT" />
-        <Alert tone="warning" title="ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน">
-          latest TMT sync ต้องมี verified หรือ validated-unverified readiness ก่อนเปิด Mapping v2
+        <PageHeader title="จับคู่รายการยา" description="Mapping identity แบบแยก TMT/TTMT" />
+        <Alert tone="warning" title="ข้อมูล TMT ยังไม่พร้อมใช้งาน">
+          latest TMT sync ต้องมี verified หรือ validated-unverified readiness ก่อนเปิดการจับคู่รายการยา
         </Alert>
       </div>
     );
@@ -30,5 +30,5 @@ export default async function MappingV2Page() {
   const facility = await resolveEffectiveFacility(user);
   if (!facility) redirect("/mappings");
   const rows = await db.select({ id: sourceDrugs.id, drugcode: sourceDrugs.drugcode, drugname: sourceDrugs.drugname, drugnamethai: sourceDrugs.drugnamethai, drugtype: sourceDrugs.drugtype }).from(sourceDrugs).where(eq(sourceDrugs.facilityId, facility.id)).orderBy(desc(sourceDrugs.updatedAt)).limit(100);
-  return <div className="space-y-4"><PageHeader eyebrow={`${facility.code} · ${facility.name} · Mapping v2`} title="จับคู่รายการยา" description="เลือก TMT หรือ TTMT identity ที่ตรงกับชนิด source drug โดยคง source, code และ level แยกกัน" />{readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="กำลังใช้ข้อมูล TMT แบบ degraded">ชุดข้อมูลผ่าน validation แล้ว แต่ upstream ยังไม่ยืนยัน version</Alert> : null}<V2MappingWorkbench sourceDrugs={rows} /></div>;
+  return <div className="space-y-4"><PageHeader eyebrow={`${facility.code} · ${facility.name} · การจับคู่รายการยา`} title="จับคู่รายการยา" description="เลือก TMT หรือ TTMT identity ที่ตรงกับชนิด source drug โดยคง source, code และ level แยกกัน" />{readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="กำลังใช้ข้อมูล TMT แบบ degraded">ชุดข้อมูลผ่าน validation แล้ว แต่ upstream ยังไม่ยืนยัน version</Alert> : null}<V2MappingWorkbench sourceDrugs={rows} /></div>;
 }

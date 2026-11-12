@@ -42,12 +42,12 @@ const schema = z.object({
 export async function GET(request: Request) {
   if (!(await currentUser())) return unauthorized();
   if (!tmtV2BrowserEnabled()) {
-    return apiJson({ ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser v2 ยังไม่เปิดใช้งาน" }, 503);
+    return apiJson({ ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser ยังไม่เปิดใช้งาน" }, 503);
   }
   try {
     await requireTmtV2Ready(dbPool());
   } catch {
-    return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT v2 ยังไม่พร้อมใช้งาน" }, 503);
+    return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503);
   }
 
   const parsed = schema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));

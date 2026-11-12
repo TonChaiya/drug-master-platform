@@ -55,7 +55,7 @@ test("default-off feature gate returns unavailable without constructing a DB poo
   vi.stubEnv("TMT_V2_BROWSER_ENABLED", "0");
   const response = await search(new Request("https://example.test/api/v1/tmt-v2/search?q=764169"));
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser v2 ยังไม่เปิดใช้งาน" });
+  assert.deepEqual(await response.json(), { ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser ยังไม่เปิดใช้งาน" });
   assert.equal(mocks.dbPool.mock.calls.length, 0);
   assert.equal(mocks.search.mock.calls.length, 0);
 });

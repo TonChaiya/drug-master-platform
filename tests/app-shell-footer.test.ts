@@ -18,6 +18,6 @@ test("shared authenticated shell renders the authoritative package version in it
   }));
 
   assert.match(html, /<footer[^>]*>/);
-  assert.match(html, /Drug Master Platform · v0\.3\.0/);
-  assert.ok(html.indexOf("เนื้อหา") < html.indexOf("Drug Master Platform · v0.3.0"));
+  assert.match(html, /Drug Master Platform · v0\.3\.1/);
+  assert.ok(html.indexOf("เนื้อหา") < html.indexOf("Drug Master Platform · v0.3.1"));
 });
