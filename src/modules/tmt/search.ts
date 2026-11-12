@@ -210,9 +210,10 @@ export async function searchTmt(pool: Pool, filters: TmtSearchFilters): Promise<
     parameters.push(`${escapeLike(nlem)}%`);
   }
 
-  if (filters.status === "active" || filters.mappingEligible === true) conditions.push("c.level_name='tpu' AND m.status=0");
+  if (filters.status === "active") conditions.push("(c.level_name<>'tpu' OR m.status=0)");
   if (filters.status === "cancelled") conditions.push("c.level_name='tpu' AND m.status=1");
   if (filters.status === "unknown") conditions.push("(c.level_name<>'tpu' OR m.status IS NULL OR m.status NOT IN (0,1))");
+  if (filters.mappingEligible === true) conditions.push("c.level_name='tpu' AND m.status=0");
   if (filters.mappingEligible === false) conditions.push("(c.level_name<>'tpu' OR m.status IS NULL OR m.status<>0)");
 
   if (conditions.length === 0) return [];

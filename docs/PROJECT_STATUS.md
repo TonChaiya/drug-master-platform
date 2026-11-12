@@ -7,8 +7,8 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Previous advanced TMT search checkpoint: `d60e91630652b4ea643663a7659fbdd929c85913`
-- Current application version: `0.3.1`
+- Previous UX/version-policy checkpoint: `4fce97bbe57fbab02c995c641f30eb37ee6a6f9f`
+- Current application version: `0.3.2`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -109,6 +109,9 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 - application version แสดงเฉพาะ shared global footer จาก authoritative `package.json` source
 - TMT/TTMT dataset version ต้องมี label `เวอร์ชันข้อมูล TMT` หรือ `เวอร์ชันข้อมูล TTMT` เสมอ ไม่ใช้ `Version` แบบกำกวม
 - TMT search status เริ่มต้นและการล้างตัวกรองกลับไป `ใช้งานอยู่`; ผู้ใช้ยังเลือก `ทั้งหมด` ได้เอง
+- `active` แสดงทุก non-TPU ที่ตรงการค้นหา และแสดงเฉพาะ TPU ที่ MasterTMT `status=0`; ไม่ได้หมายถึง TPU-only
+- `mappingEligible=true` จึงยังหมายถึงเฉพาะ active commercial TPU เท่านั้น แยกจาก status filter
+- Hotfix นี้แก้ regression ที่ `active` เคยถูกใช้เป็น eligibility condition จน GP/GPU/TP หายจากผลค้นหา
 - user-facing workflow ไม่ใช้คำว่า “v2” โดยไม่จำเป็น แต่ internal identifiers/routes เช่น `/mappings/v2`, feature flags และ schema names คงไว้เพื่อ compatibility/stability
 - permanent application-version policy อยู่ใน [AGENTS.md](../AGENTS.md#application-versioning)
 
@@ -158,8 +161,8 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Last verified checkpoint
 
-- Previous repository checkpoint: `d60e91630652b4ea643663a7659fbdd929c85913`
-- Current application version: `0.3.1`
+- Previous repository checkpoint: `4fce97bbe57fbab02c995c641f30eb37ee6a6f9f`
+- Current application version: `0.3.2`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest migration: `0017_tmt_run_validations.sql`

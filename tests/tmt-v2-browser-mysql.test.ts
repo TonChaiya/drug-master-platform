@@ -50,6 +50,33 @@ describe.runIf(dbIntegrationTestsEnabled()).sequential("TMT v2 browser on isolat
     assert.equal((await searchTmt(pool, { query: "lidocaine", limit: 2 })).length, 2);
   });
 
+  test("active status keeps the Lidocaine hierarchy visible but hides cancelled or unknown TPU", async () => {
+    for (const [tmtId, level] of [[GPU_ID, "gpu"], ["764176", "tp"], ["764182", "tpu"]] as const) {
+      const rows = await searchTmt(pool, { tmtId, status: "active", limit: 20 });
+      assert.equal(rows[0]?.tmtId, tmtId);
+      assert.equal(rows[0]?.level, level);
+    }
+
+    const hierarchy = await searchTmt(pool, { fsn: "lidocaine", status: "active", limit: 100 });
+    assert.ok(hierarchy.some((row) => row.tmtId === "224729"));
+    assert.ok(hierarchy.some((row) => row.tmtId === "764148"));
+    assert.ok(hierarchy.some((row) => row.tmtId === "1147579"));
+    assert.ok(hierarchy.some((row) => row.tmtId === GPU_ID));
+    assert.ok(hierarchy.some((row) => row.tmtId === "764176"));
+    assert.ok(hierarchy.some((row) => row.tmtId === "764182"));
+    assert.ok(!hierarchy.some((row) => row.tmtId === "999001" || row.tmtId === "999002"));
+  });
+
+  test("mapping eligibility remains active TPU-only independently of status", async () => {
+    const rows = await searchTmt(pool, { fsn: "lidocaine", status: "active", mappingEligible: true, limit: 100 });
+    assert.ok(rows.length > 0);
+    assert.ok(rows.every((row) => row.level === "tpu" && row.status === "active" && row.mappingEligible));
+    assert.ok(!rows.some((row) => row.tmtId === GPU_ID));
+
+    const cancelled = await searchTmt(pool, { fsn: "lidocaine", status: "cancelled", limit: 100 });
+    assert.deepEqual(cancelled.map((row) => row.tmtId), ["999001"]);
+  });
+
   test("independent Lidocaine fields combine with AND and keep q compatibility", async () => {
     const rows = await searchTmt(pool, {
       tmtId: "764182",

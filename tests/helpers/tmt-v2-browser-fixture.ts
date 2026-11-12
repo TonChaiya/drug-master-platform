@@ -19,6 +19,9 @@ export async function resetTmtBrowserFixture(pool: Pool): Promise<void> {
   ]) await pool.query(`DELETE FROM ${table}`);
 
   const concepts: Array<[string, string, string]> = [
+    ["224729", "lidocaine hydrochloride", "subs"],
+    ["764148", "lidocaine hydrochloride", "vtm"],
+    ["764176", "LIDOCAINE HYDROCHLORIDE", "tp"],
     [GPU_ID, "lidocaine hydrochloride 400 mg/20 mL solution for injection, 20 mL vial (GPU)", "gpu"],
     ["7641690", "lidocaine prefix control (GPU)", "gpu"],
     ["1147579", "lidocaine hydrochloride injectable product (GP)", "gp"],
@@ -39,11 +42,14 @@ export async function resetTmtBrowserFixture(pool: Pool): Promise<void> {
   ];
   await insertRows(pool, "tmt_concept", ["tmtid", "fsn", "change_date", "level_name", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], concepts.map(([id, fsn, level]) => [id, fsn, "2026-01-01", level, fsn.toLowerCase(), version, version, timestamp]));
 
+  await insertRows(pool, "tmt_subs", ["subsid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [["224729", "lidocaine hydrochloride", "2026-01-01", "lidocaine hydrochloride", version, version, timestamp]]);
+  await insertRows(pool, "tmt_vtm", ["vtmid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [["764148", "lidocaine hydrochloride", "2026-01-01", "lidocaine hydrochloride", version, version, timestamp]]);
   await insertRows(pool, "tmt_gp", ["gpid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [["1147579", "lidocaine hydrochloride injectable product", "2026-01-01", "lidocaine hydrochloride injectable product", version, version, timestamp]]);
   await insertRows(pool, "tmt_gpu", ["gpuid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [
     [GPU_ID, "lidocaine hydrochloride 400 mg/20 mL solution for injection, 20 mL vial", "2026-01-01", "lidocaine hydrochloride 400 mg/20 ml solution for injection 20 ml vial", version, version, timestamp],
     ["7641690", "lidocaine prefix control", "2026-01-01", "lidocaine prefix control", version, version, timestamp],
   ]);
+  await insertRows(pool, "tmt_tp", ["tpid", "fsn", "manufacturer", "change_date", "normalized_fsn", "normalized_manufacturer", "source_version", "last_seen_version", "synced_at"], [["764176", "LIDOCAINE HYDROCHLORIDE", "องค์การเภสัชกรรม", "2026-01-01", "lidocaine hydrochloride", "องค์การเภสัชกรรม", version, version, timestamp]]);
   await insertRows(pool, "tmt_gpp", ["gppid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], ["1181564", "1181586", "1311037"].map((id, index) => [id, `lidocaine pack ${index + 1}`, "2026-01-01", `lidocaine pack ${index + 1}`, version, version, timestamp]));
 
   const allTpu = [...TPU_IDS, "999001", "999002"];
