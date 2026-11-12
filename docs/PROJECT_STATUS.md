@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.4.0`
+- Current application version: `0.5.0`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -73,6 +73,9 @@ Migration สำคัญล่าสุด:
 - `/admin` แสดง current TMT v2 readiness, latest run, bounded run/checkpoint history และ current TTMT v2 import history เฉพาะผู้ดูแลระบบ
 - การเริ่มหรือ resume TMT sync ยังเป็น CLI-only เพราะต้องยืนยัน environment/database, mode และ production guard สำหรับงานที่อาจใช้เวลานาน; Admin ไม่เริ่มงานนี้จาก web request
 - Admin สามารถนำเข้าไฟล์ MasterTTMT `.xls`/`.xlsx` ด้วย current TTMT v2 importer เท่านั้น; route ใช้ `requireAdmin()` และไม่เรียก legacy `standard_products` pipeline
+- worklist การจับคู่รายการยาบน `/mappings/v2` กลับมาแล้ว: เริ่มที่ `pending`, ค้นหารหัส/ชื่อยา, กรอง lifecycle (`pending`/`needs_review`/`mapped`/`all`) และชนิดยา (`01` TMT/`10` TTMT), ใช้ pagination ฝั่ง server 30 รายการต่อหน้า และแสดง identity TMT/TTMT ปัจจุบัน, UPDATEFLAG กับเหตุผล lifecycle
+- การจับคู่/แก้ไขจาก worklist ใช้ source-aware `/api/v1/mappings/v2` เท่านั้น; needs_review ยืนยันด้วย acknowledgement เดิมแบบ idempotent และไม่กลับไปใช้ `standard_products` หรือ legacy save route
+- ปุ่ม reconcile จาก Drug Catalog ปรากฏเฉพาะเมื่อ current source-aware catalog path ถูกเปิดใช้ (`TMT_V2_CATALOG_ENABLED`); service เดิมรองรับ identity TMT/TTMT อยู่แล้ว จึงไม่สร้าง reconcile path ใหม่
 
 ## TMT result presentation contract
 
@@ -165,7 +168,7 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 ## Last verified checkpoint
 
 - Previous repository checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.4.0`
+- Current application version: `0.5.0`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest migration: `0017_tmt_run_validations.sql`
