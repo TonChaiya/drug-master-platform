@@ -58,7 +58,7 @@ export default async function StandardsPage() {
 
       <section className="space-y-3" aria-labelledby="tmt-v2-heading">
         <div><h2 id="tmt-v2-heading" className="type-section-title">ค้นหา TMT v2</h2><p className="type-help mt-1">แสดงระดับ สี FSN ชื่อการค้า ผู้ผลิต เลขทะเบียน สถานะ และความพร้อมจับคู่จากข้อมูล TMT v2</p></div>
-        {browserReady ? <TmtBrowser /> : <Alert tone="danger" title="TMT v2 ยังไม่พร้อมค้นหา">ตรวจ readiness และ feature configuration ก่อนใช้งาน โดยไม่ย้อนกลับไปใช้คลัง legacy แทน</Alert>}
+        {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="TMT v2 ยังไม่พร้อมค้นหา">ตรวจ readiness และ feature configuration ก่อนใช้งาน โดยไม่ย้อนกลับไปใช้คลัง legacy แทน</Alert>}
       </section>
 
       <TtmtSearch />
@@ -66,7 +66,7 @@ export default async function StandardsPage() {
       <Card>
         <CardHeader title="ประวัตินำเข้า TTMT ปัจจุบัน" description="ข้อมูลจาก ttmt_imports โดยตรง ไม่ปะปนกับประวัติ MasterTMT แบบ legacy" />
         <CardBody flush className="pt-3">
-          <TableScroll><Table><thead><tr><th>เวอร์ชัน</th><th>จำนวนแถว</th><th>นำเข้าเมื่อ</th><th>สถานะ</th></tr></thead><tbody>
+          <TableScroll><Table><thead><tr><th>เวอร์ชันข้อมูล TTMT</th><th>จำนวนแถว</th><th>นำเข้าเมื่อ</th><th>สถานะ</th></tr></thead><tbody>
             {imports.length === 0 ? <TableMessage colSpan={4}><EmptyState compact icon={<IconStandards size={18} />} title="ยังไม่มี TTMT ที่นำเข้าสำเร็จ" /></TableMessage> : imports.map((row) => (
               <tr key={row.id}><td className="cell-code">{row.version}</td><td className="cell-num">{row.rowCount.toLocaleString("th-TH")}</td><td>{formatBangkok(row.completedAt)}</td><td><StatusBadge status={row.status} /></td></tr>
             ))}

@@ -84,6 +84,23 @@ test("browser starts as a compact read-only search workspace", () => {
   assert.match(html, /ความพร้อมจับคู่/);
   assert.match(html, /ดูข้อมูลเท่านั้น/);
   assert.doesNotMatch(html, /api\/v1\/mappings\/save/);
+  assert.doesNotMatch(html, /ชื่อสามัญ|ชื่อการค้า|เลขทะเบียนยา|ล้างตัวกรอง/);
+});
+
+test("advanced standards browser exposes nine independent filters and a clear action", () => {
+  const html = renderToStaticMarkup(createElement(TmtBrowser, { mode: "advanced" }));
+  for (const label of [
+    "TMT ID",
+    "ชื่อยา / FSN",
+    "ชื่อสามัญ",
+    "ชื่อการค้า",
+    "ผู้ผลิต",
+    "เลขทะเบียนยา",
+    "ระดับ TMT",
+    "สถานะ",
+    "ความพร้อมจับคู่",
+  ]) assert.match(html, new RegExp(label.replace("/", "\\/")));
+  assert.match(html, /ล้างตัวกรอง/);
 });
 
 test("admin browser and mapping pages label validated-unverified data as degraded", async () => {

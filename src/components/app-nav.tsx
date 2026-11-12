@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { IconButton } from "@/components/ui/button";
 import { IconClose, IconMenu } from "@/components/ui/icons";
 import { cx } from "@/components/ui/cx";
+import { APP_VERSION } from "@/lib/app-version";
 
 export interface NavItem {
   href: Route;
@@ -141,6 +142,9 @@ export function AppShell({
       </header>
 
       <main className="mx-auto w-full max-w-[1480px] px-3 py-4 sm:px-5 sm:py-5">{children}</main>
+      <footer className="mx-auto w-full max-w-[1480px] px-3 pb-4 text-center text-xxs text-slate-400 sm:px-5 sm:pb-5">
+        Drug Master Platform · v{APP_VERSION}
+      </footer>
     </div>
   );
 }

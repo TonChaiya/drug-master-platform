@@ -22,7 +22,7 @@ export async function resetTmtBrowserFixture(pool: Pool): Promise<void> {
     [GPU_ID, "lidocaine hydrochloride 400 mg/20 mL solution for injection, 20 mL vial (GPU)", "gpu"],
     ["7641690", "lidocaine prefix control (GPU)", "gpu"],
     ["1147579", "lidocaine hydrochloride injectable product (GP)", "gp"],
-    ...TPU_IDS.map((id, index) => [id, `lidocaine trade ${index + 1} (TPU)`, "tpu"] as [string, string, string]),
+    ...TPU_IDS.map((id, index) => [id, id === "764182" ? "LIDOCAINE HYDROCHLORIDE 400 mg/20 mL solution for injection, 20 mL vial (TPU)" : `lidocaine trade ${index + 1} (TPU)`, "tpu"] as [string, string, string]),
     ["1181564", "lidocaine pack one (GPP)", "gpp"],
     ["1181586", "lidocaine pack two (GPP)", "gpp"],
     ["1311037", "lidocaine pack three (GPP)", "gpp"],
@@ -47,8 +47,19 @@ export async function resetTmtBrowserFixture(pool: Pool): Promise<void> {
   await insertRows(pool, "tmt_gpp", ["gppid", "fsn", "change_date", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], ["1181564", "1181586", "1311037"].map((id, index) => [id, `lidocaine pack ${index + 1}`, "2026-01-01", `lidocaine pack ${index + 1}`, version, version, timestamp]));
 
   const allTpu = [...TPU_IDS, "999001", "999002"];
-  await insertRows(pool, "tmt_tpu", ["tpuid", "fsn", "manufacturer", "change_date", "normalized_fsn", "normalized_manufacturer", "source_version", "last_seen_version", "synced_at"], allTpu.map((id, index) => [id, `lidocaine trade ${index + 1}`, index === 0 ? "บริษัท แอคมี จำกัด" : "Example Manufacturer", "2026-01-01", `lidocaine trade ${index + 1}`, index === 0 ? "บริษัท แอคมี จำกัด" : "example manufacturer", version, version, timestamp]));
-  await insertRows(pool, "tmt_mastertmt", ["tpucode", "activeingredient", "strength", "dosageform", "contvalue", "contunit", "dispunit", "tradename", "manufacturer", "fsn", "status", "normalized_generic", "normalized_trade", "normalized_manufacturer", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [...TPU_IDS, "999001"].map((id, index) => [id, "lidocaine hydrochloride", "20 mg/mL", "solution for injection", "20", "mL", "vial", `LIDOCAINE ${index + 1}`, index === 0 ? "บริษัท แอคมี จำกัด" : "Example Manufacturer", `lidocaine product ${index + 1}`, id === "999001" ? 1 : 0, "lidocaine hydrochloride", `lidocaine ${index + 1}`, index === 0 ? "บริษัท แอคมี จำกัด" : "example manufacturer", `lidocaine product ${index + 1}`, version, version, timestamp]));
+  await insertRows(pool, "tmt_tpu", ["tpuid", "fsn", "manufacturer", "change_date", "normalized_fsn", "normalized_manufacturer", "source_version", "last_seen_version", "synced_at"], allTpu.map((id, index) => {
+    const official = id === "764182";
+    const fsn = official ? "LIDOCAINE HYDROCHLORIDE 400 mg/20 mL solution for injection, 20 mL vial" : `lidocaine trade ${index + 1}`;
+    const manufacturer = official ? "องค์การเภสัชกรรม" : index === 0 ? "บริษัท แอคมี จำกัด" : "Example Manufacturer";
+    return [id, fsn, manufacturer, "2026-01-01", fsn.toLowerCase(), manufacturer.toLowerCase(), version, version, timestamp];
+  }));
+  await insertRows(pool, "tmt_mastertmt", ["tpucode", "activeingredient", "strength", "dosageform", "contvalue", "contunit", "dispunit", "tradename", "manufacturer", "fsn", "status", "normalized_generic", "normalized_trade", "normalized_manufacturer", "normalized_fsn", "source_version", "last_seen_version", "synced_at"], [...TPU_IDS, "999001"].map((id, index) => {
+    const official = id === "764182";
+    const tradeName = official ? "LIDOCAINE HYDROCHLORIDE" : `LIDOCAINE ${index + 1}`;
+    const manufacturer = official ? "องค์การเภสัชกรรม" : index === 0 ? "บริษัท แอคมี จำกัด" : "Example Manufacturer";
+    const fsn = official ? "LIDOCAINE HYDROCHLORIDE 400 mg/20 mL solution for injection, 20 mL vial" : `lidocaine product ${index + 1}`;
+    return [id, "lidocaine hydrochloride", official ? "400 mg/20 mL" : "20 mg/mL", "solution for injection", "20", "mL", "vial", tradeName, manufacturer, fsn, id === "999001" ? 1 : 0, "lidocaine hydrochloride", tradeName.toLowerCase(), manufacturer.toLowerCase(), fsn.toLowerCase(), version, version, timestamp];
+  }));
 
   await insertRows(pool, "tmt_relationship", ["concept1", "concept2", "change_date", "level_name1", "level_name2", "source_version", "last_seen_version", "synced_at"], [
     ["1147579", GPU_ID, "2026-01-01", "gp", "gpu", version, version, timestamp],

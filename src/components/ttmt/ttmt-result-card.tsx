@@ -29,7 +29,7 @@ export function TtmtResultCard({ result, children }: { result: TtmtResult; child
         <div><dt className="type-caption">เลขทะเบียนยา</dt><dd>{result.registrationNumber ?? ""}</dd></div>
       </dl>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="type-help mr-auto">เวอร์ชัน {result.sourceVersion}</span>
+        <span className="type-help mr-auto">เวอร์ชันข้อมูล TTMT {result.sourceVersion}</span>
         {children}
       </div>
     </article>

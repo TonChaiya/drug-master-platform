@@ -5,6 +5,10 @@ import { TMT_LEVEL_PRESENTATION } from "./presentation";
 
 export interface TmtSearchFilters {
   query?: string;
+  tmtId?: string;
+  fsn?: string;
+  genericName?: string;
+  tradeName?: string;
   level?: string;
   status?: "active" | "cancelled" | "unknown";
   mappingEligible?: boolean;
@@ -146,6 +150,31 @@ export async function searchTmt(pool: Pool, filters: TmtSearchFilters): Promise<
       conditions.push("c.normalized_fsn LIKE ?");
       parameters.push(`${escapeLike(normalized)}%`);
     }
+  }
+
+  const tmtId = filters.tmtId?.trim();
+  if (tmtId) {
+    if (!/^\d{1,20}$/.test(tmtId)) return [];
+    conditions.push("c.tmtid=?");
+    parameters.push(tmtId);
+  }
+
+  const fsn = normalizeSearchText(filters.fsn);
+  if (fsn) {
+    conditions.push("c.normalized_fsn LIKE ?");
+    parameters.push(`${escapeLike(fsn)}%`);
+  }
+
+  const genericName = normalizeSearchText(filters.genericName);
+  if (genericName) {
+    conditions.push("m.normalized_generic LIKE ?");
+    parameters.push(`${escapeLike(genericName)}%`);
+  }
+
+  const tradeName = normalizeSearchText(filters.tradeName);
+  if (tradeName) {
+    conditions.push("m.normalized_trade LIKE ?");
+    parameters.push(`${escapeLike(tradeName)}%`);
   }
 
   if (filters.level) {

@@ -89,16 +89,9 @@ Migration สำคัญล่าสุด:
 - Trade Name, Manufacturer หรือ RegNo ที่ไม่มีข้อมูลต้องแสดงเป็นค่าว่าง ไม่ใช้ `-`, `N/A` หรือค่าที่เดา
 - RegNo ที่ latest state มีหลายค่าขัดแย้งต้องแสดง conflict และห้ามเลือกค่าหนึ่งโดยพลการ
 
-## Outstanding `/standards` regression
+## Standards search and application-version UX
 
-หลัง UX-2 หน้า `/standards` reuse compact TMT Browser UI จึงเหลือ filter ที่มองเห็นเพียง:
-
-- query รวม TMT ID / ชื่อยา
-- ระดับ
-- สถานะ
-- ความพร้อมจับคู่
-
-backend TMT v2 ปัจจุบันรองรับ `q`, `level`, `status`, `mappingEligible`, `manufacturer`, `registration`, `atc` และ `nlem` แล้ว งานถัดไปต้องคืน independent filters บน `/standards` ดังนี้ และใช้ AND semantics เมื่อกรอกหลายช่อง:
+`/standards` ใช้ advanced TMT v2 search โดยมี independent filters ต่อไปนี้และใช้ AND semantics เมื่อกรอกหลายช่อง:
 
 1. TMT ID
 2. ชื่อยา / FSN
@@ -110,7 +103,10 @@ backend TMT v2 ปัจจุบันรองรับ `q`, `level`, `status`
 8. สถานะ
 9. ความพร้อมจับคู่
 
-backend ที่ยังต้องเพิ่มคือ filter แยก `tmtId`, `fsn`, generic name และ trade name โดยใช้ authoritative TMT v2 data, รักษา `q` compatibility, query แบบไม่เกิด N+1 และห้าม fallback ไป `standard_products`
+backend ใช้ authoritative TMT v2 data เท่านั้น: รองรับ `tmtId`, `fsn`, generic name, trade name, manufacturer, registration, level, status และ mapping eligibility; รักษา `q`, ATC และ NLEM compatibility, query แบบไม่เกิด N+1 และห้าม fallback ไป `standard_products`.
+
+- application version แสดงเฉพาะ shared global footer จาก authoritative `package.json` source
+- TMT/TTMT dataset version ต้องมี label `เวอร์ชันข้อมูล TMT` หรือ `เวอร์ชันข้อมูล TTMT` เสมอ ไม่ใช้ `Version` แบบกำกวม
 
 ## Official TMT Browser research reference
 
@@ -129,13 +125,7 @@ backend ที่ยังต้องเพิ่มคือ filter แยก 
 
 ## Next implementation checkpoint
 
-ทำเป็น implementation ขนาดเล็กหนึ่งงานเท่านั้น:
-
-- คืน full TMT v2 filters บน `/standards` ตามรายการด้านบน
-- แสดง application version ที่ shared global footer เพียงแห่งเดียว โดยใช้ authoritative source เดียว
-- ห้ามแสดง app version ใน dashboard, standards, mapping, catalog, exports, JHCIS, admin, page headers, cards หรือ status panels
-- เวอร์ชัน dataset แสดงในจุดที่มีประโยชน์ได้ แต่ต้องใช้ label ชัดเจนว่า `เวอร์ชันข้อมูล TMT` หรือ `เวอร์ชันข้อมูล TTMT`; ห้ามใช้ข้อความ `Version` ลอย ๆ
-- ไม่เพิ่ม schema/migration, ไม่แก้ production data, ไม่เปลี่ยน TTMT และต้องรักษา UX-1 result cards/colors/RegNo behavior
+ก่อนทำงาน UI ถัดไป ต้องรักษา TMT v2 result cards/colors/RegNo behavior, ไม่เพิ่ม schema/migration และไม่แก้ production data โดยไม่มี approval แยก
 
 ก่อนเริ่ม implementation ให้ยืนยันว่า `origin/main` ยังตรงกับ checkpoint ที่เอกสารนี้ระบุ หลัง Codex รายงานงานเสร็จต้องตรวจ GitHub commit/diff เทียบ `main` จริง ไม่เชื่อเฉพาะรายงาน
 

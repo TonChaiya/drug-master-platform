@@ -6,7 +6,7 @@ import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Field, FilterBar, SearchInput, SelectInput } from "@/components/ui/form";
+import { Field, FilterBar, SearchInput, SelectInput, TextInput } from "@/components/ui/form";
 import { EmptyState } from "@/components/ui/states";
 import type { TmtConceptDetail } from "@/modules/tmt/detail";
 import type { TmtSearchResult } from "@/modules/tmt/browser";
@@ -69,8 +69,14 @@ function RelationshipList({ title, rows, onOpen }: { title: string; rows: TmtRel
   );
 }
 
-export function TmtBrowser() {
+export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced" }) {
   const [query, setQuery] = useState("");
+  const [tmtId, setTmtId] = useState("");
+  const [fsn, setFsn] = useState("");
+  const [genericName, setGenericName] = useState("");
+  const [tradeName, setTradeName] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
+  const [registration, setRegistration] = useState("");
   const [level, setLevel] = useState("");
   const [status, setStatus] = useState("");
   const [eligibility, setEligibility] = useState("");
@@ -80,18 +86,33 @@ export function TmtBrowser() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+  const advanced = mode === "advanced";
 
   async function search(event?: FormEvent) {
     event?.preventDefault();
-    if (!query.trim()) {
-      setError("กรุณากรอกรหัส TMT หรือชื่อยา");
+    const hasAdvancedFilter = [tmtId, fsn, genericName, tradeName, manufacturer, registration, level, status, eligibility]
+      .some((value) => value.trim() !== "");
+    if (advanced ? !hasAdvancedFilter : !query.trim()) {
+      setError(advanced ? "กรุณาระบุตัวกรองอย่างน้อย 1 รายการ" : "กรุณากรอกรหัส TMT หรือชื่อยา");
       return;
     }
     const current = requestId.current + 1;
     requestId.current = current;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ q: query.trim(), limit: "30" });
+    const params = new URLSearchParams({ limit: "30" });
+    if (advanced) {
+      for (const [key, value] of [
+        ["tmtId", tmtId],
+        ["fsn", fsn],
+        ["genericName", genericName],
+        ["tradeName", tradeName],
+        ["manufacturer", manufacturer],
+        ["registration", registration],
+      ]) if (value.trim()) params.set(key, value.trim());
+    } else {
+      params.set("q", query.trim());
+    }
     if (level) params.set("level", level);
     if (status) params.set("status", status);
     if (eligibility) params.set("mappingEligible", eligibility);
@@ -107,6 +128,24 @@ export function TmtBrowser() {
     } finally {
       if (current === requestId.current) setLoading(false);
     }
+  }
+
+  function clearFilters() {
+    requestId.current += 1;
+    setQuery("");
+    setTmtId("");
+    setFsn("");
+    setGenericName("");
+    setTradeName("");
+    setManufacturer("");
+    setRegistration("");
+    setLevel("");
+    setStatus("");
+    setEligibility("");
+    setRows([]);
+    setDetail(null);
+    setError(null);
+    setLoading(false);
   }
 
   async function openDetail(tmtId: string) {
@@ -132,22 +171,45 @@ export function TmtBrowser() {
       <Card>
         <CardBody>
           <form onSubmit={(event) => void search(event)}>
-            <FilterBar actions={<Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT v2</Button>}>
-              <Field label="ค้นหารหัส TMT หรือชื่อยา" htmlFor="tmt-v2-query" className="min-w-60 flex-1">
-                <SearchInput id="tmt-v2-query" value={query} maxLength={120} autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
-              </Field>
-              <Field label="ระดับ" htmlFor="tmt-v2-level">
+            <FilterBar actions={<><Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT v2</Button>{advanced ? <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>ล้างตัวกรอง</Button> : null}</>}>
+              {advanced ? (
+                <>
+                  <Field label="TMT ID" htmlFor="tmt-v2-id" className="w-full sm:w-44">
+                    <TextInput id="tmt-v2-id" value={tmtId} maxLength={20} inputMode="numeric" mono autoComplete="off" onChange={(event) => setTmtId(event.target.value)} />
+                  </Field>
+                  <Field label="ชื่อยา / FSN" htmlFor="tmt-v2-fsn" className="w-full sm:min-w-64 sm:flex-1">
+                    <SearchInput id="tmt-v2-fsn" value={fsn} maxLength={120} autoComplete="off" onChange={(event) => setFsn(event.target.value)} />
+                  </Field>
+                  <Field label="ชื่อสามัญ" htmlFor="tmt-v2-generic" className="w-full sm:w-56">
+                    <SearchInput id="tmt-v2-generic" value={genericName} maxLength={120} autoComplete="off" onChange={(event) => setGenericName(event.target.value)} />
+                  </Field>
+                  <Field label="ชื่อการค้า" htmlFor="tmt-v2-trade" className="w-full sm:w-56">
+                    <SearchInput id="tmt-v2-trade" value={tradeName} maxLength={120} autoComplete="off" onChange={(event) => setTradeName(event.target.value)} />
+                  </Field>
+                  <Field label="ผู้ผลิต" htmlFor="tmt-v2-manufacturer" className="w-full sm:w-56">
+                    <SearchInput id="tmt-v2-manufacturer" value={manufacturer} maxLength={120} autoComplete="off" onChange={(event) => setManufacturer(event.target.value)} />
+                  </Field>
+                  <Field label="เลขทะเบียนยา" htmlFor="tmt-v2-registration" className="w-full sm:w-52">
+                    <SearchInput id="tmt-v2-registration" value={registration} maxLength={120} autoComplete="off" onChange={(event) => setRegistration(event.target.value)} />
+                  </Field>
+                </>
+              ) : (
+                <Field label="ค้นหารหัส TMT หรือชื่อยา" htmlFor="tmt-v2-query" className="min-w-60 flex-1">
+                  <SearchInput id="tmt-v2-query" value={query} maxLength={120} autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
+                </Field>
+              )}
+              <Field label={advanced ? "ระดับ TMT" : "ระดับ"} htmlFor="tmt-v2-level" className={advanced ? "w-full sm:w-auto" : undefined}>
                 <SelectInput id="tmt-v2-level" value={level} onChange={(event) => setLevel(event.target.value)}>
                   <option value="">ทุกระดับ</option>
                   {LEVELS.map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}
                 </SelectInput>
               </Field>
-              <Field label="สถานะ MasterTMT" htmlFor="tmt-v2-status">
+              <Field label={advanced ? "สถานะ" : "สถานะ MasterTMT"} htmlFor="tmt-v2-status" className={advanced ? "w-full sm:w-auto" : undefined}>
                 <SelectInput id="tmt-v2-status" value={status} onChange={(event) => setStatus(event.target.value)}>
                   <option value="">ทั้งหมด</option><option value="active">ใช้งานอยู่</option><option value="cancelled">ยกเลิกแล้ว</option><option value="unknown">ยังไม่ทราบ</option>
                 </SelectInput>
               </Field>
-              <Field label="ความพร้อมจับคู่" htmlFor="tmt-v2-eligibility">
+              <Field label="ความพร้อมจับคู่" htmlFor="tmt-v2-eligibility" className={advanced ? "w-full sm:w-auto" : undefined}>
                 <SelectInput id="tmt-v2-eligibility" value={eligibility} onChange={(event) => setEligibility(event.target.value)}>
                   <option value="">ทั้งหมด</option><option value="true">พร้อม commercial TPU</option><option value="false">ยังไม่พร้อม</option>
                 </SelectInput>
@@ -189,7 +251,7 @@ export function TmtBrowser() {
                 <section>
                   <div className="flex flex-wrap items-center gap-2"><TmtLevelBadge level={detail.concept.level} /><span className="cell-code text-sm">{detail.concept.tmtId}</span></div>
                   <h2 className="mt-2 break-words text-sm font-semibold text-ink">{detail.concept.endpointFsn ?? detail.concept.conceptFsn}</h2>
-                  <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Values label="Concept FSN" value={detail.concept.conceptFsn} /><Values label="Source version" value={detail.concept.sourceVersion} /><Values label="ผู้ผลิต" value={detail.concept.manufacturer} /><Values label="สถานะ" value={statusLabel(detail.concept.status)} /></dl>
+                  <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Values label="Concept FSN" value={detail.concept.conceptFsn} /><Values label="เวอร์ชันข้อมูล TMT" value={detail.concept.sourceVersion} /><Values label="ผู้ผลิต" value={detail.concept.manufacturer} /><Values label="สถานะ" value={statusLabel(detail.concept.status)} /></dl>
                 </section>
 
                 <Alert tone={detail.concept.mappingEligible ? "success" : "warning"} title={detail.concept.mappingEligible ? "พร้อมสำหรับการจับคู่" : "ยังไม่พร้อมสำหรับการจับคู่"}>{detail.concept.mappingEligibilityReason}</Alert>

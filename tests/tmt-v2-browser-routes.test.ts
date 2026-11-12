@@ -86,6 +86,32 @@ test("search passes only validated bounded filters to the service", async () => 
   }]);
 });
 
+test("search validates and forwards independent TMT fields with AND-compatible values", async () => {
+  mocks.search.mockResolvedValueOnce([{ tmtId: "764182" }]);
+  const response = await search(new Request(
+    "https://example.test/api/v1/tmt-v2/search?tmtId=764182&fsn=lidocaine&genericName=lidocaine%20hydrochloride&tradeName=LIDOCAINE&manufacturer=%E0%B8%AD%E0%B8%87%E0%B8%84%E0%B9%8C%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B9%80%E0%B8%A0%E0%B8%AA%E0%B8%B1%E0%B8%8A%E0%B8%81%E0%B8%A3%E0%B8%A3%E0%B8%A1&registration=1A&level=tpu&status=active&mappingEligible=true",
+  ));
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(mocks.search.mock.calls[0], [pool, {
+    tmtId: "764182",
+    fsn: "lidocaine",
+    genericName: "lidocaine hydrochloride",
+    tradeName: "LIDOCAINE",
+    manufacturer: "องค์การเภสัชกรรม",
+    registration: "1A",
+    level: "tpu",
+    status: "active",
+    mappingEligible: true,
+  }]);
+});
+
+test("search accepts a structured selector without q but rejects an empty or invalid TMT ID request", async () => {
+  assert.equal((await search(new Request("https://example.test/api/v1/tmt-v2/search?level=gpu"))).status, 200);
+  assert.equal((await search(new Request("https://example.test/api/v1/tmt-v2/search?tmtId=not-a-code"))).status, 400);
+  assert.equal((await search(new Request("https://example.test/api/v1/tmt-v2/search"))).status, 400);
+});
+
 test("concept route validates ID, depth, and node cap", async () => {
   for (const [id, query] of [["not-a-code", ""], ["764169", "?depth=5"], ["764169", "?maxNodes=201"]]) {
     const response = await detail(new Request(`https://example.test/api/v1/tmt-v2/concepts/${id}${query}`), { params: Promise.resolve({ id }) });

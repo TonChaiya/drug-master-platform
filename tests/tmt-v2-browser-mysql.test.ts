@@ -50,6 +50,27 @@ describe.runIf(dbIntegrationTestsEnabled()).sequential("TMT v2 browser on isolat
     assert.equal((await searchTmt(pool, { query: "lidocaine", limit: 2 })).length, 2);
   });
 
+  test("independent Lidocaine fields combine with AND and keep q compatibility", async () => {
+    const rows = await searchTmt(pool, {
+      tmtId: "764182",
+      fsn: "lidocaine hydrochloride",
+      genericName: "lidocaine hydrochloride",
+      tradeName: "lidocaine hydrochloride",
+      manufacturer: "องค์การเภสัชกรรม",
+      level: "tpu",
+      status: "active",
+      mappingEligible: true,
+      limit: 20,
+    });
+    assert.deepEqual(rows.map((row) => row.tmtId), ["764182"]);
+    assert.equal(rows[0]?.tradeName, "LIDOCAINE HYDROCHLORIDE");
+    assert.equal(rows[0]?.manufacturer, "องค์การเภสัชกรรม");
+    assert.equal((await searchTmt(pool, { tmtId: "764182", manufacturer: "ไม่ตรง", limit: 20 })).length, 0);
+    assert.ok((await searchTmt(pool, { fsn: "lidocaine", limit: 20 })).length > 0);
+    assert.ok((await searchTmt(pool, { genericName: "lidocaine hydrochloride", limit: 20 })).length > 0);
+    assert.equal((await searchTmt(pool, { query: "764182", limit: 20 }))[0]?.tmtId, "764182");
+  });
+
   test("search exposes latest RegNo without choosing conflicts or inventing missing values", async () => {
     const conflict = (await searchTmt(pool, { query: TPU_IDS[0], limit: 20 }))[0];
     assert.equal(conflict?.registrationNumber, null);

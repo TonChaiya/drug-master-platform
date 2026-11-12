@@ -8,7 +8,7 @@ test("normal standards page is a TMT v2 and TTMT hub without legacy sync control
   const page = await source("src/app/(dashboard)/standards/page.tsx");
 
   assert.match(page, /readTmtV2Readiness/);
-  assert.match(page, /TmtBrowser/);
+  assert.match(page, /<TmtBrowser mode="advanced"/);
   assert.match(page, /TtmtSearch/);
   assert.match(page, /ttmtImports/);
   assert.doesNotMatch(page, /StandardsPanel|standardCounts|readSyncProgress/);

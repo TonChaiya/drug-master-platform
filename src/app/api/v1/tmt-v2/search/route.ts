@@ -12,6 +12,10 @@ export const dynamic = "force-dynamic";
 const optionalText = z.string().trim().max(120).optional();
 const schema = z.object({
   q: optionalText,
+  tmtId: z.string().trim().regex(/^\d{1,20}$/).optional(),
+  fsn: optionalText,
+  genericName: optionalText,
+  tradeName: optionalText,
   level: z.enum(["subs", "vtm", "gp", "gpu", "gpp", "tp", "tpu", "tpp"]).optional(),
   status: z.enum(["active", "cancelled", "unknown"]).optional(),
   mappingEligible: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
@@ -20,7 +24,20 @@ const schema = z.object({
   atc: optionalText,
   nlem: optionalText,
   limit: z.coerce.number().int().min(1).max(100).optional(),
-}).refine((value) => [value.q, value.manufacturer, value.registration, value.atc, value.nlem].some(Boolean));
+}).refine((value) => [
+  value.q,
+  value.tmtId,
+  value.fsn,
+  value.genericName,
+  value.tradeName,
+  value.level,
+  value.status,
+  value.mappingEligible,
+  value.manufacturer,
+  value.registration,
+  value.atc,
+  value.nlem,
+].some((item) => item !== undefined && item !== ""));
 
 export async function GET(request: Request) {
   if (!(await currentUser())) return unauthorized();
@@ -38,7 +55,7 @@ export async function GET(request: Request) {
 
   try {
     const { q, ...filters } = parsed.data;
-    const rows = await searchTmt(dbPool(), { query: q, ...filters });
+    const rows = await searchTmt(dbPool(), { ...filters, ...(q ? { query: q } : {}) });
     return apiJson({ ok: true, rows, count: rows.length });
   } catch {
     console.error("tmt_v2.browser_search_failed");
