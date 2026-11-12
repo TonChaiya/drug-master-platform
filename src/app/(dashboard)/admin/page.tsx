@@ -4,7 +4,7 @@ import { countFacilitylessUsers, countMisconfiguredAdmins, countPendingUsers, fa
 import { formatBangkok } from "@/modules/facilities/queries";
 import { readTmtCredentialStatus } from "@/modules/standards/tmt-credentials";
 import { readInstallerLink } from "@/modules/agent/installer-link";
-import { readTmtV2Readiness } from "@/modules/tmt/readiness";
+import { listTtmtOperationImports, readTmtOperations } from "@/modules/tmt/operations";
 import { facilityCondition, mappedPercent } from "@/modules/admin/condition";
 import { Alert, Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -14,6 +14,8 @@ import { AgentInstallerPanel } from "./agent-installer-panel";
 import { FacilityAdminPanel } from "./facility-admin-panel";
 import { FacilityOverviewTable, type FacilityOverviewRow } from "./facility-overview-table";
 import { TmtApiPanel } from "./tmt-api-panel";
+import { TmtOperationsPanel } from "./tmt-operations-panel";
+import { TtmtImportPanel } from "./ttmt-import-panel";
 import { UserTable, type AdminUserRow } from "./user-table";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,7 @@ export default async function AdminPage() {
   }
   if (user.role !== "admin") redirect("/dashboard");
 
-  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus, installerLink, tmtReadiness] = await Promise.all([
+  const [summaries, users, pending, misconfiguredAdmins, facilitylessUsers, tmtStatus, installerLink, tmtOperations, ttmtImports] = await Promise.all([
     facilitySummaries(),
     listUsers(),
     countPendingUsers(),
@@ -35,8 +37,10 @@ export default async function AdminPage() {
     countFacilitylessUsers(),
     readTmtCredentialStatus(),
     readInstallerLink(),
-    readTmtV2Readiness(),
+    readTmtOperations(),
+    listTtmtOperationImports(),
   ]);
+  const tmtReadiness = tmtOperations.readiness;
 
   const rows: AdminUserRow[] = users.map((row) => ({
     id: row.id,
@@ -166,6 +170,28 @@ export default async function AdminPage() {
           <CardBody>
             {tmtReadiness.assurance === "validated_unverified" ? <Alert tone="warning" className="mb-3" title="พร้อมใช้แบบ validated_unverified">ข้อมูลผ่านหลักฐาน validation ที่บันทึกไว้ แต่ยังไม่ใช่ verified จาก upstream</Alert> : null}
             <TmtApiPanel initial={tmtStatus} readiness={tmtReadiness.ready ? tmtReadiness.assurance : null} />
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="การดำเนินงาน TMT"
+            description="สถานะและประวัติของ TMT v2 production pipeline ปัจจุบัน"
+          />
+          <CardBody>
+            <TmtOperationsPanel initial={tmtOperations} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="นำเข้าและประวัติ TTMT"
+            description="นำเข้า MasterTTMT เข้าสู่ namespace TTMT v2 เท่านั้น"
+          />
+          <CardBody>
+            <TtmtImportPanel imports={ttmtImports} />
           </CardBody>
         </Card>
       </div>

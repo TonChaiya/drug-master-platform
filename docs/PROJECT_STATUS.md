@@ -7,8 +7,8 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Previous UX/version-policy checkpoint: `4fce97bbe57fbab02c995c641f30eb37ee6a6f9f`
-- Current application version: `0.3.2`
+- Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
+- Current application version: `0.4.0`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -70,6 +70,9 @@ Migration สำคัญล่าสุด:
 - workflow ปัจจุบัน: JHCIS → Standards Hub → Drug Catalog → การจับคู่รายการยา → Export
 - navigation หลักชี้ไปการจับคู่รายการยา; `/mappings` redirect ไป `/mappings/v2` เมื่อ feature flag ภายในเปิด
 - `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็นข้อมูล TMT ปัจจุบัน
+- `/admin` แสดง current TMT v2 readiness, latest run, bounded run/checkpoint history และ current TTMT v2 import history เฉพาะผู้ดูแลระบบ
+- การเริ่มหรือ resume TMT sync ยังเป็น CLI-only เพราะต้องยืนยัน environment/database, mode และ production guard สำหรับงานที่อาจใช้เวลานาน; Admin ไม่เริ่มงานนี้จาก web request
+- Admin สามารถนำเข้าไฟล์ MasterTTMT `.xls`/`.xlsx` ด้วย current TTMT v2 importer เท่านั้น; route ใช้ `requireAdmin()` และไม่เรียก legacy `standard_products` pipeline
 
 ## TMT result presentation contract
 
@@ -161,8 +164,8 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Last verified checkpoint
 
-- Previous repository checkpoint: `4fce97bbe57fbab02c995c641f30eb37ee6a6f9f`
-- Current application version: `0.3.2`
+- Previous repository checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
+- Current application version: `0.4.0`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest migration: `0017_tmt_run_validations.sql`
