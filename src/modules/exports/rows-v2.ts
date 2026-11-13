@@ -18,6 +18,7 @@ import {
 } from "@/modules/mappings/v2-consumer";
 import { isExportCandidate, type ExportCandidateState, type ExportSelection } from "./delta";
 import type { ExportCandidate, ExportRow } from "./rows";
+import type { ActiveStandardRelease } from "@/modules/standards/active-release";
 
 type ExportQueryDb = Pick<typeof db, "select">;
 
@@ -78,6 +79,7 @@ export async function buildExportCandidatesV2(
   selection: ExportSelection,
   database: ExportQueryDb = db,
   lockRows = false,
+  release?: ActiveStandardRelease,
 ): Promise<ExportCandidate[]> {
   const latestCatalog = alias(drugCatalogRows, "latest_export_catalog_v2");
   const catalogHistory = database
@@ -140,7 +142,7 @@ export async function buildExportCandidatesV2(
       ? [{ source: row.standardSource, code: row.standardCode, level: row.standardLevel, productCat: row.productCat }]
       : [],
   );
-  const standards = await loadMappedStandardsV2(identities, database);
+  const standards = await loadMappedStandardsV2(identities, database, release);
 
   return rows.flatMap((row) => {
     const identity: MappingV2Identity | null = (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel

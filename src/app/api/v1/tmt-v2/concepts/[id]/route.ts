@@ -3,8 +3,9 @@ import { dbPool } from "@/db/client";
 import { apiJson, unauthorized } from "@/lib/api-response";
 import { currentUser } from "@/modules/auth/session";
 import { getTmtConceptDetail } from "@/modules/tmt/detail";
-import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
+import { activeStandardReleaseEnabled, tmtV2BrowserEnabled } from "@/modules/tmt/feature";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,10 +34,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   try {
-    const detail = await getTmtConceptDetail(dbPool(), params.data.id, {
+    const pool = dbPool();
+    const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(pool) : undefined;
+    const detailOptions = {
       graphDepth: query.data.depth,
       maxNodes: query.data.maxNodes,
-    });
+    };
+    const detail = release
+      ? await getTmtConceptDetail(pool, params.data.id, detailOptions, release)
+      : await getTmtConceptDetail(pool, params.data.id, detailOptions);
     if (!detail) return apiJson({ ok: false, errorCode: "TMT_CONCEPT_NOT_FOUND", message: "ไม่พบรายการ TMT" }, 404);
     return apiJson({ ok: true, detail });
   } catch {

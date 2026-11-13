@@ -18,3 +18,8 @@ export function tmtV2CatalogEnabled(env: EnvLike = process.env): boolean {
 export function tmtV2ExportEnabled(env: EnvLike = process.env): boolean {
   return env.TMT_V2_EXPORT_ENABLED === "1";
 }
+
+/** Versioned standard releases are opt-in until every consumer path is migrated. */
+export function activeStandardReleaseEnabled(env: EnvLike = process.env): boolean {
+  return env.ACTIVE_STANDARD_RELEASE_ENABLED === "1";
+}

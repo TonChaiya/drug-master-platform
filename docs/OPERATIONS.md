@@ -374,6 +374,14 @@ DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 
 **0018_versioned_standard_dataset_foundation.sql** — เพิ่มเฉพาะ metadata, release/pointer/manifest และ shadow tables `tmt_dataset_*`/`ttmt_dataset_products`; ไม่แก้, copy, backfill หรือใช้ตารางมาตรฐานเดิมเป็น runtime source. Migration ไม่สร้าง pointer row, dataset หรือ approved release.
 
+### Phase 2C Active Standard Release gate
+
+- `ACTIVE_STANDARD_RELEASE_ENABLED` เป็น default-off และเปิดเฉพาะค่า exact `1`; การมี migration 0018 อย่างเดียวไม่อนุญาตให้เปิด flag.
+- ก่อนเปิดต้องมี pointer key `active-standard-release` ที่ชี้ approved release ซึ่งผูก TMT/TTMT datasets สถานะ `validated`, source ตรงชนิด และ validation evidence สถานะ `passed`. Missing/invalid pointer หรือ release ต้อง fail closed โดยห้าม fallback ไป live standard tables.
+- เมื่อเปิด flag Search/RegNo/Graph/Detail, TTMT Search, Mapping v2, Readiness และ Export v2 ต้องใช้ release context เดียวต่อ operation และ dataset IDs ต้องอยู่ในทุก query/join/subquery ที่อ่าน shadow tables.
+- Export preview รวม release ID ใน snapshot hash; download lock pointer row ภายใน transaction ก่อน resolve/build. Token stale ห้าม consume และห้ามเลื่อน mapping delta checkpoint; การเปลี่ยน standard release อย่างเดียวไม่เปลี่ยน `drug_mappings.updatedAt`.
+- Rollback ของ application path คือปิด flag ให้กลับ legacy behavior. ห้ามเปิด production ก่อน Phase 2D baseline copy, manifest/evidence review, atomic publish และ production preflight ได้รับอนุมัติแยก; ห้ามสร้าง pointer หรือ publish release จาก application startup/deploy.
+
 ### Phase 2B baseline copy plan (design only)
 
 - Preflight แบบ read-only ต้องยืนยัน source run/import, row counts, version และ validation evidence ก่อนสร้าง candidate ใด ๆ; ห้ามอ่านหรือเขียน production โดยอาศัย `.env.local` แบบ implicit.

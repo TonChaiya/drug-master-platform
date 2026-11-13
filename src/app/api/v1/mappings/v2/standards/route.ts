@@ -6,6 +6,10 @@ import { apiJson } from "@/lib/api-response";
 import { withFacilityContext } from "@/lib/authorization/require-context";
 import { tmtV2MappingEnabled } from "@/modules/tmt/feature";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
+import { dbPool } from "@/db/client";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { searchTtmtStandards } from "@/modules/standards/ttmt-search";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +25,12 @@ export async function GET(request: Request) {
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_QUERY", message: "ตัวกรองไม่ถูกต้อง" }, 400);
   const query = parsed.data.q;
   try {
+    if (activeStandardReleaseEnabled()) {
+      const pool = dbPool();
+      const release = await readActiveStandardRelease(pool);
+      const rows = await searchTtmtStandards(pool, query, release);
+      return apiJson({ ok: true, rows: rows.map((row) => ({ source: "TTMT", code: row.code, level: "product", fsn: row.fsn, activeIngredient: row.activeIngredient, tradeName: row.tradeName, manufacturer: row.manufacturer, registrationNumber: row.registrationNumber, active: row.status === "active", sourceVersion: row.sourceVersion })) });
+    }
     const rows = await db
       .select({ code: ttmtProducts.ttmtcode, fsn: ttmtProducts.fsn, activeIngredient: ttmtProducts.activeingredient, tradeName: ttmtProducts.tradename, manufacturer: ttmtProducts.manufacturer, registrationNumber: ttmtProducts.registrationNumber, status: ttmtProducts.status, sourceVersion: ttmtProducts.sourceVersion, importStatus: ttmtImports.status })
       .from(ttmtProducts)

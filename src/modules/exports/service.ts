@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, dbPool } from "@/db/client";
 import { auditLogs, exportPreviewTokens, facilities, mappingExportCheckpoints } from "@/db/schema";
 import {
   checkpointRowsAfterExport,
@@ -11,8 +11,9 @@ import {
 import { buildExportCandidates, type ExportCandidate, type ExportSelection } from "./rows";
 import { buildExportCandidatesV2 } from "./rows-v2";
 import { buildDrugCatWorkbook, exportFilename } from "./writer";
-import { tmtV2ExportEnabled } from "@/modules/tmt/feature";
+import { activeStandardReleaseEnabled, tmtV2ExportEnabled } from "@/modules/tmt/feature";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readActiveStandardRelease, readLockedActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface ExportBundle {
   filename: string;
@@ -31,24 +32,25 @@ export class ExportPreviewStaleError extends Error {
 
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
-async function exportCandidateBuilder() {
-  if (!tmtV2ExportEnabled()) return buildExportCandidates;
-  await requireTmtV2Ready();
-  return buildExportCandidatesV2;
+async function exportCandidateBuilder(release?: ActiveStandardRelease) {
+  if (!tmtV2ExportEnabled()) return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidates(facilityId, selection, database, lockRows);
+  if (!release) await requireTmtV2Ready();
+  return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidatesV2(facilityId, selection, database, lockRows, release);
 }
 
 export async function createExportPreview(
   facilityId: string,
   selection: ExportSelection,
 ): Promise<{ candidates: ExportCandidate[]; previewToken: string }> {
-  const candidates = await (await exportCandidateBuilder())(facilityId, selection);
+  const release = tmtV2ExportEnabled() && activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
+  const candidates = await (await exportCandidateBuilder(release))(facilityId, selection);
   const previewToken = randomBytes(32).toString("hex");
   const now = new Date();
   await db.insert(exportPreviewTokens).values({
     tokenHash: hashExportPreviewToken(previewToken),
     facilityId,
     selection,
-    snapshotHash: exportSnapshotHash(facilityId, selection, candidates),
+    snapshotHash: exportSnapshotHash(facilityId, selection, candidates, release?.releaseId),
     expiresAt: new Date(now.getTime() + PREVIEW_TTL_MS),
     consumedAt: null,
     createdAt: now,
@@ -71,6 +73,9 @@ export async function createExport(options: {
     await tx.execute(
       sql`SELECT ${facilities.id} FROM ${facilities} WHERE ${facilities.id} = ${options.facilityId} FOR UPDATE`,
     );
+    const release = tmtV2ExportEnabled() && activeStandardReleaseEnabled()
+      ? await readLockedActiveStandardRelease(tx)
+      : undefined;
     const tokenHash = hashExportPreviewToken(options.previewToken);
     const tokenRows = await tx
       .select()
@@ -81,14 +86,14 @@ export async function createExport(options: {
     const token = tokenRows[0];
     if (!token) throw new ExportPreviewStaleError();
 
-    const candidates = await (await exportCandidateBuilder())(options.facilityId, options.selection, tx, true);
+    const candidates = await (await exportCandidateBuilder(release))(options.facilityId, options.selection, tx, true);
     const now = new Date();
     if (
       !isExportPreviewTokenValid(token, {
         rawToken: options.previewToken,
         facilityId: options.facilityId,
         selection: options.selection,
-        snapshotHash: exportSnapshotHash(options.facilityId, options.selection, candidates),
+        snapshotHash: exportSnapshotHash(options.facilityId, options.selection, candidates, release?.releaseId),
         now,
       })
     ) {

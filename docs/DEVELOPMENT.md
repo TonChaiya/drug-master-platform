@@ -205,6 +205,24 @@ pnpm exec vitest run tests/mapping-v2.test.ts tests/mapping-v2-routes.test.ts te
 
 การตรวจ clean migration + TMT/TTMT save/review/facility isolation ใช้ฐาน exact `drug_master_mapping_v2_test` บน localhost เท่านั้น และต้องกำหนด `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `TMT_V2_TEST_*` ครบก่อนรัน `tests/tmt-v2-migration-mysql.test.ts`; guard ปฏิเสธชื่อฐาน/host อื่นและไม่อ่าน `.env.local`.
 
+### Active Standard Release consumers (Phase 2C, local only)
+
+`ACTIVE_STANDARD_RELEASE_ENABLED` เป็น default-off และเปิดด้วย exact `1` เท่านั้น. ใช้ได้เฉพาะ local/test database ที่ migrate ถึง 0018 และมี synthetic approved release/pointer/validation evidence ครบ; ห้ามเปิดกับ production หรือ `.env.local` โดยอาศัยการคาดเดา. เมื่อ flag เปิด consumer ต้อง fail closed หาก pointer/release/dataset/validation ไม่ถูกต้อง และห้าม fallback ไป live standard tables.
+
+Integration test ใช้ฐาน exact `drug_master_mapping_v2_test` ที่ `127.0.0.1:3306`, ต้องยืนยันว่าฐานไม่มีอยู่ก่อน และ test จะสร้าง/ลบเฉพาะฐานที่สร้างในรอบนั้น:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:TMT_V2_TEST_HOST = "127.0.0.1"
+$env:TMT_V2_TEST_PORT = "3306"
+$env:TMT_V2_TEST_DATABASE = "drug_master_mapping_v2_test"
+$env:TMT_V2_TEST_USERNAME = "root"
+pnpm exec vitest run tests/phase-2c-mysql.test.ts
+```
+
+Test ใช้ synthetic data เพื่อตรวจ approved resolver, dataset isolation, fail-closed, release-aware export hash, stale token/checkpoint safety และ pointer-row locking; ห้ามใช้ฐานที่มีอยู่เดิมหรือ credentials ของ TiDB/JHCIS.
+
 ### Catalog/Export v2 (Phase 6, local only)
 
 Catalog และ Export v2 แยก flag และ default-off. ใช้เฉพาะ local/test process ที่ migrate ถึง 0016 แล้ว:

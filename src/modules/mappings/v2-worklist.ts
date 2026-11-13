@@ -1,19 +1,17 @@
 import { and, asc, count, eq, like, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { db } from "@/db/client";
+import { db, dbPool } from "@/db/client";
 import {
   drugCatalogRows,
   drugMappings,
   mappingReviewAcknowledgements,
   sourceDrugs,
-  tmtConcept,
-  tmtMastertmt,
-  ttmtImports,
-  ttmtProducts,
 } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { classifyMappingLifecycle, type MappingLifecycleStatus } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
+import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
 
 export type V2WorklistStatusFilter = "all" | "mapped" | "pending" | "needs_review";
 export type V2WorklistDrugTypeFilter = "all" | "01" | "10";
@@ -76,6 +74,7 @@ export async function mappingWorklistV2(options: {
   const page = Math.max(options.page ?? 1, 1);
   const status = options.status ?? "pending";
   const drugType = options.drugType ?? "all";
+  const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
   const latest = await latestImport(options.facilityId);
   const latestCatalog = alias(drugCatalogRows, "v2_worklist_latest_catalog");
   const history = db
@@ -97,18 +96,41 @@ export async function mappingWorklistV2(options: {
     AND ${mappingReviewAcknowledgements.catalogPresent} = (${latestCatalog.id} IS NOT NULL)
     AND ${mappingReviewAcknowledgements.catalogTmtid} <=> ${latestCatalog.tmtid}
   )`;
-  const standardValid = sql<boolean>`(
-    (${drugMappings.standardSource} = 'TMT'
-      AND ${drugMappings.standardLevel} = 'tpu'
-      AND ${drugMappings.productCat} = '1'
-      AND ${tmtConcept.levelName} = 'tpu'
-      AND ${tmtMastertmt.status} = 0)
-    OR (${drugMappings.standardSource} = 'TTMT'
-      AND ${drugMappings.standardLevel} = 'product'
-      AND ${drugMappings.productCat} = '3'
-      AND ${ttmtProducts.status} = 'active'
-      AND ${ttmtImports.status} = 'succeeded')
-  )`;
+  const standardValid = release
+    ? sql<boolean>`(
+        (${drugMappings.standardSource} = 'TMT'
+          AND ${drugMappings.standardLevel} = 'tpu'
+          AND ${drugMappings.productCat} = '1'
+          AND EXISTS (
+            SELECT 1 FROM tmt_dataset_concepts c
+            INNER JOIN tmt_dataset_mastertmt m ON m.dataset_id=c.dataset_id AND m.tpucode=c.tmtid
+            WHERE c.dataset_id=${release.tmtDatasetId} AND c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED)
+              AND c.level_name='tpu' AND m.status=0
+          ))
+        OR (${drugMappings.standardSource} = 'TTMT'
+          AND ${drugMappings.standardLevel} = 'product'
+          AND ${drugMappings.productCat} = '3'
+          AND EXISTS (
+            SELECT 1 FROM ttmt_dataset_products p
+            WHERE p.dataset_id=${release.ttmtDatasetId} AND p.ttmtcode=${drugMappings.standardCode} AND p.status='active'
+          ))
+      )`
+    : sql<boolean>`(
+        (${drugMappings.standardSource} = 'TMT'
+          AND ${drugMappings.standardLevel} = 'tpu'
+          AND ${drugMappings.productCat} = '1'
+          AND EXISTS (
+            SELECT 1 FROM tmt_concept c INNER JOIN tmt_mastertmt m ON m.tpucode=c.tmtid
+            WHERE c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED) AND c.level_name='tpu' AND m.status=0
+          ))
+        OR (${drugMappings.standardSource} = 'TTMT'
+          AND ${drugMappings.standardLevel} = 'product'
+          AND ${drugMappings.productCat} = '3'
+          AND EXISTS (
+            SELECT 1 FROM ttmt_products p INNER JOIN ttmt_imports i ON i.id=p.source_import_id
+            WHERE p.ttmtcode=${drugMappings.standardCode} AND p.status='active' AND i.status='succeeded'
+          ))
+      )`;
   const needsReview = sql<boolean>`(
     (${drugMappings.id} IS NOT NULL AND NOT (${standardValid}))
     OR (${latestCatalog.id} IS NULL AND ${history.hospdrugcode} IS NOT NULL AND NOT (${acknowledgementMatches}))
@@ -141,10 +163,6 @@ export async function mappingWorklistV2(options: {
     .leftJoin(mappingReviewAcknowledgements, and(eq(mappingReviewAcknowledgements.mappingId, drugMappings.id), eq(mappingReviewAcknowledgements.facilityId, sourceDrugs.facilityId)))
     .leftJoin(latestCatalog, latestJoin)
     .leftJoin(history, and(eq(history.facilityId, sourceDrugs.facilityId), eq(history.hospdrugcode, sourceDrugs.drugcode)))
-    .leftJoin(tmtConcept, sql`${drugMappings.standardSource} = 'TMT' AND ${tmtConcept.tmtid} = CAST(${drugMappings.standardCode} AS UNSIGNED)`)
-    .leftJoin(tmtMastertmt, eq(tmtMastertmt.tpucode, tmtConcept.tmtid))
-    .leftJoin(ttmtProducts, and(eq(drugMappings.standardSource, "TTMT"), eq(ttmtProducts.ttmtcode, drugMappings.standardCode)))
-    .leftJoin(ttmtImports, eq(ttmtImports.id, ttmtProducts.sourceImportId))
     .where(where);
   const rows = await db.select({
     sourceDrugId: sourceDrugs.id,
@@ -173,10 +191,6 @@ export async function mappingWorklistV2(options: {
     .leftJoin(mappingReviewAcknowledgements, and(eq(mappingReviewAcknowledgements.mappingId, drugMappings.id), eq(mappingReviewAcknowledgements.facilityId, sourceDrugs.facilityId)))
     .leftJoin(latestCatalog, latestJoin)
     .leftJoin(history, and(eq(history.facilityId, sourceDrugs.facilityId), eq(history.hospdrugcode, sourceDrugs.drugcode)))
-    .leftJoin(tmtConcept, sql`${drugMappings.standardSource} = 'TMT' AND ${tmtConcept.tmtid} = CAST(${drugMappings.standardCode} AS UNSIGNED)`)
-    .leftJoin(tmtMastertmt, eq(tmtMastertmt.tpucode, tmtConcept.tmtid))
-    .leftJoin(ttmtProducts, and(eq(drugMappings.standardSource, "TTMT"), eq(ttmtProducts.ttmtcode, drugMappings.standardCode)))
-    .leftJoin(ttmtImports, eq(ttmtImports.id, ttmtProducts.sourceImportId))
     .where(where)
     .orderBy(sql`CASE WHEN ${needsReview} THEN 0 WHEN ${drugMappings.id} IS NULL THEN 1 ELSE 2 END`, asc(sourceDrugs.drugcode))
     .limit(pageSize)
@@ -186,7 +200,7 @@ export async function mappingWorklistV2(options: {
     const identity = identityFrom(row);
     return identity ? [identity] : [];
   });
-  const standards = await loadMappedStandardsV2(identities);
+  const standards = await loadMappedStandardsV2(identities, db, release);
   const classified = rows.map((row) => {
     const identity = identityFrom(row);
     const standard = identity ? standards.get(mappingV2IdentityKey(identity)) : null;

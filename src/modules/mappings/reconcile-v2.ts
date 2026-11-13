@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db/client";
-import { auditLogs, drugCatalogRows, drugMappings, sourceDrugs, tmtConcept } from "@/db/schema";
+import { db, dbPool } from "@/db/client";
+import { auditLogs, drugCatalogRows, drugMappings, sourceDrugs, tmtConcept, tmtDatasetConcepts } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { decideCatalogReconcile } from "./lifecycle";
 import { MappingRuleError, standardTypeForDrugType } from "./product-category";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
 import type { ReconcileResult } from "./service";
+import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
 
 function today(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
@@ -14,6 +16,7 @@ function today(): string {
 
 /** Catalog v2 uses the catalog code as an exact source identity; it never traverses GPU→TPU automatically. */
 export async function reconcileFromLatestCatalogV2(facilityId: string, userId: string): Promise<ReconcileResult> {
+  const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
   const snapshot = await latestImport(facilityId);
   if (!snapshot) throw new MappingRuleError("CATALOG_SNAPSHOT_MISSING", "ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้");
   const [drugs, mapped, catalogRows, catalogHistory] = await Promise.all([
@@ -34,9 +37,11 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
     try { return [BigInt(code)]; } catch { return []; }
   }))];
   const tmtLevels = wantedTmt.length
-    ? await db.select({ code: tmtConcept.tmtid, level: tmtConcept.levelName }).from(tmtConcept).where(inArray(tmtConcept.tmtid, wantedTmt))
+    ? release
+      ? await db.select({ code: tmtDatasetConcepts.tmtid, level: tmtDatasetConcepts.levelName }).from(tmtDatasetConcepts).where(and(eq(tmtDatasetConcepts.datasetId, release.tmtDatasetId), inArray(tmtDatasetConcepts.tmtid, wantedTmt)))
+      : await db.select({ code: tmtConcept.tmtid, level: tmtConcept.levelName }).from(tmtConcept).where(inArray(tmtConcept.tmtid, wantedTmt))
     : [];
-  const levelByTmt = new Map(tmtLevels.map((row) => [row.code.toString(), row.level]));
+  const levelByTmt = new Map(tmtLevels.flatMap((row) => row.code === null ? [] : [[row.code.toString(), row.level] as const]));
   const identities: MappingV2Identity[] = drugs.flatMap((drug) => {
     const code = catalogByCode.get(drug.drugcode)?.tmtid;
     if (!code) return [];
@@ -46,7 +51,7 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
       return level ? [{ source, code, level, productCat: source === "TMT" ? "1" : "3" }] : [];
     } catch { return []; }
   });
-  const standards = await loadMappedStandardsV2(identities);
+  const standards = await loadMappedStandardsV2(identities, db, release);
   const identityBySourceCode = new Map(identities.map((identity) => [`${identity.source}\u0000${identity.code}`, identity]));
   const result: ReconcileResult = { considered: 0, created: 0, updated: 0, needsReview: 0, skippedNoStandard: 0, skippedTypeMismatch: 0 };
   const now = new Date();

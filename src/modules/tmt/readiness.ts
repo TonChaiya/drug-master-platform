@@ -3,6 +3,8 @@ import type { Pool, RowDataPacket } from "mysql2/promise";
 import { dbPool } from "@/db/client";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
 import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, VALIDATED_UNVERIFIED_POLICY_VERSION } from "./validation";
+import { activeStandardReleaseEnabled } from "./feature";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface TmtReadinessRun {
   id: string;
@@ -154,6 +156,10 @@ export async function readTmtV2Readiness(pool: Pick<Pool, "query"> = dbPool()): 
 }
 
 export async function requireTmtV2Ready(pool: Pick<Pool, "query"> = dbPool()): Promise<void> {
+  if (activeStandardReleaseEnabled()) {
+    await readActiveStandardRelease(pool);
+    return;
+  }
   const readiness = await readTmtV2Readiness(pool);
   if (!readiness.ready) throw new TmtV2NotReadyError(readiness);
 }

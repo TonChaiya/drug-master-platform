@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.5.0`
+- Current application version: `0.6.0`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -17,8 +17,16 @@
 ## Unified system improvement handoff
 
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
-- Status: documentation handoff complete; **Phase 1 is awaiting explicit approval and must not start automatically**.
+- Status: Phase 2C Active Standard Release consumer integration และ local verification เสร็จแล้ว; **Phase 2D ยังรออนุมัติแยกและห้ามเริ่มอัตโนมัติ**.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
+
+## Phase 2C completion checkpoint
+
+- เพิ่ม Active Standard Release resolver จาก schema 0018 โดยใช้ pointer key กลาง `active-standard-release`; เปิดใช้เฉพาะเมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และค่า default เป็น off.
+- เมื่อ flag เปิด Search/RegNo/Graph/Detail, TTMT Search, Mapping v2, Readiness และ Export v2 อ่าน TMT/TTMT จาก approved release เดียวกัน; missing/invalid release ต้อง fail closed และห้าม fallback ไป live standard tables.
+- Export preview hash ผูกกับ release ID; download lock pointer row ภายใน transaction ก่อน resolve/build. Release switch ทำให้ token stale แม้ output เหมือนเดิม และ stale request ห้าม consume token หรือเลื่อน delta checkpoint.
+- Local Laragon verification วันที่ 2026-11-13: migration integration 7/7, Phase 2C MySQL integration 4/4, full regression 270 passed / 52 guarded skips, typecheck/lint/diff-check ผ่าน. ฐาน `drug_master_mapping_v2_test` ถูกสร้างจากศูนย์ด้วย synthetic data และยืนยันว่าถูกลบหลังทดสอบ.
+- ไม่มีการ apply migration, เปลี่ยน active pointer, publish release, เปิด feature flag หรือแก้ production. Phase 2D baseline copy/publish/rollback implementation ยังไม่เริ่ม.
 
 ## Major completed areas
 
@@ -144,6 +152,8 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Next implementation checkpoint
 
+Phase 2D ยังรออนุมัติแยก: baseline copy จาก live tables ไป versioned datasets, manifest/evidence verification, approved release publish และ rollback ด้วย active pointer. ห้ามเริ่ม implementation, copy production data, publish release หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` บน production โดยไม่มี approved runbook และ preflight แยก.
+
 ก่อนทำงาน UI ถัดไป ต้องรักษา TMT v2 result cards/colors/RegNo behavior, ไม่เพิ่ม schema/migration และไม่แก้ production data โดยไม่มี approval แยก
 
 ก่อนเริ่ม implementation ให้ยืนยันว่า `origin/main` ยังตรงกับ checkpoint ที่เอกสารนี้ระบุ หลัง Codex รายงานงานเสร็จต้องตรวจ GitHub commit/diff เทียบ `main` จริง ไม่เชื่อเฉพาะรายงาน
@@ -173,13 +183,13 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Last verified checkpoint
 
-- Previous repository checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.5.0`
+- Previous repository checkpoint: `97416b913e30a2ee1f5a463aae2b3f70cc6dd1ed`
+- Current application version: `0.6.0`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest migration: `0017_tmt_run_validations.sql`
 - Agent version: `1.3.0`
-- Expected worktree: clean
+- Release preparation: Phase 2C verified locally; commit/push/deploy ยังไม่ได้ดำเนินการ
 
 ก่อนเริ่มงานใหม่ให้ตรวจ `git fetch origin main`, `git rev-parse HEAD`, `git rev-parse origin/main` และ `git status`
 อย่าเชื่อเอกสารนี้หรือ chat memory แบบ blind เพราะสถานะอาจเปลี่ยนหลัง checkpoint นี้

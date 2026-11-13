@@ -31,7 +31,9 @@ test("current worklist stays source-aware and does not call legacy mapping/searc
   assert.match(currentPath, /standardSource/);
   assert.match(currentPath, /loadMappedStandardsV2/);
   assert.doesNotMatch(currentPath, /standardProducts|\/api\/v1\/mappings\/save|\/api\/v1\/mappings\/search/);
-  assert.match(service, /const standards = await loadMappedStandardsV2\(identities\)/);
+  assert.match(service, /const standards = await loadMappedStandardsV2\(identities, db, release\)/);
+  assert.match(service, /tmt_dataset_concepts/);
+  assert.match(service, /ttmt_dataset_products/);
   assert.doesNotMatch(service, /for \(const .*await db\.select/);
 });
 

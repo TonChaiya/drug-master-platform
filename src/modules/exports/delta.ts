@@ -41,6 +41,7 @@ export function exportSnapshotHash(
   facilityId: string,
   selection: ExportSelection,
   candidates: Array<ExportCandidateState & { row: unknown }>,
+  activeReleaseId?: string,
 ): string {
   const payload = candidates.map((candidate) => ({
     mappingId: candidate.mappingId,
@@ -51,7 +52,8 @@ export function exportSnapshotHash(
     standardLevel: candidate.standardLevel,
     row: candidate.row,
   }));
-  return createHash("sha256").update(JSON.stringify({ facilityId, selection, payload })).digest("hex");
+  const snapshot = activeReleaseId === undefined ? { facilityId, selection, payload } : { facilityId, selection, activeReleaseId, payload };
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
 }
 
 export function hashExportPreviewToken(rawToken: string): string {

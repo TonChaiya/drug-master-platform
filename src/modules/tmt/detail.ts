@@ -3,6 +3,7 @@ import { mappingEligibility, masterTmtStatus, type LatestTmtValues, type TmtSear
 import { loadDirectTmtRelationships, traverseTmtGraph, type TmtDirectRelationships, type TmtGraphResult } from "./graph";
 import { TmtSyncRepository } from "./persistence";
 import { latestRegnoByTmtIds, searchTmt } from "./search";
+import type { ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface TmtRelatedTpu {
   tmtId: string;
@@ -39,18 +40,21 @@ export interface TmtConceptDetail {
   warnings: string[];
 }
 
-async function relatedTpu(pool: Pool, ids: string[]): Promise<TmtRelatedTpu[]> {
+async function relatedTpu(pool: Pool, ids: string[], release?: ActiveStandardRelease): Promise<TmtRelatedTpu[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
+  const concepts = release ? "tmt_dataset_concepts" : "tmt_concept";
+  const tpu = release ? "tmt_dataset_tpu" : "tmt_tpu";
+  const master = release ? "tmt_dataset_mastertmt" : "tmt_mastertmt";
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT c.tmtid,c.fsn AS concept_fsn,t.fsn AS endpoint_fsn,t.manufacturer,m.tradename,m.status
-     FROM tmt_concept c
-     LEFT JOIN tmt_tpu t ON t.tpuid=c.tmtid
-     LEFT JOIN tmt_mastertmt m ON m.tpucode=c.tmtid
-     WHERE c.level_name='tpu' AND c.tmtid IN (${placeholders}) ORDER BY c.tmtid`,
-    ids,
+     FROM ${concepts} c
+     LEFT JOIN ${tpu} t ON t.tpuid=c.tmtid${release ? " AND t.dataset_id=c.dataset_id" : ""}
+     LEFT JOIN ${master} m ON m.tpucode=c.tmtid${release ? " AND m.dataset_id=c.dataset_id" : ""}
+     WHERE ${release ? "c.dataset_id=? AND " : ""}c.level_name='tpu' AND c.tmtid IN (${placeholders}) ORDER BY c.tmtid`,
+    release ? [release.tmtDatasetId, ...ids] : ids,
   );
-  const regnoById = await latestRegnoByTmtIds(pool, ids);
+  const regnoById = await latestRegnoByTmtIds(pool, ids, release);
   return rows.map((row) => {
     const status = row.status === null || row.status === undefined ? null : Number(row.status);
     const eligibility = mappingEligibility("tpu", status);
@@ -73,19 +77,22 @@ export async function getTmtConceptDetail(
   pool: Pool,
   tmtId: string,
   options: { graphDepth?: number; maxNodes?: number } = {},
+  release?: ActiveStandardRelease,
 ): Promise<TmtConceptDetail | null> {
-  const matches = await searchTmt(pool, { query: tmtId, limit: 100 });
+  const matches = await searchTmt(pool, { query: tmtId, limit: 100 }, release);
   const concept = matches.find((row) => row.tmtId === tmtId);
   if (!concept) return null;
 
-  const direct = await loadDirectTmtRelationships(pool, tmtId, 100);
-  const graph = await traverseTmtGraph(pool, tmtId, { maxDepth: options.graphDepth, maxNodes: options.maxNodes });
-  const repository = new TmtSyncRepository(pool);
+  const direct = await loadDirectTmtRelationships(pool, tmtId, 100, release);
+  const graph = await traverseTmtGraph(pool, tmtId, { maxDepth: options.graphDepth, maxNodes: options.maxNodes }, release);
+  const repository = release ? null : new TmtSyncRepository(pool);
   const [nlem, atc, regno] = concept.level === "tpu"
-    ? await Promise.all([repository.latestNlem(tmtId), repository.latestAtc(tmtId), repository.latestRegno(tmtId)])
+    ? release
+      ? await Promise.all([latestVersionedTemporal(pool, release, "nlem", tmtId), latestVersionedTemporal(pool, release, "atc", tmtId), latestVersionedTemporal(pool, release, "regno", tmtId)])
+      : await Promise.all([repository!.latestNlem(tmtId), repository!.latestAtc(tmtId), repository!.latestRegno(tmtId)])
     : [null, null, null];
   const tpuIds = direct.outbound.filter((item) => item.relatedLevel === "tpu").map((item) => item.relatedId);
-  const related = await relatedTpu(pool, tpuIds);
+  const related = await relatedTpu(pool, tpuIds, release);
   const warnings = [...concept.dataQualityWarnings];
   if ([...direct.inbound, ...direct.outbound].some((item) => item.relatedConcept === null)) warnings.push("ไม่พบรายละเอียด concept ในข้อมูล TMT ที่ซิงก์ปัจจุบัน");
   if ([...direct.inbound, ...direct.outbound].some((item) => item.concept1 === item.concept2)) warnings.push("พบ self relationship ในข้อมูล TMT");
@@ -114,4 +121,17 @@ export async function getTmtConceptDetail(
     relatedTpu: related,
     warnings: [...new Set(warnings)].slice(0, 20),
   };
+}
+
+async function latestVersionedTemporal(pool: Pool, release: ActiveStandardRelease, column: "nlem" | "atc" | "regno", tmtId: string): Promise<LatestTmtValues | null> {
+  const table = `tmt_dataset_${column}`;
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT change_date,${column} AS value FROM ${table}
+     WHERE dataset_id=? AND tpuid=? AND change_date=(SELECT MAX(change_date) FROM ${table} WHERE dataset_id=? AND tpuid=?) ORDER BY ${column}`,
+    [release.tmtDatasetId, tmtId, release.tmtDatasetId, tmtId],
+  );
+  if (rows.length === 0) return null;
+  const values = [...new Set(rows.map((row) => String(row.value)))];
+  const date = rows[0]?.change_date;
+  return { changeDate: date instanceof Date ? date.toISOString().slice(0, 10) : String(date).slice(0, 10), values, conflict: values.length > 1 };
 }

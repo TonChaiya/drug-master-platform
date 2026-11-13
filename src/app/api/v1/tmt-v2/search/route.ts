@@ -2,9 +2,10 @@ import { z } from "zod";
 import { dbPool } from "@/db/client";
 import { apiJson, unauthorized } from "@/lib/api-response";
 import { currentUser } from "@/modules/auth/session";
-import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
+import { activeStandardReleaseEnabled, tmtV2BrowserEnabled } from "@/modules/tmt/feature";
 import { searchTmt } from "@/modules/tmt/search";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +56,10 @@ export async function GET(request: Request) {
 
   try {
     const { q, ...filters } = parsed.data;
-    const rows = await searchTmt(dbPool(), { ...filters, ...(q ? { query: q } : {}) });
+    const pool = dbPool();
+    const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(pool) : undefined;
+    const searchFilters = { ...filters, ...(q ? { query: q } : {}) };
+    const rows = release ? await searchTmt(pool, searchFilters, release) : await searchTmt(pool, searchFilters);
     return apiJson({ ok: true, rows, count: rows.length });
   } catch {
     console.error("tmt_v2.browser_search_failed");

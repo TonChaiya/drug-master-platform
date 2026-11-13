@@ -1,4 +1,5 @@
 import type { Pool, RowDataPacket } from "mysql2/promise";
+import type { ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface TmtRelationshipEdge {
   concept1: string;
@@ -57,20 +58,23 @@ function edge(row: RowDataPacket, direction: "inbound" | "outbound"): TmtRelatio
   };
 }
 
-async function loadEdgesForIds(pool: Pool, ids: string[], limit: number): Promise<TmtDirectRelationships> {
+async function loadEdgesForIds(pool: Pool, ids: string[], limit: number, release?: ActiveStandardRelease): Promise<TmtDirectRelationships> {
   if (ids.length === 0) return { inbound: [], outbound: [] };
   const placeholders = ids.map(() => "?").join(",");
+  const relationships = release ? "tmt_dataset_relationships" : "tmt_relationship";
+  const concepts = release ? "tmt_dataset_concepts" : "tmt_concept";
+  const joinDataset = release ? " AND c.dataset_id=r.dataset_id" : "";
+  const whereDataset = release ? "r.dataset_id=? AND " : "";
+  const parameters = release ? [release.tmtDatasetId, ...ids, limit] : [...ids, limit];
   const [outbound] = await pool.query<RowDataPacket[]>(
     `SELECT r.*,c.tmtid AS related_id,c.fsn AS related_fsn,c.level_name AS related_level,c.source_version AS related_version
-     FROM tmt_relationship r LEFT JOIN tmt_concept c ON c.tmtid=r.concept2
-     WHERE r.concept1 IN (${placeholders}) ORDER BY r.concept1,r.concept2 LIMIT ?`,
-    [...ids, limit],
+     FROM ${relationships} r LEFT JOIN ${concepts} c ON c.tmtid=r.concept2${joinDataset}
+     WHERE ${whereDataset}r.concept1 IN (${placeholders}) ORDER BY r.concept1,r.concept2 LIMIT ?`, parameters,
   );
   const [inbound] = await pool.query<RowDataPacket[]>(
     `SELECT r.*,c.tmtid AS related_id,c.fsn AS related_fsn,c.level_name AS related_level,c.source_version AS related_version
-     FROM tmt_relationship r LEFT JOIN tmt_concept c ON c.tmtid=r.concept1
-     WHERE r.concept2 IN (${placeholders}) ORDER BY r.concept2,r.concept1 LIMIT ?`,
-    [...ids, limit],
+     FROM ${relationships} r LEFT JOIN ${concepts} c ON c.tmtid=r.concept1${joinDataset}
+     WHERE ${whereDataset}r.concept2 IN (${placeholders}) ORDER BY r.concept2,r.concept1 LIMIT ?`, parameters,
   );
   return {
     inbound: inbound.map((row) => edge(row, "inbound")),
@@ -78,18 +82,20 @@ async function loadEdgesForIds(pool: Pool, ids: string[], limit: number): Promis
   };
 }
 
-export async function loadDirectTmtRelationships(pool: Pool, tmtId: string, limit = 100): Promise<TmtDirectRelationships> {
-  return loadEdgesForIds(pool, [tmtId], Math.min(Math.max(limit, 1), 200));
+export async function loadDirectTmtRelationships(pool: Pool, tmtId: string, limit = 100, release?: ActiveStandardRelease): Promise<TmtDirectRelationships> {
+  return loadEdgesForIds(pool, [tmtId], Math.min(Math.max(limit, 1), 200), release);
 }
 
 export async function traverseTmtGraph(
   pool: Pool,
   startId: string,
   options: { maxDepth?: number; maxNodes?: number } = {},
+  release?: ActiveStandardRelease,
 ): Promise<TmtGraphResult> {
   const maxDepth = Math.min(Math.max(options.maxDepth ?? 2, 0), 4);
   const maxNodes = Math.min(Math.max(options.maxNodes ?? 200, 1), 200);
-  const [startRows] = await pool.query<RowDataPacket[]>("SELECT tmtid,fsn,level_name,source_version FROM tmt_concept WHERE tmtid=? LIMIT 1", [startId]);
+  const conceptTable = release ? "tmt_dataset_concepts" : "tmt_concept";
+  const [startRows] = await pool.query<RowDataPacket[]>(`SELECT tmtid,fsn,level_name,source_version FROM ${conceptTable} WHERE ${release ? "dataset_id=? AND " : ""}tmtid=? LIMIT 1`, release ? [release.tmtDatasetId, startId] : [startId]);
   const start = startRows[0];
   const nodes: TmtGraphNode[] = [{
     tmtId: startId,
@@ -106,7 +112,7 @@ export async function traverseTmtGraph(
   let truncated = false;
 
   for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth += 1) {
-    const direct = await loadEdgesForIds(pool, frontier, maxNodes);
+    const direct = await loadEdgesForIds(pool, frontier, maxNodes, release);
     const candidates = [...direct.outbound, ...direct.inbound];
     const next: string[] = [];
     for (const item of candidates) {

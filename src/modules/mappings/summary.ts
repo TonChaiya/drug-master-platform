@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, dbPool } from "@/db/client";
 import {
   drugCatalogImports,
   drugCatalogRows,
@@ -11,8 +11,9 @@ import {
 } from "@/db/schema";
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
-import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
+import { activeStandardReleaseEnabled, tmtV2CatalogEnabled } from "@/modules/tmt/feature";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface MappingLifecycleSummaryInput {
   facilityId: string;
@@ -100,7 +101,8 @@ export async function mappingLifecycleSummaries(
 ): Promise<Map<string, MappingLifecycleSummary>> {
   if (tmtV2CatalogEnabled()) {
     await requireTmtV2Ready();
-    return mappingLifecycleSummariesV2(facilityId, database);
+    const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
+    return mappingLifecycleSummariesV2(facilityId, database, release);
   }
   const importScope = facilityId
     ? eq(drugCatalogImports.facilityId, facilityId)
@@ -226,6 +228,7 @@ export async function mappingLifecycleSummaries(
 async function mappingLifecycleSummariesV2(
   facilityId: string | undefined,
   database: MappingSummaryDb,
+  release?: ActiveStandardRelease,
 ): Promise<Map<string, MappingLifecycleSummary>> {
   const importScope = facilityId ? eq(drugCatalogImports.facilityId, facilityId) : eq(facilities.status, "active");
   const rankedImports = database
@@ -285,7 +288,7 @@ async function mappingLifecycleSummariesV2(
       ? [{ source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }]
       : [],
   );
-  const standards = await loadMappedStandardsV2(identities, database);
+  const standards = await loadMappedStandardsV2(identities, database, release);
   const latestCatalogByDrug = new Map(latestCatalogRows.map((row) => [`${row.facilityId}\u0000${row.hospdrugcode}`, row]));
   return summarizeMappingLifecycleInputs(sourceRows.map((row) => {
     const latest = latestCatalogByDrug.get(`${row.facilityId}\u0000${row.drugcode}`);
