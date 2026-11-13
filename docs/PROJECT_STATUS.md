@@ -14,6 +14,12 @@
 - Latest applied migration: `0017_tmt_run_validations.sql`
 - Windows Agent baseline: `1.3.0`
 
+## Unified system improvement handoff
+
+- Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
+- Status: documentation handoff complete; **Phase 1 is awaiting explicit approval and must not start automatically**.
+- The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
+
 ## Major completed areas
 
 - JHCIS Agent enrollment, signed heartbeat/command polling และ atomic sync
