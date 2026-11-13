@@ -42,9 +42,31 @@ const stagingTables = new Set([
   "tmt_dataset_nlem", "tmt_dataset_atc", "tmt_dataset_regno", "tmt_dataset_mastertmt", "tmt_dataset_concepts", "tmt_dataset_relationships", "ttmt_dataset_products",
 ]);
 
+const manifestKeys: Record<string, Array<{ column: string; numeric?: true }>> = {
+  tmt_dataset_subs: [{ column: "subsid", numeric: true }],
+  tmt_dataset_vtm: [{ column: "vtmid", numeric: true }],
+  tmt_dataset_gp: [{ column: "gpid", numeric: true }],
+  tmt_dataset_gpu: [{ column: "gpuid", numeric: true }],
+  tmt_dataset_gpp: [{ column: "gppid", numeric: true }],
+  tmt_dataset_tp: [{ column: "tpid", numeric: true }],
+  tmt_dataset_tpu: [{ column: "tpuid", numeric: true }],
+  tmt_dataset_tpp: [{ column: "tppid", numeric: true }],
+  tmt_dataset_nlem: [{ column: "tpuid", numeric: true }, { column: "change_date" }, { column: "nlem" }],
+  tmt_dataset_atc: [{ column: "tpuid", numeric: true }, { column: "change_date" }, { column: "atc" }],
+  tmt_dataset_regno: [{ column: "tpuid", numeric: true }, { column: "change_date" }, { column: "regno" }],
+  tmt_dataset_mastertmt: [{ column: "tpucode", numeric: true }],
+  tmt_dataset_concepts: [{ column: "tmtid", numeric: true }],
+  tmt_dataset_relationships: [{ column: "concept1", numeric: true }, { column: "concept2", numeric: true }],
+  ttmt_dataset_products: [{ column: "ttmtcode" }],
+};
+const numericDatasetColumns = new Set(["subsid", "vtmid", "gpid", "gpuid", "gppid", "tpid", "tpuid", "tppid", "tpucode", "tmtid", "concept1", "concept2"]);
+
 type SqlExecutor = Pick<Pool, "execute">;
 
 function canonical(value: unknown): string {
+  if (typeof value === "bigint") return JSON.stringify(value.toString());
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (Buffer.isBuffer(value)) return JSON.stringify(value.toString("hex"));
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
@@ -53,11 +75,39 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
+export function canonicalDatasetRow(row: Record<string, unknown>): string {
+  const normalized = Object.fromEntries(Object.entries(row)
+    .filter(([key]) => key !== "dataset_id" && key !== "created_at" && key !== "updated_at")
+    .map(([key, value]) => {
+      if (numericDatasetColumns.has(key) && /^(?:0|[1-9]\d*)$/.test(String(value))) return [key, String(value)];
+      if (value instanceof Date) return [key, key === "change_date" ? value.toISOString().slice(0, 10) : value.toISOString()];
+      if (typeof value === "string" && key !== "change_date" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/.test(value)) {
+        return [key, new Date(`${value.replace(" ", "T")}Z`).toISOString()];
+      }
+      return [key, value];
+    }));
+  return canonical(normalized);
+}
+
+function compareManifestRows(tableName: string, left: DatasetRow, right: DatasetRow): number {
+  const keys = manifestKeys[tableName];
+  if (!keys) throw new DatasetStagingError("Unknown staging table");
+  for (const key of keys) {
+    const leftValue = String(left[key.column] ?? "");
+    const rightValue = String(right[key.column] ?? "");
+    const order = key.numeric && /^\d+$/.test(leftValue) && /^\d+$/.test(rightValue)
+      ? (BigInt(leftValue) < BigInt(rightValue) ? -1 : BigInt(leftValue) > BigInt(rightValue) ? 1 : 0)
+      : leftValue.localeCompare(rightValue);
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
 export function manifestFor(tables: DatasetTableSnapshot[]): DatasetManifestEntry[] {
   return tables.map((table) => ({
     tableName: table.tableName,
     rowCount: table.rows.length,
-    contentHash: createHash("sha256").update(table.rows.map(canonical).sort().join("\n")).digest("hex"),
+    contentHash: createHash("sha256").update([...table.rows].sort((left, right) => compareManifestRows(table.tableName, left, right)).map(canonicalDatasetRow).join("\n")).digest("hex"),
   })).sort((left, right) => left.tableName.localeCompare(right.tableName));
 }
 

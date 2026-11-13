@@ -223,6 +223,33 @@ pnpm exec vitest run tests/phase-2c-mysql.test.ts
 
 Test ใช้ synthetic data เพื่อตรวจ approved resolver, dataset isolation, fail-closed, release-aware export hash, stale token/checkpoint safety และ pointer-row locking; ห้ามใช้ฐานที่มีอยู่เดิมหรือ credentials ของ TiDB/JHCIS.
 
+### Phase 2D baseline/release lifecycle (local implementation only)
+
+Pure/unit regression ไม่เชื่อมต่อฐานข้อมูล:
+
+```powershell
+pnpm exec vitest run tests/dataset-staging.test.ts tests/standard-release-lifecycle.test.ts tests/standard-release-mysql.test.ts tests/active-release.test.ts tests/export-v2.test.ts
+```
+
+Phase 2D MySQL integration harness อยู่ที่ `tests/phase-2d-mysql.test.ts` และปิดไว้ตามค่าเริ่มต้น. Harness ยอมรับเฉพาะ `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1`, `127.0.0.1:3306` และฐาน exact `drug_master_mapping_v2_test`; ก่อนสร้างฐานจะตรวจ MySQL 8.4.3, version comment, `C:\laragon\data\mysql-8.4\`, executable exact ของ Laragon และยืนยันผ่าน `INFORMATION_SCHEMA` ว่าฐานยังไม่มีอยู่. Harness ถือ advisory lock ตลอดรอบ, สร้าง ownership token 256-bit ในฐาน และ cleanup ผ่าน connection ใหม่ได้เฉพาะเมื่อ server identity, database name, lock ownership และ token ตรงกันทั้งหมด.
+
+การรันต้องได้รับอนุมัติ DB integration แยกก่อน และกำหนด environment ต่อ process โดยไม่โหลด `.env.local` หรือ credentials ของ production/JHCIS:
+
+```powershell
+$env:NODE_ENV = "test"
+$env:ALLOW_DB_INTEGRATION_TESTS = "1"
+$env:TMT_V2_TEST_HOST = "127.0.0.1"
+$env:TMT_V2_TEST_PORT = "3306"
+$env:TMT_V2_TEST_DATABASE = "drug_master_mapping_v2_test"
+$env:TMT_V2_TEST_USERNAME = "drug_master_phase2d_test"
+$env:TMT_V2_TEST_PASSWORD = "<secure-process-local-random-secret>"
+pnpm exec vitest run tests/phase-2d-mysql.test.ts
+```
+
+ใช้ dedicated account ที่มีสิทธิ์เฉพาะ `drug_master_mapping_v2_test.*`; ห้ามใช้ root เป็น integration-test account และห้ามเก็บ password ในไฟล์หรือ shell profile. ห้ามรันหากฐานชื่อนี้มีอยู่ก่อน และห้ามเปิด DB opt-in ให้ full suite. Harness ใช้ synthetic data เพื่อตรวจ migration 0001–0018, bounded resume/source mutation, evidence rejection, concurrent writer/publish, shared pointer lock, atomic publish, pointer-only rollback และ dataset immutability เท่านั้น.
+
+ผลยืนยัน local วันที่ 2026-11-13: `tests/phase-2d-mysql.test.ts` ผ่าน 8/8 บน Laragon MySQL 8.4.3 ด้วย dedicated account; cleanup ยืนยันว่าฐานถูกลบ, advisory lock ว่าง, ไม่มี connection ของ test user และ database inventory เดิมไม่เปลี่ยน. ผลนี้ไม่อนุญาต production migration/copy/publish/flag activation; Production ต้องมี guarded CLI/dry-run/confirmation, backup/restore evidence และ approved maintenance plan แยก.
+
 ### Catalog/Export v2 (Phase 6, local only)
 
 Catalog และ Export v2 แยก flag และ default-off. ใช้เฉพาะ local/test process ที่ migrate ถึง 0016 แล้ว:

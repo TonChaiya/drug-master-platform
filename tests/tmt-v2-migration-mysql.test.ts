@@ -12,6 +12,7 @@ const database = process.env.TMT_V2_TEST_DATABASE;
 const user = process.env.TMT_V2_TEST_USERNAME;
 
 let connection: Connection;
+let createdHere = false;
 
 const enabled = process.env.ALLOW_DB_INTEGRATION_TESTS === "1";
 
@@ -27,8 +28,13 @@ beforeAll(async () => {
   const [[identity]] = await connection.query<mysql.RowDataPacket[]>("SELECT @@hostname AS hostname, @@port AS port");
   assert.equal(Number(identity?.port), 3306);
 
-  await connection.query(`DROP DATABASE IF EXISTS \`${expectedDatabase}\``);
+  const [existing] = await connection.execute<mysql.RowDataPacket[]>(
+    "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME=?",
+    [expectedDatabase],
+  );
+  assert.equal(existing.length, 0, "refuse to reuse a pre-existing test database");
   await connection.query(`CREATE DATABASE \`${expectedDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  createdHere = true;
   await connection.query(`USE \`${expectedDatabase}\``);
   await connection.query(`CREATE TABLE schema_migrations (
     filename VARCHAR(255) NOT NULL PRIMARY KEY,
@@ -39,8 +45,20 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!connection) return;
-  await connection.query("USE mysql");
-  await connection.query(`DROP DATABASE IF EXISTS \`${expectedDatabase}\``);
+  if (createdHere) {
+    const [existing] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME=?",
+      [expectedDatabase],
+    );
+    assert.equal(existing.length, 1, "created test database must exist before cleanup");
+    await connection.query("USE mysql");
+    await connection.query(`DROP DATABASE \`${expectedDatabase}\``);
+    const [remaining] = await connection.execute<mysql.RowDataPacket[]>(
+      "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME=?",
+      [expectedDatabase],
+    );
+    assert.equal(remaining.length, 0, "test database cleanup must be verified");
+  }
   await connection.end();
 });
 
