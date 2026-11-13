@@ -19,13 +19,13 @@ describe.runIf(enabled)("TMT v2 migrations on isolated Laragon MySQL", () => {
 beforeAll(async () => {
   assert.equal(process.env.NODE_ENV, "test");
   assert.equal(host, "127.0.0.1");
-  assert.equal(port, 3307);
+  assert.equal(port, 3306);
   assert.equal(database, expectedDatabase);
   assert.equal(user, "root");
 
   connection = await mysql.createConnection({ host, port, user, password: process.env.TMT_V2_TEST_PASSWORD ?? "", multipleStatements: true });
   const [[identity]] = await connection.query<mysql.RowDataPacket[]>("SELECT @@hostname AS hostname, @@port AS port");
-  assert.equal(Number(identity?.port), 3307);
+  assert.equal(Number(identity?.port), 3306);
 
   await connection.query(`DROP DATABASE IF EXISTS \`${expectedDatabase}\``);
   await connection.query(`CREATE DATABASE \`${expectedDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
@@ -63,22 +63,24 @@ async function migrate(): Promise<string[]> {
   return applied;
 }
 
-test("clean local database migrates through 0017 and rerun is idempotent", async () => {
+test("clean local database migrates through 0018 and rerun is idempotent", async () => {
   const first = await migrate();
-  assert.equal(first.at(-4), "0014_tmt_data_model_v2.sql");
-  assert.equal(first.at(-3), "0015_ttmt_data_model_v2.sql");
-  assert.equal(first.at(-2), "0016_mapping_v2_identity.sql");
-  assert.equal(first.at(-1), "0017_tmt_run_validations.sql");
+  assert.equal(first.at(-5), "0014_tmt_data_model_v2.sql");
+  assert.equal(first.at(-4), "0015_ttmt_data_model_v2.sql");
+  assert.equal(first.at(-3), "0016_mapping_v2_identity.sql");
+  assert.equal(first.at(-2), "0017_tmt_run_validations.sql");
+  assert.equal(first.at(-1), "0018_versioned_standard_dataset_foundation.sql");
   assert.deepEqual(await migrate(), []);
 
   const [journal] = await connection.query<mysql.RowDataPacket[]>("SELECT filename, content_hash FROM schema_migrations ORDER BY filename");
-  assert.equal(journal.length, 17);
-  assert.equal(journal.at(-4)?.filename, "0014_tmt_data_model_v2.sql");
-  assert.equal(journal.at(-3)?.filename, "0015_ttmt_data_model_v2.sql");
-  assert.equal(journal.at(-2)?.filename, "0016_mapping_v2_identity.sql");
-  assert.equal(journal.at(-1)?.filename, "0017_tmt_run_validations.sql");
+  assert.equal(journal.length, 18);
+  assert.equal(journal.at(-5)?.filename, "0014_tmt_data_model_v2.sql");
+  assert.equal(journal.at(-4)?.filename, "0015_ttmt_data_model_v2.sql");
+  assert.equal(journal.at(-3)?.filename, "0016_mapping_v2_identity.sql");
+  assert.equal(journal.at(-2)?.filename, "0017_tmt_run_validations.sql");
+  assert.equal(journal.at(-1)?.filename, "0018_versioned_standard_dataset_foundation.sql");
   assert.match(String(journal.at(-1)?.content_hash), /^[a-f0-9]{64}$/);
-});
+}, 15_000);
 
 test("validated-unverified evidence cascades with its TMT run", async () => {
   const runId = "00000000-0000-4000-8000-000000000017";
@@ -188,9 +190,9 @@ test("local MySQL exposes all v2 tables and required keys", async () => {
     [expectedDatabase],
   );
   assert.deepEqual(tables.map((row) => row.TABLE_NAME), [
-    "tmt_atc", "tmt_concept", "tmt_gp", "tmt_gpp", "tmt_gpu", "tmt_mastertmt", "tmt_nlem", "tmt_regno", "tmt_relationship", "tmt_run_validations",
+    "tmt_atc", "tmt_concept", "tmt_dataset_atc", "tmt_dataset_concepts", "tmt_dataset_gp", "tmt_dataset_gpp", "tmt_dataset_gpu", "tmt_dataset_mastertmt", "tmt_dataset_nlem", "tmt_dataset_regno", "tmt_dataset_relationships", "tmt_dataset_subs", "tmt_dataset_tp", "tmt_dataset_tpp", "tmt_dataset_tpu", "tmt_dataset_vtm", "tmt_gp", "tmt_gpp", "tmt_gpu", "tmt_mastertmt", "tmt_nlem", "tmt_regno", "tmt_relationship", "tmt_run_validations",
     "tmt_subs", "tmt_sync_checkpoints", "tmt_sync_runs", "tmt_tp", "tmt_tpp", "tmt_tpu", "tmt_version", "tmt_vtm",
-    "ttmt_imports", "ttmt_products",
+    "ttmt_dataset_products", "ttmt_imports", "ttmt_products",
   ]);
 
   const [relationshipIndexes] = await connection.query<mysql.RowDataPacket[]>("SHOW INDEX FROM tmt_relationship");
@@ -205,6 +207,22 @@ test("local MySQL exposes all v2 tables and required keys", async () => {
     foreignKeys.filter((row) => ["tmt_nlem", "tmt_atc", "tmt_regno", "tmt_relationship"].includes(row.TABLE_NAME)),
     [],
   );
+});
+
+test("versioned standard foundation creates empty dataset tables without changing live standard rows", async () => {
+  const [tables] = await connection.query<mysql.RowDataPacket[]>(
+    "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('standard_datasets','standard_releases','standard_dataset_pointers','standard_dataset_manifests','tmt_dataset_concepts','ttmt_dataset_products') ORDER BY TABLE_NAME",
+    [expectedDatabase],
+  );
+  assert.deepEqual(tables.map((row) => row.TABLE_NAME), [
+    "standard_dataset_manifests", "standard_dataset_pointers", "standard_datasets", "standard_releases", "tmt_dataset_concepts", "ttmt_dataset_products",
+  ]);
+  const [[pointerCount]] = await connection.query<mysql.RowDataPacket[]>("SELECT COUNT(*) AS total FROM standard_dataset_pointers");
+  const [[datasetCount]] = await connection.query<mysql.RowDataPacket[]>("SELECT COUNT(*) AS total FROM standard_datasets");
+  assert.equal(Number(pointerCount?.total), 0);
+  assert.equal(Number(datasetCount?.total), 0);
+  const [keys] = await connection.query<mysql.RowDataPacket[]>("SHOW INDEX FROM tmt_dataset_concepts");
+  assert.ok(keys.some((row) => row.Key_name === "PRIMARY" && row.Column_name === "dataset_id"));
 });
 
 test("equal numeric TMT and TTMT codes coexist in separate tables", async () => {

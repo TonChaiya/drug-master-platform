@@ -372,6 +372,42 @@ DROP TABLE tmt_run_validations;
 DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 ```
 
+**0018_versioned_standard_dataset_foundation.sql** — เพิ่มเฉพาะ metadata, release/pointer/manifest และ shadow tables `tmt_dataset_*`/`ttmt_dataset_products`; ไม่แก้, copy, backfill หรือใช้ตารางมาตรฐานเดิมเป็น runtime source. Migration ไม่สร้าง pointer row, dataset หรือ approved release.
+
+### Phase 2B baseline copy plan (design only)
+
+- Preflight แบบ read-only ต้องยืนยัน source run/import, row counts, version และ validation evidence ก่อนสร้าง candidate ใด ๆ; ห้ามอ่านหรือเขียน production โดยอาศัย `.env.local` แบบ implicit.
+- Copy ต้องสร้าง candidate TMT และ TTMT แยกกันใน `pending` แล้วเขียน **full snapshot** ไปยัง `tmt_dataset_*`/`ttmt_dataset_products`; incremental เป็นเพียง input ที่ต้อง materialize เป็น full snapshot ก่อน candidate ถูก `validated`.
+- Manifest เก็บ count และ SHA-256 canonical ต่อ table ใน `standard_dataset_manifests`; failure/partial write ต้องคง candidate เป็น `failed` พร้อม error code และห้ามแตะ `standard_dataset_pointers`, `standard_releases`, Mapping, Catalog, Export checkpoint หรือ validation evidence เดิม.
+- Baseline production `validated_unverified` จะทำได้เฉพาะ maintenance plan ที่อนุมัติแยก: SELECT-only snapshot จาก source ที่ระบุ, compare manifest/evidence, review counts แล้วค่อยอนุมัติ publish ใน Phase 2C; ไม่มี copy/backfill อัตโนมัติ.
+
+Rollback ทำได้เฉพาะก่อนมี dataset data หรือ application code ที่อ่านตารางใหม่ และต้องหยุด runtime ที่อ้าง schema ก่อน:
+
+```sql
+DROP TABLE ttmt_dataset_products;
+DROP TABLE tmt_dataset_relationships;
+DROP TABLE tmt_dataset_concepts;
+DROP TABLE tmt_dataset_mastertmt;
+DROP TABLE tmt_dataset_regno;
+DROP TABLE tmt_dataset_atc;
+DROP TABLE tmt_dataset_nlem;
+DROP TABLE tmt_dataset_tpp;
+DROP TABLE tmt_dataset_tpu;
+DROP TABLE tmt_dataset_tp;
+DROP TABLE tmt_dataset_gpp;
+DROP TABLE tmt_dataset_gpu;
+DROP TABLE tmt_dataset_gp;
+DROP TABLE tmt_dataset_vtm;
+DROP TABLE tmt_dataset_subs;
+DROP TABLE standard_dataset_manifests;
+DROP TABLE standard_dataset_pointers;
+DROP TABLE standard_releases;
+DROP TABLE standard_datasets;
+DELETE FROM schema_migrations WHERE filename = '0018_versioned_standard_dataset_foundation.sql';
+```
+
+ห้ามใช้ rollback นี้หลังมี staging/release/baseline data; ให้ใช้ approved maintenance window และ backup/restore plan แยกแทน. TiDB DDL ไม่ transactional จึงต้อง preflight ใน local test database ก่อน production approval.
+
 ### Phase 7 activation prerequisites (ยังห้าม execute)
 
 ก่อน production cutover ต้องได้รับอนุมัติ Phase 7 แยกต่างหากและยืนยันอย่างน้อย:
