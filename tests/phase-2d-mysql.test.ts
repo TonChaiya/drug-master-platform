@@ -16,7 +16,8 @@ import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "@/modules/tmt/sync";
 import {
   cleanupPhase2dTestDatabase,
   createPhase2dTestDatabase,
-  migratePhase2dDatabaseThrough0018,
+  applyPhase2dMigration0018,
+  migratePhase2dDatabaseThrough0017,
   phase2dTestConfig,
   type Phase2dHarnessConnection,
   type Phase2dHarnessSession,
@@ -53,6 +54,7 @@ describe.runIf(enabled).sequential("Phase 2D release lifecycle on an isolated La
   let pool: Pool;
   let session: Phase2dHarnessSession | undefined;
   let migrations: string[] = [];
+  let journalBefore0018: string[] = [];
   let config: Phase2dTestConfig;
 
   beforeAll(async () => {
@@ -65,7 +67,10 @@ describe.runIf(enabled).sequential("Phase 2D release lifecycle on an isolated La
       multipleStatements: true,
     });
     session = await createPhase2dTestDatabase(server as unknown as Phase2dHarnessConnection, config);
-    migrations = await migratePhase2dDatabaseThrough0018(server as unknown as Phase2dHarnessConnection);
+    migrations = await migratePhase2dDatabaseThrough0017(server as unknown as Phase2dHarnessConnection);
+    const [beforeRows] = await server.execute<RowDataPacket[]>("SELECT filename FROM schema_migrations ORDER BY filename");
+    journalBefore0018 = beforeRows.map((row) => String(row.filename));
+    migrations.push(await applyPhase2dMigration0018(server as unknown as Phase2dHarnessConnection));
     pool = mysql.createPool({ ...config, timezone: "Z", connectionLimit: 6 });
     await seedLiveSources(server, ids.runA, ids.import);
   }, 30_000);
@@ -97,6 +102,9 @@ describe.runIf(enabled).sequential("Phase 2D release lifecycle on an isolated La
   });
 
   test("applies exactly migration chain 0001-0018", () => {
+    assert.equal(journalBefore0018.length, 17);
+    assert.equal(journalBefore0018.at(-1)?.startsWith("0017_"), true);
+    assert.equal(journalBefore0018.some((filename) => filename.startsWith("0018_")), false);
     assert.equal(migrations.length, 18);
     assert.equal(migrations[0]?.startsWith("0001_"), true);
     assert.equal(migrations.at(-1), "0018_versioned_standard_dataset_foundation.sql");
@@ -119,6 +127,61 @@ describe.runIf(enabled).sequential("Phase 2D release lifecycle on an isolated La
     assert.equal(keys.has("standard_dataset_manifests:PRIMARY:PRIMARY KEY"), true);
     assert.equal(keys.has("tmt_dataset_concepts:PRIMARY:PRIMARY KEY"), true);
     assert.equal(keys.has("ttmt_dataset_products:PRIMARY:PRIMARY KEY"), true);
+  });
+
+  test("migration 0018 creates all explicit dataset keys, indexes and enforced dataset foreign keys", async () => {
+    const shadowTables = [
+      "tmt_dataset_subs", "tmt_dataset_vtm", "tmt_dataset_gp", "tmt_dataset_gpu", "tmt_dataset_gpp",
+      "tmt_dataset_tp", "tmt_dataset_tpu", "tmt_dataset_tpp", "tmt_dataset_nlem", "tmt_dataset_atc",
+      "tmt_dataset_regno", "tmt_dataset_mastertmt", "tmt_dataset_concepts", "tmt_dataset_relationships", "ttmt_dataset_products",
+    ];
+    const [primaryColumns] = await server.query<RowDataPacket[]>(
+      `SELECT TABLE_NAME,COLUMN_NAME,SEQ_IN_INDEX FROM INFORMATION_SCHEMA.STATISTICS
+       WHERE TABLE_SCHEMA=? AND TABLE_NAME IN (?) AND INDEX_NAME='PRIMARY' ORDER BY TABLE_NAME,SEQ_IN_INDEX`,
+      [config.database, shadowTables],
+    );
+    const primaryByTable = new Map<string, string[]>();
+    for (const row of primaryColumns) {
+      const table = String(row.TABLE_NAME);
+      primaryByTable.set(table, [...(primaryByTable.get(table) ?? []), String(row.COLUMN_NAME)]);
+    }
+    assert.equal(primaryByTable.size, 15);
+    for (const table of shadowTables) assert.equal(primaryByTable.get(table)?.[0], "dataset_id", table);
+
+    const [datasetForeignKeys] = await server.query<RowDataPacket[]>(
+      `SELECT TABLE_NAME,CONSTRAINT_NAME,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME
+       FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+       WHERE TABLE_SCHEMA=? AND TABLE_NAME IN (?) AND COLUMN_NAME='dataset_id' AND REFERENCED_TABLE_NAME IS NOT NULL`,
+      [config.database, shadowTables],
+    );
+    assert.equal(datasetForeignKeys.length, 15);
+    assert.equal(datasetForeignKeys.every((row) => row.REFERENCED_TABLE_NAME === "standard_datasets" && row.REFERENCED_COLUMN_NAME === "id"), true);
+
+    const datasetA = "20000000-0000-4000-8000-000000000031";
+    const datasetB = "20000000-0000-4000-8000-000000000032";
+    await server.execute(
+      "INSERT INTO standard_datasets (id,source,state,source_version) VALUES (?,'TMT','writing','schema-test'),(?,'TMT','writing','schema-test')",
+      [datasetA, datasetB],
+    );
+    const row = [123456, "schema contract", "2026-01-01", null, "schema-test", "schema-test", "2026-01-01 00:00:00"];
+    await server.execute(
+      "INSERT INTO tmt_dataset_subs (dataset_id,subsid,fsn,change_date,normalized_fsn,source_version,last_seen_version,synced_at) VALUES (?,?,?,?,?,?,?,?),(?,?,?,?,?,?,?,?)",
+      [datasetA, ...row, datasetB, ...row],
+    );
+    await assert.rejects(
+      () => server.execute(
+        "INSERT INTO tmt_dataset_subs (dataset_id,subsid,fsn,change_date,normalized_fsn,source_version,last_seen_version,synced_at) VALUES (?,?,?,?,?,?,?,?)",
+        [datasetA, ...row],
+      ),
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "ER_DUP_ENTRY",
+    );
+    await assert.rejects(
+      () => server.execute(
+        "INSERT INTO tmt_dataset_subs (dataset_id,subsid,fsn,change_date,normalized_fsn,source_version,last_seen_version,synced_at) VALUES (?,?,?,?,?,?,?,?)",
+        ["20000000-0000-4000-8000-000000000039", 999999, ...row.slice(1)],
+      ),
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "ER_NO_REFERENCED_ROW_2",
+    );
   });
 
   test("supports bounded concurrent resume and makes a validated dataset immutable", async () => {

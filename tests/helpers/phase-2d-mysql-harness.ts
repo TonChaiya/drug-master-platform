@@ -252,28 +252,54 @@ export async function cleanupPhase2dTestDatabase(
   }
 }
 
-export async function migratePhase2dDatabaseThrough0018(connection: Phase2dHarnessConnection): Promise<string[]> {
-  if (!connection.query) throw new Error("Phase 2D migration harness requires a multi-statement query connection");
-  await connection.query(`USE \`${PHASE_2D_TEST_DATABASE}\``);
-  await connection.execute(
-    "CREATE TABLE schema_migrations (filename VARCHAR(255) NOT NULL PRIMARY KEY,content_hash CHAR(64) NOT NULL,applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))",
-  );
+async function phase2dMigrationFiles(maximum: number): Promise<string[]> {
   const directory = new URL("../../src/db/migrations/", import.meta.url);
   const migrations = (await readdir(directory))
     .filter((filename) => /^\d{4}_.+\.sql$/.test(filename))
     .sort()
-    .filter((filename) => Number(filename.slice(0, 4)) <= 18);
-  const expectedNumbers = Array.from({ length: 18 }, (_, index) => String(index + 1).padStart(4, "0"));
-  if (migrations.length !== 18 || migrations.some((filename, index) => !filename.startsWith(`${expectedNumbers[index]}_`))) {
-    throw new Error("Phase 2D integration requires the complete migration chain 0001-0018");
+    .filter((filename) => Number(filename.slice(0, 4)) <= maximum);
+  const expectedNumbers = Array.from({ length: maximum }, (_, index) => String(index + 1).padStart(4, "0"));
+  if (migrations.length !== maximum || migrations.some((filename, index) => !filename.startsWith(`${expectedNumbers[index]}_`))) {
+    throw new Error(`Phase 2D integration requires the complete migration chain 0001-${String(maximum).padStart(4, "0")}`);
   }
+  return migrations;
+}
+
+async function applyPhase2dMigrations(connection: Phase2dHarnessConnection, migrations: readonly string[]): Promise<void> {
+  const directory = new URL("../../src/db/migrations/", import.meta.url);
   for (const filename of migrations) {
     const sql = await readFile(new URL(filename, directory), "utf8");
-    await connection.query(sql);
+    await connection.query!(sql);
     await connection.execute(
       "INSERT INTO schema_migrations (filename,content_hash) VALUES (?,?)",
       [filename, createHash("sha256").update(sql).digest("hex")],
     );
   }
+}
+
+export async function migratePhase2dDatabaseThrough0017(connection: Phase2dHarnessConnection): Promise<string[]> {
+  if (!connection.query) throw new Error("Phase 2D migration harness requires a multi-statement query connection");
+  await connection.query(`USE \`${PHASE_2D_TEST_DATABASE}\``);
+  await connection.execute(
+    "CREATE TABLE schema_migrations (filename VARCHAR(255) NOT NULL PRIMARY KEY,content_hash CHAR(64) NOT NULL,applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3))",
+  );
+  const migrations = await phase2dMigrationFiles(17);
+  await applyPhase2dMigrations(connection, migrations);
   return migrations;
+}
+
+export async function applyPhase2dMigration0018(connection: Phase2dHarnessConnection): Promise<string> {
+  if (!connection.query) throw new Error("Phase 2D migration harness requires a multi-statement query connection");
+  const [journal] = await connection.execute("SELECT filename FROM schema_migrations ORDER BY filename");
+  const applied = rows(journal).map((row) => String(row.filename));
+  const expected = await phase2dMigrationFiles(17);
+  if (JSON.stringify(applied) !== JSON.stringify(expected)) throw new Error("Migration 0018 upgrade requires an exact 0001-0017 journal");
+  const filename = (await phase2dMigrationFiles(18)).at(-1)!;
+  await applyPhase2dMigrations(connection, [filename]);
+  return filename;
+}
+
+export async function migratePhase2dDatabaseThrough0018(connection: Phase2dHarnessConnection): Promise<string[]> {
+  const migrations = await migratePhase2dDatabaseThrough0017(connection);
+  return [...migrations, await applyPhase2dMigration0018(connection)];
 }

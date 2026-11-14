@@ -16,8 +16,9 @@ test("shared authenticated shell renders the authoritative package version in it
     sections: [{ items: [] }],
     topbar: createElement("span", null, "บัญชี"),
   }, createElement("div", null, "เนื้อหา")));
+  const footerVersion = `Drug Master Platform · v${packageMetadata.version}`;
 
   assert.match(html, /<footer[^>]*>/);
-  assert.match(html, /Drug Master Platform · v0\.7\.0/);
-  assert.ok(html.indexOf("เนื้อหา") < html.indexOf("Drug Master Platform · v0.7.0"));
+  assert.ok(html.includes(footerVersion));
+  assert.ok(html.indexOf("เนื้อหา") < html.indexOf(footerVersion));
 });

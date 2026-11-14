@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.7.0",
+  "version": "0.8.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,8 @@
     "tmt:v2:validate": "tsx scripts/tmt-v2-validate.ts",
     "ttmt:v2:import": "tsx scripts/ttmt-v2-import.ts",
     "phase7:preflight": "tsx scripts/phase7-preflight.ts",
-    "phase7:reset": "tsx scripts/phase7-reset.ts"
+    "phase7:reset": "tsx scripts/phase7-reset.ts",
+    "dataset:release": "tsx scripts/dataset-release.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.3.3",

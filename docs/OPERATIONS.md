@@ -374,6 +374,10 @@ DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 
 **0018_versioned_standard_dataset_foundation.sql** — เพิ่มเฉพาะ metadata, release/pointer/manifest และ shadow tables `tmt_dataset_*`/`ttmt_dataset_products`; ไม่แก้, copy, backfill หรือใช้ตารางมาตรฐานเดิมเป็น runtime source. Migration ไม่สร้าง pointer row, dataset หรือ approved release.
 
+**Migration 0018 pre-production compatibility rewrite:** ก่อน Production apply ได้เปลี่ยน shadow tables ทั้ง 15 จาก `CREATE TABLE ... LIKE` + `DROP PRIMARY KEY` เป็น explicit column definitions พร้อม final composite primary key `(dataset_id, <source-key...>)`, source indexes และ dataset FK ตั้งแต่ `CREATE TABLE`. Hash เปลี่ยนจาก `a8280d06412549e7f745ea138350d4113b8430d20a0322fcaed7e74d7a8c04ff` เป็น `95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e`; migration filename และ metadata/release/pointer contract ไม่เปลี่ยน.
+
+Runner ตรวจ SHA-256 แบบ fail-closed และห้ามแก้ journal โดยตรง. Inventory ของฐาน local ที่ได้รับอนุญาตเมื่อ 2026-11-14 ไม่พบ journal 0018 hash เดิม; หาก environment ใดมี old hash ต้องหยุดและใช้แผน reconciliation แยก ห้าม reset/reapply/เปลี่ยน hash ใน journal. MySQL 8.4.3 ผ่าน fresh chain และ 0017→0018 transition แล้ว แต่ TiDB 8.5.3 ยัง **NOT VERIFIED** จนกว่าจะรันบน disposable TiDB ที่ได้รับอนุมัติ.
+
 ### Phase 2C Active Standard Release gate
 
 - `ACTIVE_STANDARD_RELEASE_ENABLED` เป็น default-off และเปิดเฉพาะค่า exact `1`; การมี migration 0018 อย่างเดียวไม่อนุญาตให้เปิด flag.
@@ -382,7 +386,7 @@ DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 - Export preview รวม release ID ใน snapshot hash; download lock pointer row ภายใน transaction ก่อน resolve/build. Token stale ห้าม consume และห้ามเลื่อน mapping delta checkpoint; การเปลี่ยน standard release อย่างเดียวไม่เปลี่ยน `drug_mappings.updatedAt`.
 - Rollback ของ application path คือปิด flag ให้กลับ legacy behavior. ห้ามเปิด production ก่อน Phase 2D baseline copy, manifest/evidence review, atomic publish และ production preflight ได้รับอนุมัติแยก; ห้ามสร้าง pointer หรือ publish release จาก application startup/deploy.
 
-### Phase 2D guarded integration and release plan (read-only)
+### Phase 2D guarded integration and release operations
 
 - Preflight แบบ read-only ต้องยืนยัน source run/import, row counts, version และ validation evidence ก่อนสร้าง candidate ใด ๆ; ห้ามอ่านหรือเขียน production โดยอาศัย `.env.local` แบบ implicit.
 - Copy ต้องสร้าง candidate TMT และ TTMT แยกกันใน `writing` แล้วเขียน **full snapshot** แบบ bounded batch ไปยัง `tmt_dataset_*`/`ttmt_dataset_products`; retry ใช้ row count/canonical primary-key order เดิมและ writer ต้อง lock candidate row ก่อนทุก batch. Incremental เป็นเพียง input ที่ต้อง materialize เป็น full snapshot ก่อน candidate ถูก `validated`.
@@ -391,7 +395,8 @@ DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 - Publish/rollback ต้องอยู่ใน transaction เดียว: สร้าง pointer row แบบ `INSERT IGNORE` เมื่อยังไม่มี, `SELECT ... FOR UPDATE` ด้วย key `active-standard-release`, compare expected active release ID, ตรวจ target approved/intact, เปลี่ยน pointer และเขียน audit. Rollback เลือกได้เฉพาะ release ที่ approved และเคย superseded; ห้าม copy/delete dataset rows.
 - Guarded MySQL integration ต้องใช้ dedicated low-privilege account และฐาน local ที่ยืนยันว่าไม่มีอยู่ก่อน, apply migration ถึง 0018 เฉพาะฐานนั้น, ใช้ synthetic data และทดสอบ batch resume/source change, concurrent writer-vs-validation, evidence failure, concurrent publish, shared pointer lock และ rollback. Harness ต้องถือ advisory lock, บันทึก ownership token 256-bit ฝั่ง server และลบได้เฉพาะฐานที่สร้างในรอบนั้นหลังยืนยัน identity/name/token/lock ผ่าน connection ใหม่.
 - Production preflight ต้องคง flag off, ยืนยัน backup/restore, migration journal ถึง 0017, TiDB compatibility/storage estimate, source run/import และ evidence read-only, แล้วขออนุมัติ maintenance แยก. ลำดับที่ปลอดภัยคือ deploy code แบบ flag off → apply 0018 → baseline/validate/approve → atomic publish → smoke consumers → อนุมัติเปิด flag แยก; rollback ใช้ pointer ไป approved release ก่อนหน้า หรือปิด flag โดยไม่ลบข้อมูล.
-- Local MySQL integration วันที่ 2026-11-13 ผ่าน 8/8 บน Laragon MySQL 8.4.3 และ cleanup/inventory verification ผ่าน. ยังไม่มี guarded production execution CLI/route, TiDB execution evidence, storage estimate หรือ backup/restore rehearsal; ห้ามใช้ library จาก application startup, web request หรือ production shell จนกว่า dry-run/confirmation และ maintenance plan จะได้รับอนุมัติแยก.
+- Local MySQL integration วันที่ 2026-11-14 ผ่าน 9/9 บน Laragon MySQL 8.4.3 รวม fresh/0017→0018 journal transition, final PK/index/FK contract และ dataset-key isolation; cleanup/inventory verification ผ่าน. Guarded CLI มีแล้วแต่ยังไม่มี TiDB execution evidence, confirmed storage headroom หรือ backup/restore rehearsal; ห้าม execute กับ Production จนกว่า blocker เหล่านี้และ maintenance approval จะครบ.
+- `pnpm dataset:release -- <command> --environment <local|production> --env-file <explicit-file>` รองรับ `preflight`, `status`, `baseline`, `resume`, `validate`, `approve`, `publish`, `rollback`, `verify`. Mutation เป็น dry-run โดย default และทุก mutation ต้องส่ง `--expected-active-release-id <uuid|none>`; execution ต้องเพิ่ม `--execute --confirm-db <exact> --confirm-action "EXECUTE <command> <target-uuid>" --actor-user-id <uuid> --reason <text>` และต้องผ่าน maintenance, migration, validation/approval และ expected-active-release gates เดิม. `publish`/`rollback` ยัง compare pointer ซ้ำใน transaction; CLI ไม่โหลด `.env.local` อัตโนมัติและไม่ echo reason โดยบันทึกเฉพาะ SHA-256 ใน operational output.
 
 Rollback ทำได้เฉพาะก่อนมี dataset data หรือ application code ที่อ่านตารางใหม่ และต้องหยุด runtime ที่อ้าง schema ก่อน:
 

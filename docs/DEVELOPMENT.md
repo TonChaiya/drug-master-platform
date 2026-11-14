@@ -248,7 +248,25 @@ pnpm exec vitest run tests/phase-2d-mysql.test.ts
 
 ใช้ dedicated account ที่มีสิทธิ์เฉพาะ `drug_master_mapping_v2_test.*`; ห้ามใช้ root เป็น integration-test account และห้ามเก็บ password ในไฟล์หรือ shell profile. ห้ามรันหากฐานชื่อนี้มีอยู่ก่อน และห้ามเปิด DB opt-in ให้ full suite. Harness ใช้ synthetic data เพื่อตรวจ migration 0001–0018, bounded resume/source mutation, evidence rejection, concurrent writer/publish, shared pointer lock, atomic publish, pointer-only rollback และ dataset immutability เท่านั้น.
 
-ผลยืนยัน local วันที่ 2026-11-13: `tests/phase-2d-mysql.test.ts` ผ่าน 8/8 บน Laragon MySQL 8.4.3 ด้วย dedicated account; cleanup ยืนยันว่าฐานถูกลบ, advisory lock ว่าง, ไม่มี connection ของ test user และ database inventory เดิมไม่เปลี่ยน. ผลนี้ไม่อนุญาต production migration/copy/publish/flag activation; Production ต้องมี guarded CLI/dry-run/confirmation, backup/restore evidence และ approved maintenance plan แยก.
+ผลยืนยัน local วันที่ 2026-11-14: `tests/phase-2d-mysql.test.ts` ผ่าน 9/9 บน Laragon MySQL 8.4.3 ด้วย dedicated account รวม fresh/0017→0018 journal transition, final schema keys/FKs และ dataset isolation; cleanup ยืนยันว่าฐานถูกลบ, advisory lock ว่าง, ไม่มี connection ของ test user และ database inventory เดิมไม่เปลี่ยน. ผลนี้ไม่อนุญาต production migration/copy/publish/flag activation; Production ต้องมี disposable TiDB evidence, backup/restore evidence และ approved maintenance plan แยก.
+
+### Dataset Release CLI (default dry-run)
+
+CLI โหลดเฉพาะไฟล์ environment ที่ระบุชัดเจนและไม่โหลด `.env.local` โดยปริยาย:
+
+```powershell
+pnpm dataset:release -- preflight --environment local --env-file <explicit-test.env>
+pnpm dataset:release -- status --environment local --env-file <explicit-test.env> --release-id <uuid>
+pnpm dataset:release -- baseline --environment local --env-file <explicit-test.env> --dataset-id <uuid> --source TMT --source-version <version> --tmt-sync-run-id <uuid> --expected-active-release-id none --actor-user-id <uuid> --reason "reviewed baseline"
+```
+
+คำสั่ง mutation (`baseline`, `resume`, `validate`, `approve`, `publish`, `rollback`) ไม่เขียนข้อมูลหากไม่มี `--execute`; ทุก mutation ต้องระบุ expected active release และ execution ต้องมี `--confirm-db` กับ confirmation exact `EXECUTE <command> <target-uuid>`. Unit tests ใช้ fake dependencies เท่านั้น:
+
+```powershell
+pnpm exec vitest run tests/dataset-release-cli.test.ts
+```
+
+ห้ามใช้ CLI กับ Production เพียงเพราะ dry-run หรือ MySQL integration ผ่าน; Migration 0018 hash ปัจจุบันคือ `95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e` และยังต้องผ่าน disposable TiDB DDL/journal/locking test, backup/restore rehearsal, storage review และ operator approval แยก.
 
 ### Catalog/Export v2 (Phase 6, local only)
 

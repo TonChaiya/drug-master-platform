@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/mysql-core";
@@ -6,6 +7,37 @@ import { test } from "vitest";
 import * as tmt from "@/db/schema/tmt";
 import * as ttmt from "@/db/schema/ttmt";
 import { drugMappings } from "@/db/schema/mappings";
+
+function tableBody(sql: string, table: string): string {
+  const match = sql.match(new RegExp(`CREATE TABLE ${table} \\(([\\s\\S]*?)\\n\\);`));
+  assert.ok(match?.[1], `Missing explicit CREATE TABLE ${table}`);
+  return match[1];
+}
+
+function definitions(body: string): string[] {
+  const result: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let index = 0; index < body.length; index += 1) {
+    if (body[index] === "(") depth += 1;
+    else if (body[index] === ")") depth -= 1;
+    else if (body[index] === "," && depth === 0) {
+      result.push(body.slice(start, index).trim().replace(/\s+/g, " "));
+      start = index + 1;
+    }
+  }
+  result.push(body.slice(start).trim().replace(/\s+/g, " "));
+  return result.filter(Boolean);
+}
+
+function columnDefinitions(body: string): Map<string, string> {
+  return new Map(definitions(body)
+    .filter((definition) => !/^(?:PRIMARY|UNIQUE|KEY|CONSTRAINT)\b/i.test(definition))
+    .map((definition) => {
+      const [name] = definition.split(" ");
+      return [name!, definition.replace(/\s+PRIMARY KEY\b/i, "")] as const;
+    }));
+}
 
 const tmtSourceTables = [
   tmt.tmtSubs,
@@ -130,4 +162,67 @@ test("0016 adds nullable mapping identity without rewriting legacy data", async 
   assert.ok(columns.includes("standard_code"));
   assert.ok(columns.includes("standard_source"));
   assert.ok(columns.includes("standard_level"));
+});
+
+test("0018 explicit shadow tables preserve the source schema with dataset-scoped identities", async () => {
+  const [sourceTmt, sourceTtmt, migration] = await Promise.all([
+    readFile(new URL("../src/db/migrations/0014_tmt_data_model_v2.sql", import.meta.url), "utf8"),
+    readFile(new URL("../src/db/migrations/0015_ttmt_data_model_v2.sql", import.meta.url), "utf8"),
+    readFile(new URL("../src/db/migrations/0018_versioned_standard_dataset_foundation.sql", import.meta.url), "utf8"),
+  ]);
+  const contracts = [
+    ["tmt_subs", "tmt_dataset_subs", ["subsid"], "idx_tmt_dataset_subs_lookup", "fk_tmt_dataset_subs_dataset"],
+    ["tmt_vtm", "tmt_dataset_vtm", ["vtmid"], "idx_tmt_dataset_vtm_lookup", "fk_tmt_dataset_vtm_dataset"],
+    ["tmt_gp", "tmt_dataset_gp", ["gpid"], "idx_tmt_dataset_gp_lookup", "fk_tmt_dataset_gp_dataset"],
+    ["tmt_gpu", "tmt_dataset_gpu", ["gpuid"], "idx_tmt_dataset_gpu_lookup", "fk_tmt_dataset_gpu_dataset"],
+    ["tmt_gpp", "tmt_dataset_gpp", ["gppid"], "idx_tmt_dataset_gpp_lookup", "fk_tmt_dataset_gpp_dataset"],
+    ["tmt_tp", "tmt_dataset_tp", ["tpid"], "idx_tmt_dataset_tp_lookup", "fk_tmt_dataset_tp_dataset"],
+    ["tmt_tpu", "tmt_dataset_tpu", ["tpuid"], "idx_tmt_dataset_tpu_lookup", "fk_tmt_dataset_tpu_dataset"],
+    ["tmt_tpp", "tmt_dataset_tpp", ["tppid"], "idx_tmt_dataset_tpp_lookup", "fk_tmt_dataset_tpp_dataset"],
+    ["tmt_nlem", "tmt_dataset_nlem", ["tpuid", "change_date", "nlem"], "idx_tmt_dataset_nlem_lookup", "fk_tmt_dataset_nlem_dataset"],
+    ["tmt_atc", "tmt_dataset_atc", ["tpuid", "change_date", "atc"], "idx_tmt_dataset_atc_lookup", "fk_tmt_dataset_atc_dataset"],
+    ["tmt_regno", "tmt_dataset_regno", ["tpuid", "change_date", "regno"], "idx_tmt_dataset_regno_lookup", "fk_tmt_dataset_regno_dataset"],
+    ["tmt_mastertmt", "tmt_dataset_mastertmt", ["tpucode"], "idx_tmt_dataset_master_lookup", "fk_tmt_dataset_master_dataset"],
+    ["tmt_concept", "tmt_dataset_concepts", ["tmtid"], "idx_tmt_dataset_concept_lookup", "fk_tmt_dataset_concepts_dataset"],
+    ["tmt_relationship", "tmt_dataset_relationships", ["concept1", "concept2"], "idx_tmt_dataset_relationship_reverse", "fk_tmt_dataset_relationships_dataset"],
+    ["ttmt_products", "ttmt_dataset_products", ["ttmtcode"], "idx_ttmt_dataset_product_lookup", "fk_ttmt_dataset_products_dataset"],
+  ] as const;
+  const shadowSection = migration.slice(migration.indexOf("CREATE TABLE tmt_dataset_subs"));
+  assert.doesNotMatch(shadowSection, /CREATE TABLE\s+\w+\s+LIKE\b/i);
+  assert.doesNotMatch(shadowSection, /DROP PRIMARY KEY/i);
+  assert.equal((shadowSection.match(/CREATE TABLE\s+(?:tmt|ttmt)_dataset_/g) ?? []).length, 15);
+
+  for (const [source, target, sourceKey, lookupIndex, datasetForeignKey] of contracts) {
+    const sourceSql = source === "ttmt_products" ? sourceTtmt : sourceTmt;
+    const sourceBody = tableBody(sourceSql, source);
+    const targetBody = tableBody(migration, target);
+    const sourceColumns = columnDefinitions(sourceBody);
+    const targetColumns = columnDefinitions(targetBody);
+    assert.deepEqual([...targetColumns.keys()], ["dataset_id", ...sourceColumns.keys()], `${target} column order`);
+    assert.equal(targetColumns.get("dataset_id"), "dataset_id CHAR(36) NOT NULL", `${target} dataset identity`);
+    for (const [name, definition] of sourceColumns) assert.equal(targetColumns.get(name), definition, `${target}.${name}`);
+    for (const sourceIndex of definitions(sourceBody).filter((definition) => /^KEY\b/i.test(definition))) {
+      assert.ok(definitions(targetBody).includes(sourceIndex), `${target} preserves ${sourceIndex}`);
+    }
+    assert.ok(definitions(targetBody).includes(`PRIMARY KEY (dataset_id,${sourceKey.join(",")})`), `${target} composite primary key`);
+    assert.ok(definitions(targetBody).some((definition) => definition.startsWith(`KEY ${lookupIndex} `)), `${target} dataset lookup index`);
+    assert.ok(definitions(targetBody).includes(`CONSTRAINT ${datasetForeignKey} FOREIGN KEY (dataset_id) REFERENCES standard_datasets(id)`), `${target} dataset FK`);
+  }
+
+  const metadataPrefix = migration.slice(0, migration.indexOf("CREATE TABLE tmt_dataset_subs"));
+  assert.equal(createHash("sha256").update(metadataPrefix).digest("hex"), "308ad199b9651149ff4d3f09ecd3e3d5834fa64b8fa20451617a734d300fddf1");
+});
+
+test("0018 compatibility rewrite has an explicit journal hash transition and remains fail closed", async () => {
+  const [migration, runner] = await Promise.all([
+    readFile(new URL("../src/db/migrations/0018_versioned_standard_dataset_foundation.sql", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8"),
+  ]);
+  const oldHash = "a8280d06412549e7f745ea138350d4113b8430d20a0322fcaed7e74d7a8c04ff";
+  const newHash = createHash("sha256").update(migration).digest("hex");
+  assert.notEqual(newHash, oldHash);
+  assert.equal(newHash, "95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e");
+  assert.match(runner, /SELECT content_hash FROM schema_migrations WHERE filename = \?/);
+  assert.match(runner, /Applied migration was modified/);
+  assert.doesNotMatch(runner, /UPDATE\s+schema_migrations/i);
 });
