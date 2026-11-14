@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.1`
+- Current application version: `0.8.2`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -17,7 +17,7 @@
 ## Unified system improvement handoff
 
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
-- Status: Phase 2D local implementation และ isolated MySQL verification เสร็จแล้ว; release `0.8.1` รวม guarded Dataset Release CLI แบบ default dry-run และแก้ pre-production Migration 0018 ให้สร้าง shadow tables ด้วย explicit final schema. Production ยังคงใช้ legacy live dataset path เพราะ feature flag ปิดอยู่ และ production migration/baseline/publish ยังไม่ได้รับอนุมัติ.
+- Status: Phase 2D local implementation และ isolated MySQL verification เสร็จแล้ว; release `0.8.2` เพิ่ม guarded Migration 0018 executor ต่อจาก guarded Dataset Release CLI และ migration explicit final schema ของ `0.8.1`. Production ยังคงใช้ legacy live dataset path เพราะ feature flag ปิดอยู่ และ production migration/baseline/publish ยังไม่ได้รับอนุมัติ.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
 
 ## Phase 2C completion checkpoint
@@ -37,6 +37,7 @@
 - Full non-DB verification ปิด DB opt-in ผ่าน 308 tests / 60 guarded skips; typecheck, lint และ diff-check ผ่าน. ไม่มี production access, production migration, baseline copy, publish/rollback หรือ feature-flag activation.
 - Guarded CLI `dataset:release` รองรับ `preflight/status/baseline/resume/validate/approve/publish/rollback/verify`, โหลดเฉพาะ env file ที่ระบุ และ mutation ต้องมี exact database/action confirmation, actor และ reason. CLI ยังไม่เคย execute กับ Production.
 - Migration 0018 ถูกแก้ก่อน Production จาก hash `a8280d06412549e7f745ea138350d4113b8430d20a0322fcaed7e74d7a8c04ff` เป็น `95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e`: shadow tables ทั้ง 15 ใช้ explicit columns/composite PK แทน `CREATE TABLE ... LIKE` + `DROP PRIMARY KEY`. ไม่พบ journal 0018 เดิมในฐาน local ที่ได้รับอนุญาตให้ตรวจ; ฐานอื่นที่มี old hash ต้องไม่ใช้ร่วมกับไฟล์ใหม่นี้.
+- Guarded Migration 0018 executor เป็น dry-run โดย default, รับเฉพาะ env file นอก repository, ตรวจ exact database/TLS/hash/journal 0001–0017/maintenance/partial schema และเขียน journal เดิมหลัง DDL กับ post-schema verification สำเร็จครบเท่านั้น. TiDB DDL ไม่ transactional; partial DDL ต้องหยุด manual reconciliation และห้าม retry อัตโนมัติ.
 - TiDB 8.5.3 compatibility ยัง **NOT VERIFIED** เพราะไม่มี disposable TiDB ที่ได้รับอนุมัติ; ห้าม apply 0018 บน Production จนกว่า migration/journal/locking/FK จะผ่าน write-based integration จริง รวมถึง storage และ backup/restore gates.
 
 ## Major completed areas
@@ -195,12 +196,12 @@ Phase 2D ขั้นถัดไปคือ production readiness review แบ
 ## Last verified checkpoint
 
 - Previous repository checkpoint: `97416b913e30a2ee1f5a463aae2b3f70cc6dd1ed`
-- Current application version: `0.8.1`
+- Current application version: `0.8.2`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)
 - Agent version: `1.3.0`
-- Release preparation: Migration 0018 compatibility rewrite และ guarded Dataset Release CLI ผ่าน local MySQL verification; Production rollout ยัง blocked ที่ disposable TiDB evidence, storage/headroom และ backup/restore rehearsal
+- Release preparation: Migration 0018 compatibility rewrite, guarded Migration 0018 executor และ guarded Dataset Release CLI ผ่าน local MySQL verification; Production rollout ยัง blocked ที่ disposable TiDB evidence, storage/headroom และ backup/restore rehearsal
 
 ก่อนเริ่มงานใหม่ให้ตรวจ `git fetch origin main`, `git rev-parse HEAD`, `git rev-parse origin/main` และ `git status`
 อย่าเชื่อเอกสารนี้หรือ chat memory แบบ blind เพราะสถานะอาจเปลี่ยนหลัง checkpoint นี้

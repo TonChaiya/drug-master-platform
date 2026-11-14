@@ -378,6 +378,16 @@ DELETE FROM schema_migrations WHERE filename = '0017_tmt_run_validations.sql';
 
 Runner ตรวจ SHA-256 แบบ fail-closed และห้ามแก้ journal โดยตรง. Inventory ของฐาน local ที่ได้รับอนุญาตเมื่อ 2026-11-14 ไม่พบ journal 0018 hash เดิม; หาก environment ใดมี old hash ต้องหยุดและใช้แผน reconciliation แยก ห้าม reset/reapply/เปลี่ยน hash ใน journal. MySQL 8.4.3 ผ่าน fresh chain และ 0017→0018 transition แล้ว แต่ TiDB 8.5.3 ยัง **NOT VERIFIED** จนกว่าจะรันบน disposable TiDB ที่ได้รับอนุมัติ.
 
+**Guarded Migration 0018 executor:** ใช้ `pnpm db:migrate:0018` เท่านั้นเมื่อได้รับอนุมัติ migration แยก. Command เป็น dry-run โดย default, ไม่โหลด `.env.local`, ไม่สร้าง database/journal และรับ env file ที่อยู่นอก repository เท่านั้น. Preflight ตรวจ exact TiDB Cloud host/port/database, verified TLS, hash `95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e`, journal 0001–0017 พร้อม hash, 0018 ต้องยังไม่มี และ Dataset Release tables ต้องยังไม่ปรากฏ.
+
+```powershell
+pnpm db:migrate:0018 -- --environment production --env-file C:\secure\drug-master-production.env --actor-user-id <operator-uuid> --reason "reviewed migration window"
+
+pnpm db:migrate:0018 -- --environment production --env-file C:\secure\drug-master-production.env --execute --confirm-db drug_master_platform --confirm-migration 0018 --confirm-hash 95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e --maintenance-approved --actor-user-id <operator-uuid> --reason "approved migration window"
+```
+
+คำสั่ง execute ต้องใช้ maintenance mode ที่เปิดอยู่และ approval ของ operator จริง. Executor รัน DDL ทีละ statement, ตรวจ 19 tables, composite PK ที่ขึ้นต้นด้วย `dataset_id` และ dataset FK แล้วจึง insert journal 0018 เพียงครั้งเดียว. TiDB DDL ไม่ rollback ด้วย transaction; หาก statement, schema verification หรือ journal write ล้มเหลว ให้หยุดทันที เก็บ output ที่ redact แล้ว และทำ manual schema/journal reconciliation ตาม incident plan—ห้าม retry, drop table หรือแก้ journal โดยพลการ.
+
 ### Phase 2C Active Standard Release gate
 
 - `ACTIVE_STANDARD_RELEASE_ENABLED` เป็น default-off และเปิดเฉพาะค่า exact `1`; การมี migration 0018 อย่างเดียวไม่อนุญาตให้เปิด flag.

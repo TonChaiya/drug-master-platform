@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm check:agent-signature",
     "check:agent-signature": "node scripts/check-agent-signature.mjs",
     "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:0018": "tsx scripts/migrate-0018-guarded.ts",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "keys:generate": "node scripts/generate-keys.mjs",
     "phase7:maintenance": "tsx scripts/phase7-maintenance.ts",

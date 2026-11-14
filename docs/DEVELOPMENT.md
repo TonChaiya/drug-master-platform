@@ -250,6 +250,14 @@ pnpm exec vitest run tests/phase-2d-mysql.test.ts
 
 ผลยืนยัน local วันที่ 2026-11-14: `tests/phase-2d-mysql.test.ts` ผ่าน 9/9 บน Laragon MySQL 8.4.3 ด้วย dedicated account รวม fresh/0017→0018 journal transition, final schema keys/FKs และ dataset isolation; cleanup ยืนยันว่าฐานถูกลบ, advisory lock ว่าง, ไม่มี connection ของ test user และ database inventory เดิมไม่เปลี่ยน. ผลนี้ไม่อนุญาต production migration/copy/publish/flag activation; Production ต้องมี disposable TiDB evidence, backup/restore evidence และ approved maintenance plan แยก.
 
+Guarded Migration 0018 executor ทดสอบด้วย `tests/migrate-0018-guarded.test.ts`; DB case ปิดตาม default และใช้ Phase 2D harness/dedicated account เดิมเท่านั้น. Unit cases ครอบคลุม identity/hash/journal/partial-schema/confirmation/maintenance/TLS/redaction/partial-DDL refusal. Local integration ต้องเริ่มจาก exact journal 0001–0017, รัน 0018 ทีละ statement, ตรวจ schema แล้วจึงบันทึก journal; test database ต้องถูก cleanup ผ่าน ownership token/advisory lock เดิม.
+
+```powershell
+pnpm exec vitest run tests/migrate-0018-guarded.test.ts
+```
+
+ห้ามใช้ `tests/tmt-v2-migration-mysql.test.ts` เป็น executor acceptance test เพราะ test เดิมบังคับ root และ cleanup ผ่าน `USE mysql`; acceptance ของ executor ใช้ dedicated-account harness ข้างต้น. การใช้ command จริงต้องระบุ `--env-file` ที่อยู่นอก repository, operator UUID และ reason; Production execute ยังต้องมี confirmation/hash/maintenance approval ครบตาม [OPERATIONS.md](OPERATIONS.md#migration).
+
 ### Dataset Release CLI (default dry-run)
 
 CLI โหลดเฉพาะไฟล์ environment ที่ระบุชัดเจนและไม่โหลด `.env.local` โดยปริยาย:
