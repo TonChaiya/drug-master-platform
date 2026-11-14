@@ -30,7 +30,7 @@ const SECTIONS: NavSection[] = [
       { href: "/jhcis", label: "เชื่อมต่อ JHCIS", icon: <IconPlug size={16} /> },
       { href: "/standards", label: "มาตรฐาน TMT/TTMT", icon: <IconStandards size={16} /> },
       { href: "/drug-catalog", label: "Drug Catalog", icon: <IconCatalog size={16} /> },
-      { href: "/mappings/v2", label: "จับคู่รายการยา", icon: <IconMappings size={16} /> },
+      { href: "/mappings", label: "จับคู่รายการยา", icon: <IconMappings size={16} /> },
       { href: "/exports", label: "ส่งออก DrugCat", icon: <IconExport size={16} /> },
     ],
   },

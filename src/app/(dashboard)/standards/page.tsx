@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { TmtBrowser } from "@/app/(dashboard)/admin/tmt-v2/tmt-browser";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
@@ -7,12 +7,13 @@ import { IconStandards } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
-import { db } from "@/db/client";
-import { tmtMastertmt, ttmtImports, ttmtProducts } from "@/db/schema";
+import { db, dbPool } from "@/db/client";
+import { ttmtImports } from "@/db/schema";
 import { requireUser } from "@/modules/auth/session";
 import { formatBangkok } from "@/modules/facilities/queries";
+import { readStandardDatasetCounts } from "@/modules/standards/versioned-read";
 import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
-import { readTmtV2Readiness } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 import { TtmtSearch } from "./ttmt-search";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,11 @@ export default async function StandardsPage() {
     redirect("/login");
   }
 
-  const [readiness, tmtCounts, ttmtCounts, imports] = await Promise.all([
-    readTmtV2Readiness(),
-    db.select({ total: count() }).from(tmtMastertmt),
-    db.select({ total: count() }).from(ttmtProducts),
+  const pool = dbPool();
+  const context = await readTmtConsumerContext(pool);
+  const { readiness } = context;
+  const [datasetCounts, imports] = await Promise.all([
+    readStandardDatasetCounts(pool, context.release),
     db.select().from(ttmtImports).where(eq(ttmtImports.status, "succeeded")).orderBy(desc(ttmtImports.completedAt)).limit(10),
   ]);
   const browserReady = tmtV2BrowserEnabled() && readiness.ready;
@@ -43,8 +45,8 @@ export default async function StandardsPage() {
         description="ค้นหามาตรฐานปัจจุบันก่อนใช้ Drug Catalog และการจับคู่รายการยา — TMT กับ TTMT แยก namespace ชัดเจน"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={readiness.ready ? "success" : "danger"}>TMT {tmtCounts[0]?.total.toLocaleString("th-TH") ?? "0"}</Badge>
-            <Badge tone="info">TTMT {ttmtCounts[0]?.total.toLocaleString("th-TH") ?? "0"}</Badge>
+            <Badge tone={readiness.ready ? "success" : "danger"}>TMT {datasetCounts.tmtTotal.toLocaleString("th-TH")}</Badge>
+            <Badge tone="info">TTMT {datasetCounts.ttmtTotal.toLocaleString("th-TH")}</Badge>
             <Badge tone={readiness.assurance === "validated_unverified" ? "warning" : readiness.ready ? "success" : "danger"}>{assuranceLabel}</Badge>
           </div>
         }
@@ -58,13 +60,13 @@ export default async function StandardsPage() {
 
       <section className="space-y-3" aria-labelledby="tmt-v2-heading">
         <div><h2 id="tmt-v2-heading" className="type-section-title">ค้นหา TMT</h2><p className="type-help mt-1">แสดงระดับ สี FSN ชื่อการค้า ผู้ผลิต เลขทะเบียน สถานะ และความพร้อมจับคู่จากข้อมูล TMT</p></div>
-        {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="ข้อมูล TMT ยังไม่พร้อมค้นหา">ตรวจ readiness และ feature configuration ก่อนใช้งาน โดยไม่ย้อนกลับไปใช้คลัง legacy แทน</Alert>}
+        {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="ข้อมูล TMT ยังไม่พร้อมค้นหา">ตรวจ readiness และการตั้งค่าระบบก่อนใช้งาน ระบบจะไม่สลับไปใช้ชุดข้อมูลอื่นโดยอัตโนมัติ</Alert>}
       </section>
 
       <TtmtSearch />
 
       <Card>
-        <CardHeader title="ประวัตินำเข้า TTMT ปัจจุบัน" description="ข้อมูลจาก ttmt_imports โดยตรง ไม่ปะปนกับประวัติ MasterTMT แบบ legacy" />
+        <CardHeader title="ประวัตินำเข้า TTMT ปัจจุบัน" description="ข้อมูลจากประวัตินำเข้า TTMT ปัจจุบัน แยกจากประวัติ MasterTMT เดิม" />
         <CardBody flush className="pt-3">
           <TableScroll><Table><thead><tr><th>เวอร์ชันข้อมูล TTMT</th><th>จำนวนแถว</th><th>นำเข้าเมื่อ</th><th>สถานะ</th></tr></thead><tbody>
             {imports.length === 0 ? <TableMessage colSpan={4}><EmptyState compact icon={<IconStandards size={18} />} title="ยังไม่มี TTMT ที่นำเข้าสำเร็จ" /></TableMessage> : imports.map((row) => (
@@ -74,8 +76,8 @@ export default async function StandardsPage() {
         </CardBody>
       </Card>
 
-      <Alert tone="info" title="เครื่องมือมาตรฐานเดิมถูกแยกออกจาก workflow ปัจจุบัน">
-        API และข้อมูล legacy ยังเก็บไว้เพื่อ compatibility แต่ปุ่ม sync standard_products ไม่แสดงใน Standards Hub และไม่ถูกนำเสนอว่าเป็นข้อมูล TMT ปัจจุบัน
+      <Alert tone="info" title="ใช้คลังมาตรฐานปัจจุบันเพียงระบบเดียว">
+        ข้อมูลสำหรับความเข้ากันได้ยังคงเก็บภายใน แต่ไม่แสดงเป็น workflow แยกและไม่ถูกนำเสนอว่าเป็นข้อมูล TMT ปัจจุบัน
       </Alert>
     </div>
   );

@@ -113,7 +113,7 @@ test("advanced standards browser exposes nine independent filters and a clear ac
 test("normal production wording does not expose the internal v2 generation", async () => {
   const pages = await Promise.all([
     "../src/app/(dashboard)/standards/page.tsx",
-    "../src/app/(dashboard)/mappings/v2/page.tsx",
+    "../src/app/(dashboard)/mappings/page.tsx",
     "../src/app/(dashboard)/admin/tmt-v2/page.tsx",
     "../src/components/mappings/v2-mapping-workbench.tsx",
   ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
@@ -124,7 +124,7 @@ test("normal production wording does not expose the internal v2 generation", asy
 test("admin browser and mapping pages label validated-unverified data as degraded", async () => {
   const [browserPage, mappingPage, mappingWorkbench] = await Promise.all([
     readFile(new URL("../src/app/(dashboard)/admin/tmt-v2/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../src/app/(dashboard)/mappings/v2/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/(dashboard)/mappings/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/mappings/v2-mapping-workbench.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(browserPage, /readiness\.assurance === "validated_unverified"/);

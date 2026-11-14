@@ -45,7 +45,7 @@ export default async function DashboardPage() {
         description={`ดึงข้อมูลจาก JHCIS ล่าสุด ${formatBangkok(overview.lastSyncAt)}`}
         actions={
           <>
-            <ButtonLink href="/mappings/v2" icon={<IconMappings size={15} />}>
+            <ButtonLink href="/mappings" icon={<IconMappings size={15} />}>
               จับคู่รายการยา
             </ButtonLink>
             <ButtonLink href="/exports" variant="primary" icon={<IconExport size={15} />}>
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
                 title="ความคืบหน้าการจับคู่"
                 description="สัดส่วนรายการยาที่ใช้งานอยู่ใน JHCIS ซึ่งจับคู่กับรหัสมาตรฐานแล้ว"
                 actions={
-                  <ButtonLink href="/mappings/v2" size="sm" iconAfter={<IconChevronRight size={13} />}>
+                  <ButtonLink href="/mappings" size="sm" iconAfter={<IconChevronRight size={13} />}>
                     เปิดหน้าจับคู่
                   </ButtonLink>
                 }
@@ -171,7 +171,7 @@ export default async function DashboardPage() {
                           <p className="text-xxs font-semibold text-slate-700">ตรวจสอบ mapping ที่เปลี่ยน</p>
                           <p className="type-help mt-0.5">มี {overview.needsReviewTotal.toLocaleString("th-TH")} รายการที่ต้องยืนยันก่อนส่งออก</p>
                         </div>
-                        <ButtonLink href="/mappings/v2" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
+                        <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
                       </li>
                     ) : null}
                     {overview.pendingTotal > 0 ? (
@@ -188,7 +188,7 @@ export default async function DashboardPage() {
                             เหลือ {overview.pendingTotal.toLocaleString("th-TH")} รายการที่ยังไม่มีรหัสมาตรฐาน
                           </p>
                         </div>
-                        <ButtonLink href="/mappings/v2" size="sm" variant="outline" className="shrink-0">
+                        <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">
                           จับคู่
                         </ButtonLink>
                       </li>
@@ -202,7 +202,7 @@ export default async function DashboardPage() {
                           <p className="text-xxs font-semibold text-slate-700">ตรวจมาตรฐานที่ส่งออกไม่ได้</p>
                           <p className="type-help mt-0.5">มี {exportBlockedTotal.toLocaleString("th-TH")} mapping ที่มาตรฐาน inactive, ไม่พบ หรือชนิดไม่ตรง</p>
                         </div>
-                        <ButtonLink href="/mappings/v2" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
+                        <ButtonLink href="/mappings" size="sm" variant="outline" className="shrink-0">เปิดรายการ</ButtonLink>
                       </li>
                     ) : null}
                   </ol>

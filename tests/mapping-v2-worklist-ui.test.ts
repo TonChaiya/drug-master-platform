@@ -39,7 +39,7 @@ test("current worklist stays source-aware and does not call legacy mapping/searc
 
 test("reconcile action is only rendered when the current catalog pipeline is available", async () => {
   const [page, workbench, service] = await Promise.all([
-    source("src/app/(dashboard)/mappings/v2/page.tsx"),
+    source("src/app/(dashboard)/mappings/page.tsx"),
     source("src/components/mappings/v2-mapping-workbench.tsx"),
     source("src/modules/mappings/service.ts"),
   ]);

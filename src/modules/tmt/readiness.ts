@@ -4,7 +4,7 @@ import { dbPool } from "@/db/client";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
 import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, VALIDATED_UNVERIFIED_POLICY_VERSION } from "./validation";
 import { activeStandardReleaseEnabled } from "./feature";
-import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface TmtReadinessRun {
   id: string;
@@ -53,6 +53,15 @@ export class TmtV2NotReadyError extends Error {
     super(`TMT v2 is not ready: ${readiness.reason ?? "unknown"}`);
     this.name = "TmtV2NotReadyError";
   }
+}
+
+export type TmtConsumerReadiness =
+  | { ready: true; assurance: "verified" | "validated_unverified" }
+  | { ready: false; assurance: null };
+
+export interface TmtConsumerContext {
+  readiness: TmtConsumerReadiness;
+  release?: ActiveStandardRelease;
 }
 
 function validationMatches(run: TmtReadinessRun, validation: TmtReadinessValidation | null | undefined): boolean {
@@ -153,6 +162,24 @@ export async function readTmtV2Readiness(pool: Pick<Pool, "query"> = dbPool()): 
       && storedEvidence.ttmt.contentHash === String(validationRow.ttmt_content_hash)
       && storedEvidence.ttmt.rowCount === Number(validationRow.ttmt_row_count),
   });
+}
+
+/** Resolve one source of truth for a page-level consumer operation. */
+export async function readTmtConsumerContext(
+  pool: Pick<Pool, "query"> = dbPool(),
+  releaseEnabled = activeStandardReleaseEnabled(),
+): Promise<TmtConsumerContext> {
+  if (releaseEnabled) {
+    const release = await readActiveStandardRelease(pool);
+    // The current release approval contract accepts validated-unverified evidence only.
+    return { release, readiness: { ready: true, assurance: "validated_unverified" } };
+  }
+  const readiness = await readTmtV2Readiness(pool);
+  return {
+    readiness: readiness.ready
+      ? { ready: true, assurance: readiness.assurance }
+      : { ready: false, assurance: null },
+  };
 }
 
 export async function requireTmtV2Ready(pool: Pick<Pool, "query"> = dbPool()): Promise<void> {

@@ -4,27 +4,32 @@ import { test } from "vitest";
 
 const source = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("normal standards page is a TMT and TTMT hub without legacy sync controls", async () => {
+test("normal standards page is a TMT and TTMT hub without retired-system wording or sync controls", async () => {
   const page = await source("src/app/(dashboard)/standards/page.tsx");
 
-  assert.match(page, /readTmtV2Readiness/);
+  assert.match(page, /readTmtConsumerContext/);
   assert.match(page, /<TmtBrowser mode="advanced"/);
   assert.match(page, /TtmtSearch/);
   assert.match(page, /ttmtImports/);
   assert.doesNotMatch(page, /StandardsPanel|standardCounts|readSyncProgress/);
+  assert.doesNotMatch(page, /legacy/i);
 });
 
-test("mapping entry and workflow navigation lead to the current mapping workflow", async () => {
-  const [mappingPage, layout] = await Promise.all([
+test("mapping entry and workflow navigation use one canonical user-facing route", async () => {
+  const [mappingPage, compatibilityPage, layout] = await Promise.all([
     source("src/app/(dashboard)/mappings/page.tsx"),
+    source("src/app/(dashboard)/mappings/v2/page.tsx"),
     source("src/app/(dashboard)/layout.tsx"),
   ]);
 
   assert.match(mappingPage, /tmtV2MappingEnabled/);
-  assert.match(mappingPage, /redirect\("\/mappings\/v2"\)/);
-  assert.match(layout, /href: "\/mappings\/v2"/);
+  assert.match(mappingPage, /V2MappingWorkbench/);
+  assert.doesNotMatch(mappingPage, /redirect\("\/mappings\/v2"\)/);
+  assert.match(compatibilityPage, /redirect\("\/mappings"\)/);
+  assert.match(layout, /href: "\/mappings"/);
+  assert.doesNotMatch(layout, /href: "\/mappings\/v2"/);
 
-  const workflow = ["/jhcis", "/standards", "/drug-catalog", "/mappings/v2", "/exports"];
+  const workflow = ["/jhcis", "/standards", "/drug-catalog", "/mappings", "/exports"];
   for (let index = 1; index < workflow.length; index += 1) {
     assert.ok(layout.indexOf(workflow[index - 1]!) < layout.indexOf(workflow[index]!), `${workflow[index - 1]} must precede ${workflow[index]}`);
   }
@@ -47,7 +52,8 @@ test("production workflow pages explain source-aware lifecycle and export modes"
     source("src/app/(dashboard)/admin/page.tsx"),
   ]);
 
-  assert.match(dashboard, /\/mappings\/v2/);
+  assert.match(dashboard, /href="\/mappings"/);
+  assert.doesNotMatch(dashboard, /href="\/mappings\/v2"/);
   assert.match(catalog, /source drug/i);
   assert.match(catalog, /TMT\/TTMT identity/i);
   assert.match(exports, /checkpoint/i);

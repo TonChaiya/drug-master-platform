@@ -5,6 +5,8 @@ import { exportSnapshotHash, type ExportCandidateState } from "@/modules/exports
 import { searchTmt } from "@/modules/tmt/search";
 import { loadDirectTmtRelationships } from "@/modules/tmt/graph";
 import { searchTtmtStandards } from "@/modules/standards/ttmt-search";
+import { readStandardDatasetCounts } from "@/modules/standards/versioned-read";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 
 const release = { releaseId: "release-a", tmtDatasetId: "tmt-a", ttmtDatasetId: "ttmt-a" };
 
@@ -63,4 +65,58 @@ test("TTMT search selects only the release dataset while legacy search stays unc
   assert.equal(calls[0]!.params[0], release.ttmtDatasetId);
   assert.match(calls[1]!.sql, /FROM ttmt_products/);
   assert.doesNotMatch(calls[1]!.sql, /dataset_id/);
+});
+
+test("Standards Hub counts use the explicit release datasets without live-table fallback", async () => {
+  const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const pool = { query: async (sql: string, params: unknown[] = []) => {
+    calls.push({ sql, params });
+    return [[{ tmt_total: 12, ttmt_total: 7 }], []];
+  } } as unknown as Pool;
+
+  assert.deepEqual(await readStandardDatasetCounts(pool, release), { tmtTotal: 12, ttmtTotal: 7 });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.sql, /tmt_dataset_mastertmt/);
+  assert.match(calls[0]!.sql, /ttmt_dataset_products/);
+  assert.doesNotMatch(calls[0]!.sql, /\bFROM tmt_mastertmt\b|\bFROM ttmt_products\b/);
+  assert.deepEqual(calls[0]!.params, [release.tmtDatasetId, release.ttmtDatasetId]);
+});
+
+test("Standards Hub counts preserve live tables when no release context is supplied", async () => {
+  const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const pool = { query: async (sql: string, params: unknown[] = []) => {
+    calls.push({ sql, params });
+    return [[{ tmt_total: 3, ttmt_total: 2 }], []];
+  } } as unknown as Pool;
+
+  assert.deepEqual(await readStandardDatasetCounts(pool), { tmtTotal: 3, ttmtTotal: 2 });
+  assert.match(calls[0]!.sql, /\bFROM tmt_mastertmt\b/);
+  assert.match(calls[0]!.sql, /\bFROM ttmt_products\b/);
+  assert.deepEqual(calls[0]!.params, []);
+});
+
+test("consumer context uses the approved active release instead of latest live-run readiness", async () => {
+  const calls: string[] = [];
+  const pool = { query: async (sql: string) => {
+    calls.push(sql);
+    return [[{
+      release_id: release.releaseId,
+      tmt_dataset_id: release.tmtDatasetId,
+      ttmt_dataset_id: release.ttmtDatasetId,
+      release_state: "approved",
+      approved_at: new Date("2026-01-01T00:00:00Z"),
+      tmt_state: "validated",
+      tmt_source: "TMT",
+      ttmt_state: "validated",
+      ttmt_source: "TTMT",
+      validation_status: "passed",
+    }], []];
+  } } as unknown as Pool;
+
+  const context = await readTmtConsumerContext(pool, true);
+  assert.deepEqual(context.release, release);
+  assert.deepEqual(context.readiness, { ready: true, assurance: "validated_unverified" });
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!, /standard_dataset_pointers/);
+  assert.doesNotMatch(calls[0]!, /FROM tmt_sync_runs/);
 });

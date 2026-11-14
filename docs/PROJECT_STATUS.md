@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.2`
+- Current application version: `0.8.3`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -19,6 +19,14 @@
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
 - Status: Phase 2D local implementation และ isolated MySQL verification เสร็จแล้ว; release `0.8.2` เพิ่ม guarded Migration 0018 executor ต่อจาก guarded Dataset Release CLI และ migration explicit final schema ของ `0.8.1`. Production ยังคงใช้ legacy live dataset path เพราะ feature flag ปิดอยู่ และ production migration/baseline/publish ยังไม่ได้รับอนุมัติ.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
+
+## Phase 4 consolidation checkpoint
+
+- Release `0.8.3` ทำให้ `/mappings` เป็น user-facing route หลักเพียงเส้นทางเดียว; `/mappings/v2` คงไว้เป็น compatibility redirect และ API/schema identifiers ภายในไม่เปลี่ยน.
+- Dashboard, navigation และ Drug Catalog ใช้ `/mappings` ทั้งหมด โดย feature flags เดิมยังเลือก current/compatibility implementation ภายในและค่า default ไม่เปลี่ยน.
+- Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน; เมื่อ flag ปิดยังใช้ live-table behavior เดิม.
+- ตัดคำเรียกระบบแบบ `legacy` ออกจากข้อความผู้ใช้ใน Standards Hub โดยยังเก็บ internal compatibility APIs/data และไม่ลบ route, table หรือ history ใด ๆ.
+- Phase 3 การเริ่ม TMT sync จาก Admin ยังไม่ implement: runtime ปัจจุบันมี CLI-only runner และไม่มี durable background execution ที่ผ่านการอนุมัติ จึงคง read-only monitoring เดิมไว้เพื่อไม่ผูกงานยาวกับ HTTP request.
 
 ## Phase 2C completion checkpoint
 
@@ -164,7 +172,7 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 ## Next implementation checkpoint
 
-Phase 2D ขั้นถัดไปคือ production readiness review แบบ read-only และอนุมัติ runbook/backup/restore/storage/TiDB preflight แยก. ห้าม copy production data, publish release จริง หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` บน production โดยไม่มี approval และ maintenance plan แยก.
+Phase 2D production rollout ยังต้องอนุมัติ runbook/backup/restore/storage และ Migration 0018 แยก. Phase 4 ให้ทำ feature-parity regression ต่อโดยคง `/mappings` เป็น route หลัก; ห้าม copy production data, publish release จริง หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` บน production โดยไม่มี approval และ maintenance plan แยก.
 
 ก่อนทำงาน UI ถัดไป ต้องรักษา TMT v2 result cards/colors/RegNo behavior, ไม่เพิ่ม schema/migration และไม่แก้ production data โดยไม่มี approval แยก
 
@@ -195,8 +203,8 @@ Phase 2D ขั้นถัดไปคือ production readiness review แบ
 
 ## Last verified checkpoint
 
-- Previous repository checkpoint: `97416b913e30a2ee1f5a463aae2b3f70cc6dd1ed`
-- Current application version: `0.8.2`
+- Previous repository checkpoint: `3ccc48107c4ea0e2698164ff21c37c284641128e`
+- Current application version: `0.8.3`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)
