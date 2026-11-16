@@ -35,6 +35,14 @@ test("mapping entry and workflow navigation use one canonical user-facing route"
   }
 });
 
+test("mapping readiness messages use user-facing TMT status language", async () => {
+  const page = await source("src/app/(dashboard)/mappings/page.tsx");
+  assert.match(page, /ข้อมูล TMT ล่าสุดต้องมีสถานะ/);
+  assert.match(page, /ยังไม่ยืนยันเวอร์ชันจาก upstream/);
+  assert.doesNotMatch(page, /latest TMT sync/);
+  assert.doesNotMatch(page, /degraded/);
+});
+
 test("dashboard standards readiness no longer derives from legacy standard_products", async () => {
   const queries = await source("src/modules/facilities/queries.ts");
   assert.match(queries, /readTmtV2Readiness/);
@@ -60,6 +68,13 @@ test("production workflow pages explain source-aware lifecycle and export modes"
   assert.match(exports, /TPU/);
   assert.match(jhcis, /ขั้นตอนแรก/);
   assert.match(admin, /validated_unverified/);
+});
+
+test("export choices name Full and Delta without changing checkpoint semantics", async () => {
+  const exports = await source("src/app/(dashboard)/exports/export-panel.tsx");
+  assert.match(exports, /label: "Full · ทั้งหมดที่จับคู่แล้ว"/);
+  assert.match(exports, /label: "Delta · เฉพาะที่จับคู่ใหม่หรือแก้ไข"/);
+  assert.match(exports, /checkpoint ของการส่งออกสำเร็จครั้งก่อน/);
 });
 
 test("TTMT search remains source-specific and exposes current product fields", async () => {

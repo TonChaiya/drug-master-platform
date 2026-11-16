@@ -121,16 +121,17 @@ test("normal production wording does not expose the internal v2 generation", asy
   assert.doesNotMatch(userVisibleSource, /TMT v2|Mapping v2|TMT Browser v2|จับคู่รายการยา v2|ข้อมูล TMT v2/);
 });
 
-test("admin browser and mapping pages label validated-unverified data as degraded", async () => {
+test("admin browser and mapping pages explain validated-but-unconfirmed TMT data without internal jargon", async () => {
   const [browserPage, mappingPage, mappingWorkbench] = await Promise.all([
     readFile(new URL("../src/app/(dashboard)/admin/tmt-v2/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/app/(dashboard)/mappings/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/mappings/v2-mapping-workbench.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(browserPage, /readiness\.assurance === "validated_unverified"/);
-  assert.match(browserPage, /ข้อมูล TMT ผ่านการตรวจสอบแบบ degraded/);
+  assert.match(browserPage, /ข้อมูล TMT ผ่านการตรวจสอบแล้ว/);
   assert.match(mappingPage, /readiness\.assurance === "validated_unverified"/);
-  assert.match(mappingPage, /กำลังใช้ข้อมูล TMT แบบ degraded/);
+  assert.match(mappingPage, /ยังไม่ยืนยันเวอร์ชันจาก upstream/);
+  assert.doesNotMatch(`${browserPage}\n${mappingPage}`, /degraded/);
   assert.doesNotMatch(`${browserPage}\n${mappingPage}`, /validated-unverified[^\n]*verified succeeded/i);
   assert.doesNotMatch(`${mappingPage}\n${mappingWorkbench}`, /ทดลองใน local เท่านั้น/);
 });

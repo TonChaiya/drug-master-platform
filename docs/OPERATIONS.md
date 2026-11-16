@@ -465,7 +465,7 @@ DB integration tests เป็น fail-closed operational invariant: ต้อ�
 ### TMT v2 sync engine operational state
 
 - Phase 3 engine ไม่มี route, cron หรือ automatic import ที่เริ่ม TMT sync ใน production; `/api/v1/admin/tmt-operations` เป็น read-only admin status/history endpoint เท่านั้น
-- `/admin` แสดง readiness, recent runs และ checkpoint ของ current TMT v2 pipeline สำหรับผู้ดูแลระบบ แต่การเริ่ม/resume ยังต้องผ่าน CLI `pnpm tmt:v2:sync` พร้อม environment/database/mode guards เดิม
+- `/admin` แสดง readiness, recent runs และ checkpoint ของ current TMT v2 pipeline สำหรับผู้ดูแลระบบ; เมื่อ run ล่าสุดมีสถานะ `running` หน้าจอ refresh read-only ทุก 15 วินาทีและสรุป checkpoint ที่สำเร็จ. การเริ่ม/resume ยังต้องผ่าน CLI `pnpm tmt:v2:sync` พร้อม environment/database/mode guards เดิม; run ที่ failed/stale ต้องตรวจ error/checkpoint ก่อน resume ผ่าน CLI และห้ามเริ่มงานยาวจาก web request
 - `/api/v1/admin/ttmt-import` รับ MasterTTMT ผ่าน current TTMT v2 importer สำหรับ admin เท่านั้น, ใช้ `ttmt_imports`/`ttmt_products` และ audit เดิม; ไม่ใช้ legacy `standard_products` route หรือ pipeline
 - run ผูกกับ `/version` ก่อน/หลัง, ใช้ checkpoint ต่อ endpoint/window และ data write + checkpoint success อยู่ transaction เดียวกัน
 - initial windows เริ่ม `2013-01-01` สูงสุด 365 วัน; incremental ใช้ cursor แยก endpoint พร้อม overlap 30 วัน

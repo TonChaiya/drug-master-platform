@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.3`
+- Current application version: `0.8.4`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -27,6 +27,12 @@
 - Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน; เมื่อ flag ปิดยังใช้ live-table behavior เดิม.
 - ตัดคำเรียกระบบแบบ `legacy` ออกจากข้อความผู้ใช้ใน Standards Hub โดยยังเก็บ internal compatibility APIs/data และไม่ลบ route, table หรือ history ใด ๆ.
 - Phase 3 การเริ่ม TMT sync จาก Admin ยังไม่ implement: runtime ปัจจุบันมี CLI-only runner และไม่มี durable background execution ที่ผ่านการอนุมัติ จึงคง read-only monitoring เดิมไว้เพื่อไม่ผูกงานยาวกับ HTTP request.
+
+## Phase 3–5 usability checkpoint
+
+- Release `0.8.4` เพิ่ม live monitoring เฉพาะขณะ TMT run มีสถานะ `running`: Admin refresh สถานะ/checkpoint ทุก 15 วินาทีโดยไม่เริ่มงานซ้ำ และแยกข้อความเริ่มงาน, progress, failure และ guarded resume ชัดเจน. การเริ่ม/resume ยังคงเป็น CLI-only จนกว่าจะมี durable execution ที่อนุมัติ.
+- หน้า Export แสดงตัวเลือก `Full` และ `Delta` ชัดเจนขึ้น โดยใช้ preview token และ checkpoint semantics เดิมทั้งหมด.
+- หน้า Mapping เปลี่ยนข้อความ readiness ให้เป็นภาษาผู้ใช้; fail-closed behavior, feature flags, lifecycle, audit และ export checkpoint ไม่เปลี่ยน.
 
 ## Phase 2C completion checkpoint
 
@@ -102,12 +108,12 @@ Migration สำคัญล่าสุด:
 - UX-1 checkpoint: `e13e5530d40db3603955743ec3999207ac5e1aae`
 - UX-2 checkpoint: `e60cda79c997622834d6562e1a1c72ff2efabe40`
 - workflow ปัจจุบัน: JHCIS → Standards Hub → Drug Catalog → การจับคู่รายการยา → Export
-- navigation หลักชี้ไปการจับคู่รายการยา; `/mappings` redirect ไป `/mappings/v2` เมื่อ feature flag ภายในเปิด
+- navigation หลักชี้ไปการจับคู่รายการยา; `/mappings` เป็น route หลักและ `/mappings/v2` เป็น compatibility redirect
 - `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็นข้อมูล TMT ปัจจุบัน
 - `/admin` แสดง current TMT v2 readiness, latest run, bounded run/checkpoint history และ current TTMT v2 import history เฉพาะผู้ดูแลระบบ
 - การเริ่มหรือ resume TMT sync ยังเป็น CLI-only เพราะต้องยืนยัน environment/database, mode และ production guard สำหรับงานที่อาจใช้เวลานาน; Admin ไม่เริ่มงานนี้จาก web request
 - Admin สามารถนำเข้าไฟล์ MasterTTMT `.xls`/`.xlsx` ด้วย current TTMT v2 importer เท่านั้น; route ใช้ `requireAdmin()` และไม่เรียก legacy `standard_products` pipeline
-- worklist การจับคู่รายการยาบน `/mappings/v2` กลับมาแล้ว: เริ่มที่ `pending`, ค้นหารหัส/ชื่อยา, กรอง lifecycle (`pending`/`needs_review`/`mapped`/`all`) และชนิดยา (`01` TMT/`10` TTMT), ใช้ pagination ฝั่ง server 30 รายการต่อหน้า และแสดง identity TMT/TTMT ปัจจุบัน, UPDATEFLAG กับเหตุผล lifecycle
+- worklist การจับคู่รายการยาบน `/mappings` กลับมาแล้ว: เริ่มที่ `pending`, ค้นหารหัส/ชื่อยา, กรอง lifecycle (`pending`/`needs_review`/`mapped`/`all`) และชนิดยา (`01` TMT/`10` TTMT), ใช้ pagination ฝั่ง server 30 รายการต่อหน้า และแสดง identity TMT/TTMT ปัจจุบัน, UPDATEFLAG กับเหตุผล lifecycle
 - การจับคู่/แก้ไขจาก worklist ใช้ source-aware `/api/v1/mappings/v2` เท่านั้น; needs_review ยืนยันด้วย acknowledgement เดิมแบบ idempotent และไม่กลับไปใช้ `standard_products` หรือ legacy save route
 - ปุ่ม reconcile จาก Drug Catalog ปรากฏเฉพาะเมื่อ current source-aware catalog path ถูกเปิดใช้ (`TMT_V2_CATALOG_ENABLED`); service เดิมรองรับ identity TMT/TTMT อยู่แล้ว จึงไม่สร้าง reconcile path ใหม่
 
@@ -204,7 +210,7 @@ Phase 2D production rollout ยังต้องอนุมัติ runbook/b
 ## Last verified checkpoint
 
 - Previous repository checkpoint: `3ccc48107c4ea0e2698164ff21c37c284641128e`
-- Current application version: `0.8.3`
+- Current application version: `0.8.4`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)

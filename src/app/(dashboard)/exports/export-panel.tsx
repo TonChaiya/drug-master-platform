@@ -28,12 +28,12 @@ interface PreviewRow {
 const SELECTIONS: Array<{ value: Selection; label: string; description: string }> = [
   {
     value: "all-mapped",
-    label: "ทั้งหมดที่จับคู่แล้ว",
+    label: "Full · ทั้งหมดที่จับคู่แล้ว",
     description: "ทุกรายการที่ lifecycle เป็นจับคู่แล้วและผ่านเงื่อนไข TMT active TPU หรือ TTMT product ปัจจุบัน",
   },
   {
     value: "manual-changes",
-    label: "เฉพาะที่จับคู่ใหม่หรือแก้ไข",
+    label: "Delta · เฉพาะที่จับคู่ใหม่หรือแก้ไข",
     description: "เฉพาะ mapping ที่สร้างหรือแก้หลัง checkpoint ของการส่งออกสำเร็จครั้งก่อน",
   },
 ];
@@ -144,7 +144,7 @@ export function ExportPanel() {
       </Alert>
       <Card>
         <CardHeader
-          title="เลือกชุดข้อมูลที่จะส่งออก"
+          title="เลือก Full หรือ Delta ที่จะส่งออก"
           description="ไฟล์ใช้แม่แบบหัวตาราง 22 คอลัมน์เดิม รหัสทุกช่องเขียนเป็นข้อความเพื่อไม่ให้เลขศูนย์นำหน้าหาย และวันที่เป็นชนิดวันที่จริงรูปแบบ dd/mm/yyyy"
           actions={
             <Button

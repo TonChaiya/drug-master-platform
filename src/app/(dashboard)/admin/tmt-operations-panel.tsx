@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Badge, StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableMessage, TableScroll } from "@/components/ui/table";
@@ -19,8 +19,11 @@ export function TmtOperationsPanel({ initial }: { initial: TmtOperationsSnapshot
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { readiness, latestRun } = operations;
+  const completedCheckpoints = operations.checkpoints.filter((checkpoint) => checkpoint.status === "succeeded").length;
+  const isRunning = latestRun?.status === "running";
+  const needsGuardedResume = latestRun?.status === "failed" || latestRun?.status === "stale";
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setRefreshing(true);
     setError(null);
     try {
@@ -33,7 +36,13 @@ export function TmtOperationsPanel({ initial }: { initial: TmtOperationsSnapshot
     } finally {
       setRefreshing(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [isRunning, refresh]);
 
   return (
     <div className="space-y-3">
@@ -43,7 +52,19 @@ export function TmtOperationsPanel({ initial }: { initial: TmtOperationsSnapshot
         <Button size="sm" className="ml-auto" loading={refreshing} onClick={() => void refresh()}>รีเฟรชสถานะ</Button>
       </div>
       {readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="พร้อมใช้แบบ validated_unverified">ผ่าน validation ที่บันทึกไว้แล้ว แต่ upstream ยังไม่ยืนยันเวอร์ชัน</Alert> : null}
-      <Alert tone="info" title="การซิงก์ TMT ทำผ่าน CLI เท่านั้น">คำสั่งปัจจุบันต้องยืนยัน environment/database, mode และ guard สำหรับงานที่อาจใช้เวลานาน จึงไม่เริ่มหรือ resume จาก web request</Alert>
+      {isRunning ? (
+        <Alert tone="info" title="กำลังซิงก์อยู่">
+          Checkpoint สำเร็จ {completedCheckpoints.toLocaleString("th-TH")} / {operations.checkpoints.length.toLocaleString("th-TH")} · รีเฟรชสถานะทุก 15 วินาทีโดยไม่เริ่มงานซ้ำ
+        </Alert>
+      ) : needsGuardedResume ? (
+        <Alert tone="danger" title="ต้องตรวจข้อผิดพลาดก่อนดำเนินการต่อ">
+          ตรวจ error code และ checkpoint ที่ค้าง แล้วดำเนินการต่อผ่าน CLI ที่มี guard ซึ่งยืนยัน environment/database และ run ที่จะ resume ก่อนเริ่มงาน
+        </Alert>
+      ) : (
+        <Alert tone="info" title="เริ่มและดำเนินการต่อผ่าน CLI ที่มี guard">
+          งาน TMT อาจใช้เวลานาน จึงไม่เริ่มหรือ resume จาก web request; ใช้ CLI ที่ยืนยัน environment/database, mode และ guard แล้วติดตามความคืบหน้าที่นี่
+        </Alert>
+      )}
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
       <dl className="grid gap-2 text-xxs sm:grid-cols-2 lg:grid-cols-4">

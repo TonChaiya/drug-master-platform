@@ -30,7 +30,7 @@ export default async function MappingsPage() {
         <div className="space-y-4">
           <PageHeader title="จับคู่รายการยา" description="จับคู่รายการ JHCIS กับมาตรฐาน TMT/TTMT ปัจจุบัน" />
           <Alert tone="warning" title="ข้อมูล TMT ยังไม่พร้อมใช้งาน">
-            latest TMT sync ต้องมี verified หรือ validated-unverified readiness ก่อนเปิดการจับคู่รายการยา
+            ข้อมูล TMT ล่าสุดต้องมีสถานะพร้อมใช้ที่ตรวจสอบแล้วก่อนเปิดการจับคู่รายการยา ระบบจะไม่สลับไปใช้ข้อมูลชุดอื่นโดยอัตโนมัติ
           </Alert>
         </div>
       );
@@ -38,7 +38,7 @@ export default async function MappingsPage() {
     return (
       <div className="space-y-4">
         <PageHeader eyebrow={`${facility.code} · ${facility.name} · การจับคู่รายการยา`} title="จับคู่รายการยา" description="ค้นหา กรอง และจับคู่รายการ JHCIS ด้วย identity TMT/TTMT ตามชนิดยา" />
-        {readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="กำลังใช้ข้อมูล TMT แบบ degraded">ชุดข้อมูลผ่าน validation แล้ว แต่ upstream ยังไม่ยืนยัน version</Alert> : null}
+        {readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="ข้อมูล TMT ผ่านการตรวจสอบแล้ว">ชุดข้อมูลผ่าน validation แล้ว แต่ยังไม่ยืนยันเวอร์ชันจาก upstream</Alert> : null}
         <V2MappingWorkbench reconcileAvailable={tmtV2CatalogEnabled()} />
       </div>
     );
