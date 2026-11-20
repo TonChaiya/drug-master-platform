@@ -77,7 +77,7 @@ test("mapping comparison leads with TMT generic details and marks the current ca
   }, createElement("button", { type: "button" }, "รายละเอียด"), createElement("button", { type: "button" }, "เลือก")));
   for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharma", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่", "รายละเอียด", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("Paracetamol") < html.indexOf("PARACETAMOL 500 MG TABLET"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "ml-auto", "ring-primary-100"]) assert.match(html, new RegExp(compactClass));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "lg:grid-cols-", "lg:items-center", "lg:justify-end", "ring-primary-100"]) assert.match(html, new RegExp(compactClass));
   assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 
@@ -98,10 +98,10 @@ test("mapping comparison leads with TTMT active ingredient and marks the current
     source: "TTMT", code: "TTMT-001", level: "product", fsn: "TTMT PRODUCT FSN",
     activeIngredient: "TTMT ingredient", tradeName: "TTMT trade", manufacturer: "TTMT maker",
     registrationNumber: "REG-1", active: true, sourceVersion: "20261001",
-  } }));
-  for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT maker", "REG-1"]) assert.match(html, new RegExp(value));
+  } }, createElement("button", { type: "button" }, "เลือก")));
+  for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT maker", "REG-1", "ใช้งานอยู่", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("TTMT ingredient") < html.indexOf("TTMT PRODUCT FSN"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "lg:grid-cols-", "lg:items-center", "lg:justify-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
   assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 

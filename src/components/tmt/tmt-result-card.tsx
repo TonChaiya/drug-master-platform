@@ -36,10 +36,12 @@ function CompactValue({ label, value }: { label: string; value: string | null | 
 export function TmtResultCard({ result, children, comparison = false, current = false }: { result: TmtResultSummary; children?: ReactNode; comparison?: boolean; current?: boolean }) {
   const decisionName = comparison && result.activeIngredient ? result.activeIngredient : result.name;
   return (
-    <article className={`min-w-0 rounded-md border bg-surface ${comparison ? "px-2.5 py-2" : "p-3"} ${current ? "border-primary-300 ring-1 ring-primary-100" : "border-border"}`}>
-      <div className="flex flex-wrap items-center gap-1.5"><TmtLevelBadge level={result.level} /><span className="cell-code">{result.tmtId}</span>{current ? <Badge tone="info">รายการปัจจุบัน</Badge> : null}</div>
-      <p className={`${comparison ? "mt-1" : "mt-2"} break-words text-xs font-semibold text-ink`}>{decisionName}{comparison && result.strength ? ` · ${result.strength}` : null}</p>
-      {comparison && result.activeIngredient && result.name !== result.activeIngredient ? <p className="type-help mt-0.5 break-words">{result.name}</p> : null}
+    <article className={`min-w-0 rounded-md border bg-surface ${comparison ? "grid gap-x-3 gap-y-1.5 px-2.5 py-2 lg:grid-cols-[minmax(14rem,1fr)_minmax(18rem,1.25fr)_auto] lg:items-center" : "p-3"} ${current ? "border-primary-300 ring-1 ring-primary-100" : "border-border"}`}>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5"><TmtLevelBadge level={result.level} /><span className="cell-code">{result.tmtId}</span>{current && !comparison ? <Badge tone="info">รายการปัจจุบัน</Badge> : null}</div>
+        <p className={`${comparison ? "mt-1" : "mt-2"} break-words text-xs font-semibold text-ink`}>{decisionName}{comparison && result.strength ? ` · ${result.strength}` : null}</p>
+        {comparison && result.activeIngredient && result.name !== result.activeIngredient ? <p className="type-help mt-0.5 break-words">{result.name}</p> : null}
+      </div>
       {comparison ? <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xxs text-ink"><CompactValue label="รูปแบบ" value={result.dosageForm} /><CompactValue label="ชื่อการค้า" value={result.tradeName} /><CompactValue label="ผู้ผลิต" value={result.manufacturer} />{result.registrationConflict ? <Badge tone="warning">เลขทะเบียนมีหลายค่า</Badge> : <CompactValue label="ทะเบียน" value={result.registrationNumber} />}</div> : <div className="mt-2 space-y-1">
         <OptionalValue label="ชื่อการค้า" value={result.tradeName} />
         <OptionalValue label="ผู้ผลิต" value={result.manufacturer} />
@@ -50,12 +52,15 @@ export function TmtResultCard({ result, children, comparison = false, current = 
           </span>
         </div>
       </div>}
-      <div className={`${comparison ? "mt-1.5 gap-1.5" : "mt-2 gap-2"} flex flex-wrap items-center`}>
+      {comparison ? <div className="flex min-w-0 flex-wrap items-center gap-1.5 lg:justify-end">
         <Badge tone={result.status === "active" ? "success" : result.status === "cancelled" ? "warning" : "neutral"}>{statusLabel(result.status)}</Badge>
         <Badge tone={result.mappingEligible ? "success" : "warning"}>{result.mappingEligibilityReason}</Badge>
-        {comparison && children ? <div className="ml-auto flex flex-wrap gap-1.5">{children}</div> : null}
-      </div>
-      {!comparison && children ? <div className="mt-2 flex flex-wrap justify-end gap-2">{children}</div> : null}
+        {current ? <Badge tone="info">รายการปัจจุบัน</Badge> : null}
+        {children ? <div className="flex flex-wrap gap-1.5">{children}</div> : null}
+      </div> : <>
+        <div className="mt-2 flex flex-wrap items-center gap-2"><Badge tone={result.status === "active" ? "success" : result.status === "cancelled" ? "warning" : "neutral"}>{statusLabel(result.status)}</Badge><Badge tone={result.mappingEligible ? "success" : "warning"}>{result.mappingEligibilityReason}</Badge></div>
+        {children ? <div className="mt-2 flex flex-wrap justify-end gap-2">{children}</div> : null}
+      </>}
     </article>
   );
 }
