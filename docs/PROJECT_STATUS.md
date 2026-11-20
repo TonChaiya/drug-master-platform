@@ -7,9 +7,9 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production SHA before this release: `3cc60ef2e0b3c17e9c24bc11b8ef026028571083`
-- Current production application version before this release: `0.8.16`
-- Local release candidate: `0.8.17`
+- Production SHA before this release: `f29f51961f322d31d0d35b48102aeb832a36bf24`
+- Current production application version before this release: `0.8.17`
+- Local release candidate: `0.8.18`
 - Hosting: Vercel production deployed through Git integration; deployment ของ SHA ข้างต้นตรวจแล้วเป็น `READY`
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
@@ -24,6 +24,7 @@
 - Release `0.8.15` เตรียม guarded Migration 0019 executor สำหรับลำดับ `0018 → 0019` และ CLI one-time TTMT baseline replacement แบบ dry-run/fail-closed ซึ่งรักษา import/audit/mapping/history เดิมและไม่ลด duplicate version/hash protection. ยังไม่มี Production migration, reset หรือ baseline import ใน checkpoint นี้.
 - Release `0.8.16` ประสาน canonical TTMT validation/replacement evidence ไปยัง MasterTTMT `20261001` hash `88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057` หลัง re-audit โครงสร้างและสถิติสำคัญผ่านครบ. Artifact นี้ได้รับอนุมัติใหม่หลัง binary identity เปลี่ยน โดยไม่ได้อ้างว่า binary-equivalent กับ workbook เดิม; migration, baseline replacement และ Dataset Release ยังไม่ได้ execute.
 - Release `0.8.17` รวม guard เป้าหมายเป็น `LOCAL_CLONE_REHEARSAL`, `TEST`, `PRODUCTION` โดย local clone ต้องใช้ `--rehearsal` และยังปฏิเสธ port 3333/`jhcisdb`/remote target. Local Production clone บน Laragon ผ่าน 0017→0018→0019 และ controlled TTMT replacement ครบ: 9,654 unique codes, `RECIPE/SINGLE/CANCEL` 6,790/2,847/17, mappings/history เดิมคงอยู่ และ maintenance ถูกปิดหลัง rehearsal. Production database ยังไม่ถูก migrate หรือ rebuild.
+- Release `0.8.18` เพิ่ม Production readiness contract แบบ external non-secret evidence, บังคับ explicit intent/operation/TiDB Cloud/mysql2/TLS ใน shared target guard และเพิ่ม ownership-guarded TiDB probe สำหรับ FK/collation/nullable ALTER/transaction rollback/row lock/partial DDL. TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` ผ่าน restore rehearsal บน isolated MySQL 8.4.3 แล้ว; probe จริง, Migration 0018/0019 และ TTMT replacement บน Production ยัง **ไม่ execute**.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
 
 ## Phase 4 consolidation checkpoint
@@ -67,7 +68,7 @@
 - Guarded CLI `dataset:release` รองรับ `preflight/status/baseline/resume/validate/approve/publish/rollback/verify`, โหลดเฉพาะ env file ที่ระบุ และ mutation ต้องมี exact database/action confirmation, actor และ reason. CLI ยังไม่เคย execute กับ Production.
 - Migration 0018 ที่ยังไม่เคย apply Production ใช้ hash ปัจจุบัน `321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41`: ต่อจาก explicit shadow schema hash `95d21cae…` โดยกำหนด collation ของสาม external FK ให้ตรง source tables (`utf8mb4_unicode_ci`) เพื่อให้ MySQL 8.4 สร้าง FK ได้โดยไม่เปลี่ยน logical contract. Environment ที่มี journal hash เก่าต้องหยุดและใช้ reconciliation แยก ห้ามแก้ journal.
 - Guarded Migration 0018 executor เป็น dry-run โดย default, รับเฉพาะ env file นอก repository, ตรวจ exact database/TLS/hash/journal 0001–0017/maintenance/partial schema และเขียน journal เดิมหลัง DDL กับ post-schema verification สำเร็จครบเท่านั้น. TiDB DDL ไม่ transactional; partial DDL ต้องหยุด manual reconciliation และห้าม retry อัตโนมัติ.
-- TiDB 8.5.3 compatibility ยัง **NOT VERIFIED** เพราะไม่มี disposable TiDB ที่ได้รับอนุมัติ; ห้าม apply 0018 บน Production จนกว่า migration/journal/locking/FK จะผ่าน write-based integration จริง รวมถึง storage และ backup/restore gates.
+- TiDB 8.5.3 write compatibility ยัง **NOT VERIFIED** จนกว่า ownership-guarded probe จะผ่านบน Production instance เดิมและ cleanup ยืนยัน ownership ครบ. Local migration/replacement และ TiDB Cloud export restore ผ่านแล้ว; Production ยังต้องมี external readiness evidence สำหรับ storage headroom, active maintenance approval, exact backup/export และ probe PASS ก่อน apply 0018/0019.
 
 ## Major completed areas
 

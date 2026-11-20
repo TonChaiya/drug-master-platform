@@ -22,6 +22,11 @@ const production = {
   maintenanceEnabled: true,
   executeRequested: true,
   confirmDatabase: "drug_master_platform",
+  provider: "tidb-cloud",
+  driver: "mysql2",
+  tlsVerified: true,
+  productionIntent: true,
+  guardedOperation: "maintenance" as const,
 };
 
 test("production execution requires every explicit identity and maintenance guard", () => {

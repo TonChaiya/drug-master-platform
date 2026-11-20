@@ -1,10 +1,15 @@
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
 import type { RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
 import { maintenanceStoreForPool, readMaintenanceState, setMaintenanceMode } from "@/modules/maintenance/service";
 import { createOperationalPool } from "@/modules/phase7/database";
 import { assertOperationalTarget, type OperationalEnvironment } from "@/modules/phase7/guards";
 import { loadExplicitEnvFile } from "@/modules/phase7/env";
+import { assertExternalEnvFile } from "@/db/migration-0018-guard";
+import { assertProductionReadiness, loadProductionReadinessFile } from "@/modules/phase7/production-readiness";
+
+const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 
 const args = parseArgs({
   options: {
@@ -12,12 +17,26 @@ const args = parseArgs({
     enable: { type: "boolean" }, disable: { type: "boolean" }, execute: { type: "boolean" },
     "confirm-db": { type: "string" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
     rehearsal: { type: "boolean" },
+    "readiness-file": { type: "string" }, "production-intent": { type: "boolean" }, operation: { type: "string" },
+    "maintenance-approved": { type: "boolean" },
   },
   strict: true,
 });
 
-loadExplicitEnvFile(args.values["env-file"]);
 const environment = z.enum(["local", "production"]).parse(args.values.environment) as OperationalEnvironment;
+if (environment === "production") {
+  z.literal("maintenance").parse(args.values.operation);
+  if (args.values["production-intent"] !== true) throw new Error("Explicit --production-intent is required");
+  assertProductionReadiness(
+    loadProductionReadinessFile(args.values["readiness-file"], repositoryRoot),
+    "maintenance",
+    { requireProbe: false },
+  );
+  if (args.values.status !== true && args.values["maintenance-approved"] !== true) {
+    throw new Error("Explicit maintenance approval is required");
+  }
+}
+loadExplicitEnvFile(assertExternalEnvFile(args.values["env-file"], repositoryRoot));
 if ([args.values.status, args.values.enable, args.values.disable].filter(Boolean).length !== 1) {
   throw new Error("Choose exactly one of --status, --enable, or --disable");
 }
@@ -36,6 +55,11 @@ try {
     maintenanceEnabled: current.enabled, executeRequested: args.values.execute === true,
     confirmDatabase: args.values["confirm-db"],
     rehearsalIntent: args.values.rehearsal === true,
+    provider: environment === "production" ? "tidb-cloud" : "local-mysql",
+    driver: "mysql2",
+    tlsVerified: environment === "production" && process.env.DB_SSL === "true",
+    productionIntent: args.values["production-intent"] === true,
+    guardedOperation: environment === "production" ? "maintenance" as const : undefined,
   };
   assertOperationalTarget(target, {
     forExecution: args.values.status !== true,

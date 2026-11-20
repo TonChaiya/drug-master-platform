@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.8.17",
+  "version": "0.8.18",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,6 +22,8 @@
     "tmt:v2:validate": "tsx scripts/tmt-v2-validate.ts",
     "ttmt:v2:import": "tsx scripts/ttmt-v2-import.ts",
     "ttmt:baseline:replace": "tsx scripts/ttmt-baseline-replace.ts",
+    "production:preflight": "tsx scripts/production-readiness-preflight.ts",
+    "production:tidb-probe": "tsx scripts/tidb-production-probe.ts",
     "phase7:preflight": "tsx scripts/phase7-preflight.ts",
     "phase7:reset": "tsx scripts/phase7-reset.ts",
     "dataset:release": "tsx scripts/dataset-release.ts"

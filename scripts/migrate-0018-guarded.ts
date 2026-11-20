@@ -15,6 +15,7 @@ import {
 import { maintenanceStoreForPool, readMaintenanceState } from "@/modules/maintenance/service";
 import { createOperationalPool } from "@/modules/phase7/database";
 import { loadExplicitEnvFile } from "@/modules/phase7/env";
+import { assertProductionReadiness, loadProductionReadinessFile } from "@/modules/phase7/production-readiness";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const migrationsDirectory = new URL("../src/db/migrations/", import.meta.url);
@@ -41,6 +42,10 @@ async function expectedPriorJournal(): Promise<MigrationJournalEntry[]> {
 
 async function main(): Promise<void> {
   const request = parseMigration0018Cli(process.argv.slice(2));
+  if (request.environment === "production") {
+    const evidence = loadProductionReadinessFile(request.readinessFile, repositoryRoot);
+    assertProductionReadiness(evidence, "migrate-0018", { requireProbe: true });
+  }
   const envFile = assertExternalEnvFile(request.envFile, repositoryRoot);
   loadExplicitEnvFile(envFile);
   const env = connectionEnvSchema.parse(process.env);
@@ -53,6 +58,8 @@ async function main(): Promise<void> {
       host: env.DB_HOST,
       port: env.DB_PORT,
       tlsVerified: request.environment === "production" && env.DB_SSL === "true",
+      provider: request.environment === "production" ? "tidb-cloud" : "local-mysql",
+      driver: "mysql2",
       expectedPriorJournal: await expectedPriorJournal(),
       migrationSql: migration.sql,
       migrationHash: migration.hash,

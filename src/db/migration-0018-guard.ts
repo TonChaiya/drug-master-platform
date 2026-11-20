@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { basename, relative, resolve } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import type { Pool, RowDataPacket } from "mysql2/promise";
 import { GuardedTargetClassificationError, classifyGuardedTarget } from "@/modules/phase7/target-classification";
@@ -37,6 +37,9 @@ export interface Migration0018Request {
   rehearsalIntent: boolean;
   actorUserId: string;
   reason: string;
+  readinessFile?: string;
+  productionIntent: boolean;
+  guardedOperation?: "migrate-0018";
 }
 
 export interface Migration0018TargetSnapshot {
@@ -50,6 +53,8 @@ export interface Migration0018TargetSnapshot {
   journalTablePresent: boolean;
   journal: readonly MigrationJournalEntry[];
   datasetReleaseTables: readonly string[];
+  provider: string;
+  driver: string;
 }
 
 export interface Migration0018SchemaVerification {
@@ -105,6 +110,9 @@ export function parseMigration0018Cli(argv: string[]): Migration0018Request {
         rehearsal: { type: "boolean" },
         "actor-user-id": { type: "string" },
         reason: { type: "string" },
+        "readiness-file": { type: "string" },
+        "production-intent": { type: "boolean" },
+        operation: { type: "string" },
       },
     });
   } catch (error) {
@@ -115,6 +123,13 @@ export function parseMigration0018Cli(argv: string[]): Migration0018Request {
   const stringValue = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
   const envFile = stringValue(parsed.values["env-file"]);
   if (typeof envFile !== "string" || !envFile.trim()) refuse("ENV_FILE_REQUIRED", "Explicit --env-file is required");
+  const operation = stringValue(parsed.values.operation);
+  if (environment === "production" && operation !== "migrate-0018") {
+    refuse("PRODUCTION_OPERATION_REQUIRED", "Exact --operation migrate-0018 is required");
+  }
+  if (environment === "production" && parsed.values["production-intent"] !== true) {
+    refuse("PRODUCTION_INTENT_REQUIRED", "Explicit --production-intent is required");
+  }
   return {
     environment,
     envFile,
@@ -126,6 +141,9 @@ export function parseMigration0018Cli(argv: string[]): Migration0018Request {
     rehearsalIntent: parsed.values.rehearsal === true,
     actorUserId: stringValue(parsed.values["actor-user-id"]) ?? "",
     reason: stringValue(parsed.values.reason) ?? "",
+    readinessFile: stringValue(parsed.values["readiness-file"]),
+    productionIntent: parsed.values["production-intent"] === true,
+    guardedOperation: operation === "migrate-0018" ? operation : undefined,
   };
 }
 
@@ -154,6 +172,9 @@ function assertTarget(request: Migration0018Request, target: Migration0018Target
       environment: request.environment, host: target.host, port: target.port, database: target.database,
       serverVersion: target.serverVersion, rehearsalIntent: request.rehearsalIntent,
       testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+      provider: target.provider, driver: target.driver, tlsVerified: target.tlsVerified,
+      productionIntent: request.productionIntent, guardedOperation: request.guardedOperation,
+      executeRequested: request.execute,
     });
     if (targetClass === "PRODUCTION" && !target.tlsVerified) refuse("TLS_REQUIRED", "Verified TLS is required for Production");
   } catch (error) {
@@ -185,7 +206,9 @@ export function assertExternalEnvFile(path: string | undefined, repositoryRoot: 
   const resolvedPath = resolve(path);
   const resolvedRoot = resolve(repositoryRoot);
   const relativePath = relative(resolvedRoot, resolvedPath);
-  if (!relativePath.startsWith("..") || basename(resolvedPath).toLowerCase() === ".env.local") {
+  const insideRepository = relativePath === ""
+    || (!relativePath.startsWith(`..${sep}`) && relativePath !== ".." && !isAbsolute(relativePath));
+  if (insideRepository || basename(resolvedPath).toLowerCase() === ".env.local") {
     refuse("ENV_FILE_UNSAFE", "Environment file must be outside the repository and must not be .env.local");
   }
   if (!existsSync(resolvedPath)) refuse("ENV_FILE_MISSING", "Environment file does not exist");
@@ -312,6 +335,8 @@ export function createMigration0018PoolDependencies(input: {
   host: string;
   port: number;
   tlsVerified: boolean;
+  provider: string;
+  driver: string;
   expectedPriorJournal: readonly MigrationJournalEntry[];
   migrationSql: string;
   migrationHash: string;
@@ -350,6 +375,8 @@ export function createMigration0018PoolDependencies(input: {
         journalTablePresent,
         journal,
         datasetReleaseTables: datasetTableResult.map((row) => String(row.TABLE_NAME)),
+        provider: input.provider,
+        driver: input.driver,
       };
     },
     async executeStatement(sql) {

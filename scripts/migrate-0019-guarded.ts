@@ -13,6 +13,7 @@ import {
 import { maintenanceStoreForPool, readMaintenanceState } from "@/modules/maintenance/service";
 import { createOperationalPool } from "@/modules/phase7/database";
 import { loadExplicitEnvFile } from "@/modules/phase7/env";
+import { assertProductionReadiness, loadProductionReadinessFile } from "@/modules/phase7/production-readiness";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const migrationsDirectory = new URL("../src/db/migrations/", import.meta.url);
@@ -28,6 +29,10 @@ async function priorJournal() {
 
 async function main() {
   const request = parseMigration0019Cli(process.argv.slice(2));
+  if (request.environment === "production") {
+    const evidence = loadProductionReadinessFile(request.readinessFile, repositoryRoot);
+    assertProductionReadiness(evidence, "migrate-0019", { requireProbe: true });
+  }
   loadExplicitEnvFile(assertExternalEnvFile(request.envFile, repositoryRoot));
   const env = envSchema.parse(process.env);
   const pool = createOperationalPool(request.environment);
@@ -37,6 +42,7 @@ async function main() {
     if (migrationHash !== EXPECTED_MIGRATION_0019_SHA256) throw new Migration0019GuardError("MIGRATION_HASH_INVALID", "Reviewed Migration 0019 changed");
     const result = await executeGuardedMigration0019(request, createMigration0019PoolDependencies({
       pool, host: env.DB_HOST, port: env.DB_PORT, tlsVerified: request.environment === "production" && env.DB_SSL === "true",
+      provider: request.environment === "production" ? "tidb-cloud" : "local-mysql", driver: "mysql2",
       expectedPriorJournal: await priorJournal(), migrationSql, migrationHash,
       maintenanceState: async () => {
         const state = await readMaintenanceState(maintenanceStoreForPool(pool));

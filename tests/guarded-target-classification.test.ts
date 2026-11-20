@@ -43,8 +43,18 @@ test("Production remains a distinct TiDB target and rejects rehearsal intent", (
   const production: GuardedTargetIdentity = {
     environment: "production", host: "gateway.prod.tidbcloud.com", port: 4000,
     database: "drug_master_platform", serverVersion: "TiDB-v8.5.3",
+    provider: "tidb-cloud", driver: "mysql2", tlsVerified: true,
+    productionIntent: true, guardedOperation: "preflight",
   };
   assert.equal(classifyGuardedTarget(production), "PRODUCTION");
+  assert.equal(classifyGuardedTarget({
+    ...production, productionIntent: false, guardedOperation: undefined, executeRequested: false,
+  }), "PRODUCTION");
   refusal({ ...production, rehearsalIntent: true }, "REHEARSAL_ENVIRONMENT_INVALID");
   refusal({ ...production, host: "127.0.0.1" }, "PRODUCTION_HOST_INVALID");
+  refusal({ ...production, productionIntent: false, executeRequested: true }, "PRODUCTION_INTENT_REQUIRED");
+  refusal({ ...production, guardedOperation: undefined, executeRequested: true }, "PRODUCTION_OPERATION_REQUIRED");
+  refusal({ ...production, provider: "other" }, "PRODUCTION_PROVIDER_INVALID");
+  refusal({ ...production, driver: "other" }, "PRODUCTION_DRIVER_INVALID");
+  refusal({ ...production, tlsVerified: false }, "PRODUCTION_TLS_REQUIRED");
 });

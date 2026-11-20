@@ -1,4 +1,8 @@
-import { GuardedTargetClassificationError, classifyGuardedTarget } from "./target-classification";
+import {
+  GuardedTargetClassificationError,
+  classifyGuardedTarget,
+  type GuardedProductionOperation,
+} from "./target-classification";
 
 export type OperationalEnvironment = "local" | "production";
 
@@ -13,6 +17,11 @@ export interface OperationalTarget {
   executeRequested: boolean;
   confirmDatabase?: string;
   rehearsalIntent?: boolean;
+  provider?: string;
+  driver?: string;
+  tlsVerified?: boolean;
+  productionIntent?: boolean;
+  guardedOperation?: GuardedProductionOperation;
 }
 
 export class Phase7GuardError extends Error {
@@ -35,6 +44,9 @@ export function assertOperationalTarget(
       environment: target.environment, host: target.host, port: target.port, database: target.database,
       serverVersion: target.serverVersion, rehearsalIntent: target.rehearsalIntent,
       testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+      provider: target.provider, driver: target.driver, tlsVerified: target.tlsVerified,
+      productionIntent: target.productionIntent, guardedOperation: target.guardedOperation,
+      executeRequested: target.executeRequested,
     });
   } catch (error) {
     if (error instanceof GuardedTargetClassificationError) refuse(error.code, error.message);

@@ -47,6 +47,8 @@ const request = (overrides: Partial<Migration0018Request> = {}): Migration0018Re
   rehearsalIntent: false,
   actorUserId: "00000000-0000-4000-8000-000000000001",
   reason: "approved migration window",
+  productionIntent: true,
+  guardedOperation: "migrate-0018",
   ...overrides,
 });
 const target = (overrides: Partial<Migration0018TargetSnapshot> = {}): Migration0018TargetSnapshot => ({
@@ -60,6 +62,8 @@ const target = (overrides: Partial<Migration0018TargetSnapshot> = {}): Migration
   journalTablePresent: true,
   journal: priorJournal,
   datasetReleaseTables: [],
+  provider: "tidb-cloud",
+  driver: "mysql2",
   ...overrides,
 });
 
@@ -193,7 +197,7 @@ describe("guarded Migration 0018 safety", () => {
   });
 
   test("production requires verified TLS and exact hash confirmation", async () => {
-    await refusal("TLS_REQUIRED", {}, { tlsVerified: false });
+    await refusal("PRODUCTION_TLS_REQUIRED", {}, { tlsVerified: false });
     await refusal("EXECUTE_CONFIRM_HASH_REQUIRED", {
       execute: true, confirmDatabase: "drug_master_platform", confirmMigration: "0018",
       confirmHash: "f".repeat(64), maintenanceApproved: true,
@@ -302,6 +306,8 @@ describe.runIf(integrationEnabled).sequential("guarded Migration 0018 on isolate
       host: config.host,
       port: config.port,
       tlsVerified: false,
+      provider: "local-mysql",
+      driver: "mysql2",
       expectedPriorJournal,
       migrationSql,
       migrationHash: createHash("sha256").update(migrationSql).digest("hex"),

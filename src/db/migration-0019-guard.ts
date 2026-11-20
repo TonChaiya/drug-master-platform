@@ -27,6 +27,9 @@ export interface Migration0019Request {
   rehearsalIntent: boolean;
   actorUserId: string;
   reason: string;
+  readinessFile?: string;
+  productionIntent: boolean;
+  guardedOperation?: "migrate-0019";
 }
 
 export interface Migration0019Snapshot {
@@ -40,6 +43,8 @@ export interface Migration0019Snapshot {
   journal: readonly MigrationJournalEntry[];
   tables: readonly string[];
   columns: readonly { table: string; column: string; type: string; nullable: boolean }[];
+  provider: string;
+  driver: string;
 }
 
 export interface Migration0019Dependencies {
@@ -70,6 +75,7 @@ export function parseMigration0019Cli(argv: string[]): Migration0019Request {
       environment: { type: "string" }, "env-file": { type: "string" }, execute: { type: "boolean" },
       "confirm-db": { type: "string" }, "confirm-migration": { type: "string" }, "confirm-hash": { type: "string" },
       "maintenance-approved": { type: "boolean" }, rehearsal: { type: "boolean" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
+      "readiness-file": { type: "string" }, "production-intent": { type: "boolean" }, operation: { type: "string" },
     } });
   } catch (error) {
     throw new Migration0019GuardError("ARGUMENT_INVALID", "Migration 0019 arguments are invalid", undefined, { cause: error });
@@ -79,12 +85,21 @@ export function parseMigration0019Cli(argv: string[]): Migration0019Request {
   const text = (value: unknown): string | undefined => typeof value === "string" ? value : undefined;
   const envFile = text(parsed.values["env-file"]);
   if (!envFile?.trim()) refuse("ENV_FILE_REQUIRED", "Explicit --env-file is required");
+  const operation = text(parsed.values.operation);
+  if (environment === "production" && operation !== "migrate-0019") {
+    refuse("PRODUCTION_OPERATION_REQUIRED", "Exact --operation migrate-0019 is required");
+  }
+  if (environment === "production" && parsed.values["production-intent"] !== true) {
+    throw new Migration0019GuardError("PRODUCTION_INTENT_REQUIRED", "Explicit --production-intent is required");
+  }
   return {
     environment, envFile, execute: parsed.values.execute === true,
     confirmDatabase: text(parsed.values["confirm-db"]), confirmMigration: text(parsed.values["confirm-migration"]),
     confirmHash: text(parsed.values["confirm-hash"]), maintenanceApproved: parsed.values["maintenance-approved"] === true,
     rehearsalIntent: parsed.values.rehearsal === true,
     actorUserId: text(parsed.values["actor-user-id"]) ?? "", reason: text(parsed.values.reason) ?? "",
+    readinessFile: text(parsed.values["readiness-file"]), productionIntent: parsed.values["production-intent"] === true,
+    guardedOperation: operation === "migrate-0019" ? operation : undefined,
   };
 }
 
@@ -94,6 +109,9 @@ function assertTarget(request: Migration0019Request, target: Migration0019Snapsh
       environment: request.environment, host: target.host, port: target.port, database: target.database,
       serverVersion: target.serverVersion, rehearsalIntent: request.rehearsalIntent,
       testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+      provider: target.provider, driver: target.driver, tlsVerified: target.tlsVerified,
+      productionIntent: request.productionIntent, guardedOperation: request.guardedOperation,
+      executeRequested: request.execute,
     });
     if (targetClass === "PRODUCTION" && !target.tlsVerified) refuse("PRODUCTION_TLS_ENGINE_INVALID", "Verified TiDB TLS is required");
   } catch (error) {
@@ -159,6 +177,7 @@ export async function executeGuardedMigration0019(request: Migration0019Request,
 
 export function createMigration0019PoolDependencies(input: {
   pool: Pool; host: string; port: number; tlsVerified: boolean; expectedPriorJournal: readonly MigrationJournalEntry[];
+  provider: string; driver: string;
   migrationSql: string; migrationHash: string; maintenanceState(): Promise<{ available: boolean; enabled: boolean }>;
 }): Migration0019Dependencies {
   const columnSql = "TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('ttmt_products','ttmt_dataset_products') AND COLUMN_NAME IN ('ttmt_type','change_date','drug_group_nhso')";
@@ -176,6 +195,7 @@ export function createMigration0019PoolDependencies(input: {
       return {
         host: input.host, port: input.port, database: String(identity[0]?.databaseName ?? ""), serverVersion: String(identity[0]?.serverVersion ?? ""),
         tlsVerified: input.tlsVerified, maintenanceAvailable: maintenance.available, maintenanceEnabled: maintenance.enabled,
+        provider: input.provider, driver: input.driver,
         journal: journal.map((row) => ({ filename: String(row.filename), contentHash: String(row.content_hash) })),
         tables: tables.map((row) => String(row.TABLE_NAME)), columns: await readColumns(),
       };

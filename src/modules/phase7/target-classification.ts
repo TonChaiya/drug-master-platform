@@ -1,5 +1,16 @@
 export type GuardedTargetClass = "LOCAL_CLONE_REHEARSAL" | "TEST" | "PRODUCTION";
 
+export const GUARDED_PRODUCTION_OPERATIONS = [
+  "preflight",
+  "maintenance",
+  "tidb-probe",
+  "migrate-0018",
+  "migrate-0019",
+  "ttmt-replacement",
+] as const;
+
+export type GuardedProductionOperation = typeof GUARDED_PRODUCTION_OPERATIONS[number];
+
 export interface GuardedTargetIdentity {
   environment: "local" | "production";
   host: string;
@@ -8,6 +19,12 @@ export interface GuardedTargetIdentity {
   serverVersion: string;
   rehearsalIntent?: boolean;
   testOptIn?: boolean;
+  provider?: string;
+  driver?: string;
+  tlsVerified?: boolean;
+  productionIntent?: boolean;
+  guardedOperation?: GuardedProductionOperation;
+  executeRequested?: boolean;
 }
 
 export class GuardedTargetClassificationError extends Error {
@@ -31,10 +48,17 @@ export function classifyGuardedTarget(target: GuardedTargetIdentity): GuardedTar
 
   if (target.environment === "production") {
     if (target.rehearsalIntent) refuse("REHEARSAL_ENVIRONMENT_INVALID", "Local rehearsal intent cannot authorize Production");
+    if (target.provider !== "tidb-cloud") refuse("PRODUCTION_PROVIDER_INVALID", "Production provider must be TiDB Cloud");
+    if (target.driver !== "mysql2") refuse("PRODUCTION_DRIVER_INVALID", "Production driver must be mysql2");
+    if (!target.tlsVerified) refuse("PRODUCTION_TLS_REQUIRED", "Verified TLS is required for Production");
     if (!target.host.toLowerCase().endsWith(".tidbcloud.com")) refuse("PRODUCTION_HOST_INVALID", "Production host is not TiDB Cloud");
     if (target.port !== 4000) refuse("PRODUCTION_PORT_INVALID", "Production port must be 4000");
     if (target.database !== "drug_master_platform") refuse("PRODUCTION_DATABASE_INVALID", "Production database identity mismatch");
     if (!/tidb/i.test(target.serverVersion)) refuse("PRODUCTION_ENGINE_INVALID", "Production server is not TiDB");
+    if (target.executeRequested || target.productionIntent || target.guardedOperation) {
+      if (!target.productionIntent) refuse("PRODUCTION_INTENT_REQUIRED", "Explicit Production intent is required");
+      if (!target.guardedOperation) refuse("PRODUCTION_OPERATION_REQUIRED", "An explicit guarded Production operation is required");
+    }
     return "PRODUCTION";
   }
 

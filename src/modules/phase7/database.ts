@@ -2,6 +2,7 @@ import mysql, { type Pool, type RowDataPacket } from "mysql2/promise";
 import { z } from "zod";
 import { maintenanceStoreForPool, readMaintenanceState } from "@/modules/maintenance/service";
 import type { OperationalEnvironment, OperationalTarget } from "./guards";
+import type { GuardedProductionOperation } from "./target-classification";
 
 const databaseEnvSchema = z.object({
   DB_HOST: z.string().min(1),
@@ -25,7 +26,14 @@ export function createOperationalPool(environment: OperationalEnvironment): Pool
 
 export async function inspectOperationalTarget(
   pool: Pool,
-  input: { environment: OperationalEnvironment; executeRequested: boolean; confirmDatabase?: string; rehearsalIntent?: boolean },
+  input: {
+    environment: OperationalEnvironment;
+    executeRequested: boolean;
+    confirmDatabase?: string;
+    rehearsalIntent?: boolean;
+    productionIntent?: boolean;
+    guardedOperation?: GuardedProductionOperation;
+  },
 ): Promise<OperationalTarget> {
   const [identityRows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS databaseName, VERSION() AS serverVersion, @@hostname AS serverHost");
   const [journal] = await pool.query<RowDataPacket[]>("SELECT filename FROM schema_migrations ORDER BY filename");
@@ -43,6 +51,11 @@ export async function inspectOperationalTarget(
     executeRequested: input.executeRequested,
     confirmDatabase: input.confirmDatabase,
     rehearsalIntent: input.rehearsalIntent === true,
+    provider: input.environment === "production" ? "tidb-cloud" : "local-mysql",
+    driver: "mysql2",
+    tlsVerified: input.environment === "production" && env.DB_SSL === "true",
+    productionIntent: input.productionIntent === true,
+    guardedOperation: input.guardedOperation,
   };
 }
 

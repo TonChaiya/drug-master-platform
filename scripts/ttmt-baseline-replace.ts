@@ -6,6 +6,7 @@ import { assertExternalEnvFile } from "@/db/migration-0018-guard";
 import { createOperationalPool, inspectOperationalTarget } from "@/modules/phase7/database";
 import { assertOperationalTarget } from "@/modules/phase7/guards";
 import { loadExplicitEnvFile } from "@/modules/phase7/env";
+import { assertProductionReadiness, loadProductionReadinessFile } from "@/modules/phase7/production-readiness";
 import { runTtmtBaselineReplacement, ttmtBaselineReplacementStoreForPool } from "@/modules/standards/ttmt-baseline-replacement";
 
 async function main() {
@@ -13,18 +14,31 @@ async function main() {
     environment: { type: "string" }, "env-file": { type: "string" }, file: { type: "string" }, execute: { type: "boolean" },
     "confirm-db": { type: "string" }, "confirm-action": { type: "string" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
     "expected-current-hash": { type: "string" }, rehearsal: { type: "boolean" },
+    "readiness-file": { type: "string" }, "production-intent": { type: "boolean" }, operation: { type: "string" },
+    "maintenance-approved": { type: "boolean" },
   } });
   const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
-  loadExplicitEnvFile(assertExternalEnvFile(z.string().min(1).parse(args.values["env-file"]), repositoryRoot));
   const environment = z.enum(["local", "production"]).parse(args.values.environment);
+  if (environment === "production") {
+    z.literal("ttmt-replacement").parse(args.values.operation);
+    if (args.values["production-intent"] !== true) throw new Error("Explicit --production-intent is required");
+    const evidence = loadProductionReadinessFile(args.values["readiness-file"], repositoryRoot);
+    assertProductionReadiness(evidence, "ttmt-replacement", { requireProbe: true });
+  }
+  loadExplicitEnvFile(assertExternalEnvFile(z.string().min(1).parse(args.values["env-file"]), repositoryRoot));
   const file = z.string().min(1).parse(args.values.file);
   const expectedCurrentHash = z.string().regex(/^[a-f0-9]{64}$/i).parse(args.values["expected-current-hash"]);
   const execute = args.values.execute === true;
+  if (environment === "production" && execute && args.values["maintenance-approved"] !== true) {
+    throw new Error("Explicit maintenance approval is required");
+  }
   if (!(await stat(file)).isFile()) throw new Error("MasterTTMT input is not a file");
   const pool = createOperationalPool(environment);
   try {
     const target = await inspectOperationalTarget(pool, {
       environment, executeRequested: execute, confirmDatabase: args.values["confirm-db"], rehearsalIntent: args.values.rehearsal === true,
+      productionIntent: args.values["production-intent"] === true,
+      guardedOperation: environment === "production" ? "ttmt-replacement" : undefined,
     });
     assertOperationalTarget(target, { forExecution: execute, requiredMigrations: [
       "0015_ttmt_data_model_v2.sql", "0017_tmt_run_validations.sql",
