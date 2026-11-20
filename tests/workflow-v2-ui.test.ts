@@ -78,8 +78,13 @@ test("export choices name Full and Delta without changing checkpoint semantics",
 });
 
 test("TTMT search remains source-specific and exposes current product fields", async () => {
-  const route = await source("src/app/api/v1/mappings/v2/standards/route.ts");
-  assert.match(route, /manufacturer: ttmtProducts\.manufacturer/);
-  assert.match(route, /registrationNumber: ttmtProducts\.registrationNumber/);
-  assert.doesNotMatch(route, /tmtRelationship|tmtConcept|tmtMastertmt/);
+  const [route, search] = await Promise.all([
+    source("src/app/api/v1/mappings/v2/standards/route.ts"),
+    source("src/modules/standards/ttmt-search.ts"),
+  ]);
+  assert.match(route, /searchTtmtStandards/);
+  assert.match(search, /p\.manufacturer/);
+  assert.match(search, /p\.registration_number/);
+  assert.match(search, /ttmt_dataset_products/);
+  assert.doesNotMatch(`${route}\n${search}`, /tmtRelationship|tmtConcept|tmtMastertmt/);
 });

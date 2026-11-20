@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/toast";
+import { EMPTY_STANDARD_FILTERS, StandardFilterInputs, standardFilterValues, type StandardFilterState } from "@/components/standard-search";
 import { TmtResultCard } from "@/components/tmt/tmt-result-card";
 import { TtmtResultCard, type TtmtResult } from "@/components/ttmt/ttmt-result-card";
 import { Alert, Badge } from "@/components/ui/badge";
@@ -18,8 +19,26 @@ import type { V2WorklistRow } from "@/modules/mappings/v2-worklist";
 type Worklist = { rows: V2WorklistRow[]; total: number; page: number; pageSize: number; pageCount: number };
 type LifecycleFilter = "all" | "pending" | "needs_review" | "mapped";
 type DrugTypeFilter = "all" | "01" | "10";
+type StandardSearchStatus = "idle" | "short" | "loading" | "empty" | "ready" | "error";
 const EMPTY: Worklist = { rows: [], total: 0, page: 1, pageSize: 30, pageCount: 1 };
 const COLUMNS = 8;
+
+export function mappingStandardSearchUrl(source: "TMT" | "TTMT", filters: StandardFilterState): string {
+  const params = new URLSearchParams();
+  if (source === "TMT") {
+    if (filters.code.trim()) params.set("q", filters.code.trim());
+    if (filters.registrationNumber.trim()) params.set("registration", filters.registrationNumber.trim());
+  } else {
+    params.set("source", "TTMT");
+    if (filters.code.trim()) params.set("code", filters.code.trim());
+    if (filters.registrationNumber.trim()) params.set("registrationNumber", filters.registrationNumber.trim());
+  }
+  for (const key of ["tradeName", "genericName", "manufacturer"] as const) {
+    if (filters[key].trim()) params.set(key, filters[key].trim());
+  }
+  if (source === "TMT") params.set("limit", "30");
+  return `${source === "TMT" ? "/api/v1/tmt-v2/search" : "/api/v1/mappings/v2/standards"}?${params.toString()}`;
+}
 
 function statusLabel(status: V2WorklistRow["status"]): string {
   return status === "needs_review" ? "ต้องตรวจสอบ" : status === "mapped" ? "จับคู่แล้ว" : "คงค้าง";
@@ -60,12 +79,14 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
   const [failed, setFailed] = useState(false);
   const [selected, setSelected] = useState<V2WorklistRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [standardQuery, setStandardQuery] = useState("");
+  const [standardFilters, setStandardFilters] = useState<StandardFilterState>(EMPTY_STANDARD_FILTERS);
+  const [standardSearchStatus, setStandardSearchStatus] = useState<StandardSearchStatus>("idle");
   const [tmtRows, setTmtRows] = useState<TmtSearchResult[]>([]);
   const [ttmtRows, setTtmtRows] = useState<TtmtResult[]>([]);
   const [detail, setDetail] = useState<TmtConceptDetail | null>(null);
   const chooserRef = useRef<HTMLDivElement | null>(null);
   const requestIdRef = useRef(0);
+  const standardRequestIdRef = useRef(0);
 
   useEffect(() => { chooserRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [selected]);
   const load = useCallback(async () => {
@@ -92,27 +113,49 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
 
   function openChooser(row: V2WorklistRow) {
     setSelected(selected?.sourceDrugId === row.sourceDrugId ? null : row);
-    setStandardQuery(""); setTmtRows([]); setTtmtRows([]); setDetail(null);
+    standardRequestIdRef.current += 1;
+    setStandardFilters(EMPTY_STANDARD_FILTERS); setStandardSearchStatus("idle"); setTmtRows([]); setTtmtRows([]); setDetail(null);
   }
-  async function searchStandards(event: FormEvent) {
-    event.preventDefault();
-    if (!selected) return;
-    if (standardQuery.trim().length < 2) return push("warning", "กรุณาค้นหาอย่างน้อย 2 ตัวอักษร");
-    setBusy("search");
+  const searchStandards = useCallback(async () => {
+    const values = standardFilterValues(standardFilters);
+    const requestId = standardRequestIdRef.current + 1;
+    standardRequestIdRef.current = requestId;
+    if (!selected || values.length === 0) {
+      setStandardSearchStatus("idle"); setTmtRows([]); setTtmtRows([]); setDetail(null);
+      return;
+    }
+    if (values.some((value) => value.length < 2)) {
+      setStandardSearchStatus("short"); setTmtRows([]); setTtmtRows([]); setDetail(null);
+      return;
+    }
+    const source = selected.drugtype === "10" ? "TTMT" : "TMT";
+    setStandardSearchStatus("loading");
     try {
-      if (selected.drugtype === "01") {
-        const response = await fetch(`/api/v1/tmt-v2/search?q=${encodeURIComponent(standardQuery.trim())}&limit=30`);
+      const response = await fetch(mappingStandardSearchUrl(source, standardFilters));
+      if (source === "TMT") {
         const payload = (await response.json()) as { ok?: boolean; rows?: TmtSearchResult[]; message?: string };
         if (!response.ok || !payload.ok) throw new Error(payload.message ?? "ค้นหา TMT ไม่สำเร็จ");
+        if (requestId !== standardRequestIdRef.current) return;
         setTmtRows(payload.rows ?? []); setTtmtRows([]);
+        setStandardSearchStatus((payload.rows ?? []).length > 0 ? "ready" : "empty");
       } else {
-        const response = await fetch(`/api/v1/mappings/v2/standards?source=TTMT&q=${encodeURIComponent(standardQuery.trim())}`);
         const payload = (await response.json()) as { ok?: boolean; rows?: TtmtResult[]; message?: string };
         if (!response.ok || !payload.ok) throw new Error(payload.message ?? "ค้นหา TTMT ไม่สำเร็จ");
+        if (requestId !== standardRequestIdRef.current) return;
         setTtmtRows(payload.rows ?? []); setTmtRows([]);
+        setStandardSearchStatus((payload.rows ?? []).length > 0 ? "ready" : "empty");
       }
-    } catch (error) { push("error", error instanceof Error ? error.message : "ค้นหามาตรฐานไม่สำเร็จ"); }
-    finally { setBusy(null); }
+      setDetail(null);
+    } catch (error) {
+      if (requestId !== standardRequestIdRef.current) return;
+      setStandardSearchStatus("error");
+      push("error", error instanceof Error ? error.message : "ค้นหามาตรฐานไม่สำเร็จ");
+    }
+  }, [push, selected, standardFilters]);
+  useEffect(() => { const timer = setTimeout(() => void searchStandards(), 300); return () => clearTimeout(timer); }, [searchStandards]);
+  function clearStandardFilters() {
+    standardRequestIdRef.current += 1;
+    setStandardFilters(EMPTY_STANDARD_FILTERS); setStandardSearchStatus("idle"); setTmtRows([]); setTtmtRows([]); setDetail(null);
   }
   async function openDetail(tmtId: string) {
     setBusy("detail");
@@ -162,7 +205,23 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
           return <Fragment key={row.sourceDrugId}><tr className={open ? "row-selected" : undefined}><td className="cell-code">{row.drugcode}</td><td className="max-w-56"><div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>{row.druggenericname ? <div className="type-help">{row.druggenericname}</div> : null}</td><td><Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge></td><td className="max-w-72"><MappedStandardSummary row={row} /></td><td>{row.standardSource ? <div className="flex flex-wrap gap-1"><Badge tone={row.standardSource === "TMT" ? "info" : "success"}>{row.standardSource}</Badge><Badge>{row.standardLevel?.toUpperCase()}</Badge></div> : <span className="type-caption">—</span>}</td><td>{row.updateFlag ? <Badge>{row.updateFlag}</Badge> : <span className="type-caption">—</span>}</td><td className="max-w-56"><Badge tone={statusTone(row.status)} dot>{statusLabel(row.status)}</Badge>{row.statusReason ? <div className="type-help mt-1">{row.statusReason}</div> : null}</td><td><Button size="sm" variant={open ? "secondary" : row.standardCode ? "ghost" : "outline"} icon={open ? <IconClose size={13} /> : <IconLink size={13} />} disabled={busy !== null && busy !== row.sourceDrugId} loading={busy === row.sourceDrugId} onClick={() => openChooser(row)}>{open ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}</Button></td></tr>
             {open ? <tr className="hover:bg-transparent"><td colSpan={COLUMNS} className="border-b-0 bg-primary-50/40 p-0"><div ref={chooserRef} className="border-y border-primary-200 bg-surface p-3.5"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="type-card-title">เลือกมาตรฐานให้ <span className="cell-code">{row.drugcode}</span> — {row.drugname ?? row.drugnamethai ?? ""}</h3><p className="type-help mt-0.5">drugtype {row.drugtype} ใช้คลัง {row.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น</p></div><Button size="sm" icon={<IconClose size={13} />} onClick={() => setSelected(null)}>ปิด</Button></div>
               {row.status === "needs_review" && row.standardSource && row.standardCode && row.standardLevel ? <Alert tone="warning" className="mt-3" title="รายการนี้ต้องยืนยันหลังตรวจสอบ"><div className="flex flex-wrap items-center justify-between gap-2"><span>{row.statusReason}</span><Button size="sm" variant="primary" disabled={busy !== null} loading={busy === row.sourceDrugId} onClick={() => void save(row, row.standardSource!, row.standardCode!, row.standardLevel!, true)}>บันทึกและยืนยันว่าตรวจสอบแล้ว</Button></div></Alert> : null}
-              <form className="mt-3 flex gap-2" onSubmit={(event) => void searchStandards(event)}><SearchInput value={standardQuery} onChange={(event) => setStandardQuery(event.target.value)} placeholder={row.drugtype === "10" ? "รหัสหรือชื่อ TTMT" : "รหัส TMT หรือ FSN"} /><Button type="submit" variant="primary" loading={busy === "search"}>ค้นหา</Button></form>
+              <div className="mt-3 flex flex-wrap items-end gap-2.5">
+                <Badge tone={row.drugtype === "10" ? "success" : "info"} className="mb-2">คลัง {row.drugtype === "10" ? "TTMT" : "TMT"}</Badge>
+                <StandardFilterInputs
+                  filters={standardFilters}
+                  idPrefix={`mapping-standard-${row.sourceDrugId}`}
+                  onChange={(key, value) => setStandardFilters((current) => ({ ...current, [key]: value }))}
+                  onClear={clearStandardFilters}
+                />
+              </div>
+              <p className="type-caption mt-2" role="status" aria-live="polite">
+                {standardSearchStatus === "idle" && "พิมพ์อย่างน้อย 2 ตัวอักษรในช่องใดช่องหนึ่งเพื่อค้นหา"}
+                {standardSearchStatus === "short" && "ต้องพิมพ์อย่างน้อย 2 ตัวอักษรในทุกช่องที่กรอก"}
+                {standardSearchStatus === "loading" && "กำลังค้นหา…"}
+                {standardSearchStatus === "empty" && "ไม่พบรายการที่ตรงกับตัวกรอง"}
+                {standardSearchStatus === "ready" && `พบ ${(row.drugtype === "10" ? ttmtRows : tmtRows).length.toLocaleString("th-TH")} รายการ`}
+              </p>
+              {standardSearchStatus === "error" ? <div className="mt-2 rounded-lg border border-border"><ErrorState compact title="ค้นหามาตรฐานไม่สำเร็จ" description="ระบบติดต่อคลังมาตรฐานไม่ได้ ตัวกรองที่กรอกไว้ยังคงอยู่" onRetry={() => void searchStandards()} /></div> : null}
               {row.drugtype === "01" ? <div className="mt-3 space-y-2">{tmtRows.map((item) => <TmtResultCard key={item.tmtId} result={{ level: item.level, tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" onClick={() => void openDetail(item.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, item.level)}>เลือก</Button></TmtResultCard>)}{detail?.concept.level === "gpu" ? <section className="rounded-md border border-border p-3"><h4 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง ({detail.relatedTpu.length})</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((item) => <TmtResultCard key={item.tmtId} result={{ level: "tpu", tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" variant="primary" disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, "tpu")}>เลือก TPU</Button></TmtResultCard>)}</div></section> : null}</div> : <div className="mt-3 space-y-2">{ttmtRows.map((item) => <TtmtResultCard key={item.code} result={item}><Button size="sm" variant="primary" disabled={!item.active || busy !== null} onClick={() => void save(row, "TTMT", item.code, "product")}>เลือก</Button></TtmtResultCard>)}</div>}
             </div></td></tr> : null}</Fragment>;
         })}</tbody>}</Table></TableScroll>}

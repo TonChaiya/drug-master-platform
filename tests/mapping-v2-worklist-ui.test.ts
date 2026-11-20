@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { MappedStandardSummary } from "@/components/mappings/v2-mapping-workbench";
+import { MappedStandardSummary, mappingStandardSearchUrl } from "@/components/mappings/v2-mapping-workbench";
+import { EMPTY_STANDARD_FILTERS, type StandardFilterState } from "@/components/standard-search";
 import type { V2WorklistRow } from "@/modules/mappings/v2-worklist";
 
 const source = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -38,6 +39,37 @@ test("unmapped row stays compact and does not invent standard metadata", () => {
   const html = renderToStaticMarkup(createElement(MappedStandardSummary, { row: row({ standardCode: null, standardSource: null, standardLevel: null }) }));
   assert.match(html, /ยังไม่จับคู่/);
   assert.doesNotMatch(html, /Paracetamol|Example Pharma|ที่มา:/);
+});
+
+test("mapping chooser maps each independent filter to the source-specific query contract", () => {
+  const cases: Array<[keyof StandardFilterState, string, string]> = [
+    ["code", "q=Example", "code=Example"],
+    ["tradeName", "tradeName=Example", "tradeName=Example"],
+    ["genericName", "genericName=Example", "genericName=Example"],
+    ["manufacturer", "manufacturer=Example", "manufacturer=Example"],
+    ["registrationNumber", "registration=Example", "registrationNumber=Example"],
+  ];
+  for (const [key, tmtParam, ttmtParam] of cases) {
+    const filters = { ...EMPTY_STANDARD_FILTERS, [key]: "Example" };
+    assert.match(mappingStandardSearchUrl("TMT", filters), new RegExp(tmtParam));
+    assert.match(mappingStandardSearchUrl("TTMT", filters), new RegExp(ttmtParam));
+  }
+  const combined = { code: "12", tradeName: "Trade", genericName: "Generic", manufacturer: "Maker", registrationNumber: "1A" };
+  const url = mappingStandardSearchUrl("TMT", combined);
+  for (const key of ["q=12", "tradeName=Trade", "genericName=Generic", "manufacturer=Maker", "registration=1A"]) assert.match(url, new RegExp(key));
+});
+
+test("mapping chooser keeps debounce, minimum length, stale response, and clear guards", async () => {
+  const [workbench, standardSearch] = await Promise.all([
+    source("src/components/mappings/v2-mapping-workbench.tsx"),
+    source("src/components/standard-search.tsx"),
+  ]);
+  for (const label of ["รหัส TMT/TTMT", "ชื่อการค้า", "ชื่อสามัญ", "ผู้ผลิต", "เลขทะเบียนยา"]) assert.match(standardSearch, new RegExp(label));
+  assert.match(workbench, /values\.some\(\(value\) => value\.length < 2\)/);
+  assert.match(workbench, /setTimeout\(\(\) => void searchStandards\(\), 300\)/);
+  assert.match(workbench, /requestId !== standardRequestIdRef\.current/);
+  assert.match(workbench, /setStandardFilters\(EMPTY_STANDARD_FILTERS\)/);
+  assert.doesNotMatch(workbench, /location\.reload|window\.location/);
 });
 
 test("current mapping worklist has pending defaults, current filters, pagination, and review confirmation", async () => {

@@ -143,7 +143,7 @@ describe.runIf(enabled)("Phase 2C active release consumers on isolated Laragon M
     assert.equal(release.releaseId, "00000000-0000-4000-8000-000000000221");
     const versioned = await searchTmt(pool, { tmtId: "565818" }, release);
     assert.equal(versioned[0]?.conceptFsn, "TPU A");
-    const ttmt = await searchTtmtStandards(pool, "TTMT", release);
+    const ttmt = await searchTtmtStandards(pool, { code: "TTMT" }, release);
     assert.equal(ttmt[0]?.fsn, "TTMT A");
     const mapped = await loadMappedStandardsV2([{ source: "TMT", code: "565818", level: "tpu", productCat: "1" }], undefined, release);
     assert.equal(mapped.values().next().value?.fsn, "Synthetic TPU");

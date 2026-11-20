@@ -22,7 +22,7 @@ export interface StandardRow {
   fsn: string | null;
 }
 
-const FILTERS = [
+export const STANDARD_FILTERS = [
   { key: "code", label: "รหัส TMT/TTMT" },
   { key: "tradeName", label: "ชื่อการค้า" },
   { key: "genericName", label: "ชื่อสามัญ" },
@@ -30,10 +30,44 @@ const FILTERS = [
   { key: "registrationNumber", label: "เลขทะเบียนยา" },
 ] as const;
 
-type FilterKey = (typeof FILTERS)[number]["key"];
-type FilterState = Record<FilterKey, string>;
+export type StandardFilterKey = (typeof STANDARD_FILTERS)[number]["key"];
+export type StandardFilterState = Record<StandardFilterKey, string>;
 
-const EMPTY: FilterState = { code: "", tradeName: "", genericName: "", manufacturer: "", registrationNumber: "" };
+export const EMPTY_STANDARD_FILTERS: StandardFilterState = { code: "", tradeName: "", genericName: "", manufacturer: "", registrationNumber: "" };
+
+export function standardFilterValues(filters: StandardFilterState): string[] {
+  return STANDARD_FILTERS.map((filter) => filters[filter.key].trim()).filter(Boolean);
+}
+
+export function StandardFilterInputs({
+  filters,
+  idPrefix,
+  onChange,
+  onClear,
+}: {
+  filters: StandardFilterState;
+  idPrefix: string;
+  onChange: (key: StandardFilterKey, value: string) => void;
+  onClear: () => void;
+}) {
+  const hasFilters = standardFilterValues(filters).length > 0;
+  return <>
+    {STANDARD_FILTERS.map((filter) => (
+      <Field key={filter.key} label={filter.label} htmlFor={`${idPrefix}-${filter.key}`} className="min-w-36 flex-1">
+        <TextInput
+          id={`${idPrefix}-${filter.key}`}
+          value={filters[filter.key]}
+          autoComplete="off"
+          mono={filter.key === "code" || filter.key === "registrationNumber"}
+          onChange={(event) => onChange(filter.key, event.target.value)}
+        />
+      </Field>
+    ))}
+    <Button size="sm" className="mb-1" icon={<IconClose size={13} />} disabled={!hasFilters} onClick={onClear}>
+      ล้างตัวกรอง
+    </Button>
+  </>;
+}
 
 export interface StandardSearchProps {
   standardType?: "TMT" | "TTMT";
@@ -55,13 +89,13 @@ export function StandardSearch({ standardType = "TMT", lockType = false, onSelec
   // it into state (a mirror needs an effect, and the effect is the bug).
   const [chosenType, setChosenType] = useState<"TMT" | "TTMT">(standardType);
   const type = lockType ? standardType : chosenType;
-  const [filters, setFilters] = useState<FilterState>(EMPTY);
+  const [filters, setFilters] = useState<StandardFilterState>(EMPTY_STANDARD_FILTERS);
   const [rows, setRows] = useState<StandardRow[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "short" | "empty" | "ready" | "error">("idle");
   const requestIdRef = useRef(0);
 
   const activeFilters = useMemo(
-    () => FILTERS.map((filter) => filters[filter.key].trim()).filter((value) => value.length > 0),
+    () => standardFilterValues(filters),
     [filters],
   );
 
@@ -82,7 +116,7 @@ export function StandardSearch({ standardType = "TMT", lockType = false, onSelec
     setStatus("loading");
 
     const params = new URLSearchParams({ standardType: type });
-    for (const filter of FILTERS) {
+    for (const filter of STANDARD_FILTERS) {
       const value = filters[filter.key].trim();
       if (value) params.set(filter.key, value);
     }
@@ -109,7 +143,6 @@ export function StandardSearch({ standardType = "TMT", lockType = false, onSelec
   }, [runSearch]);
 
   const columns = onSelect ? 7 : 6;
-  const hasFilters = activeFilters.length > 0;
 
   return (
     <div className="space-y-2.5">
@@ -132,21 +165,12 @@ export function StandardSearch({ standardType = "TMT", lockType = false, onSelec
           </Badge>
         )}
 
-        {FILTERS.map((filter) => (
-          <Field key={filter.key} label={filter.label} htmlFor={`filter-${filter.key}`} className="min-w-36 flex-1">
-            <TextInput
-              id={`filter-${filter.key}`}
-              value={filters[filter.key]}
-              autoComplete="off"
-              mono={filter.key === "code" || filter.key === "registrationNumber"}
-              onChange={(event) => setFilters((current) => ({ ...current, [filter.key]: event.target.value }))}
-            />
-          </Field>
-        ))}
-
-        <Button size="sm" className="mb-1" icon={<IconClose size={13} />} disabled={!hasFilters} onClick={() => setFilters(EMPTY)}>
-          ล้างตัวกรอง
-        </Button>
+        <StandardFilterInputs
+          filters={filters}
+          idPrefix="filter"
+          onChange={(key, value) => setFilters((current) => ({ ...current, [key]: value }))}
+          onClear={() => setFilters(EMPTY_STANDARD_FILTERS)}
+        />
       </div>
 
       <p className="type-caption" role="status" aria-live="polite">

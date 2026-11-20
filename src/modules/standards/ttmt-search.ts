@@ -1,4 +1,5 @@
 import type { Pool, RowDataPacket } from "mysql2/promise";
+import { normalizeRegistrationNumber, normalizeSearchText } from "./normalize";
 import type { ActiveStandardRelease } from "./active-release";
 
 export interface TtmtSearchRow {
@@ -6,14 +7,63 @@ export interface TtmtSearchRow {
   manufacturer: string | null; registrationNumber: string | null; status: string; sourceVersion: string;
 }
 
-export async function searchTtmtStandards(pool: Pick<Pool, "query">, query: string, release?: ActiveStandardRelease): Promise<TtmtSearchRow[]> {
-  const table = release ? "ttmt_dataset_products" : "ttmt_products";
-  const normalized = query.trim().toLowerCase();
+export interface TtmtSearchFilters {
+  query?: string;
+  code?: string;
+  tradeName?: string;
+  genericName?: string;
+  manufacturer?: string;
+  registrationNumber?: string;
+  limit?: number;
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+export async function searchTtmtStandards(pool: Pick<Pool, "query">, filters: TtmtSearchFilters, release?: ActiveStandardRelease): Promise<TtmtSearchRow[]> {
+  const conditions: string[] = [];
+  const parameters: unknown[] = [];
+  if (release) { conditions.push("p.dataset_id=?"); parameters.push(release.ttmtDatasetId); }
+  const values = {
+    code: filters.code?.trim(),
+    tradeName: normalizeSearchText(filters.tradeName),
+    genericName: normalizeSearchText(filters.genericName),
+    manufacturer: normalizeSearchText(filters.manufacturer),
+    registrationNumber: normalizeRegistrationNumber(filters.registrationNumber),
+  };
+  const query = filters.query?.trim();
+  if (query) {
+    const normalized = normalizeSearchText(query);
+    const predicates = ["p.ttmtcode LIKE ?"];
+    parameters.push(`${escapeLike(query)}%`);
+    if (normalized) {
+      predicates.push("p.normalized_generic LIKE ?", "p.normalized_trade LIKE ?", "p.normalized_manufacturer LIKE ?", "p.normalized_regno LIKE ?");
+      parameters.push(...Array(4).fill(`${escapeLike(normalized)}%`));
+    }
+    conditions.push(`(${predicates.join(" OR ")})`);
+  }
+  for (const [key, column] of [
+    ["code", "p.ttmtcode"],
+    ["tradeName", "p.normalized_trade"],
+    ["genericName", "p.normalized_generic"],
+    ["manufacturer", "p.normalized_manufacturer"],
+    ["registrationNumber", "p.normalized_regno"],
+  ] as const) {
+    const value = values[key];
+    if (!value) continue;
+    conditions.push(`${column} LIKE ?`);
+    parameters.push(`${escapeLike(value)}%`);
+  }
+  if (conditions.length === (release ? 1 : 0)) return [];
+  const source = release
+    ? "ttmt_dataset_products p"
+    : "ttmt_products p INNER JOIN ttmt_imports i ON i.id=p.source_import_id AND i.status='succeeded'";
+  const limit = Math.min(Math.max(filters.limit ?? 30, 1), 100);
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT ttmtcode,fsn,activeingredient,tradename,manufacturer,registration_number,status,source_version
-     FROM ${table} WHERE ${release ? "dataset_id=? AND " : ""}(ttmtcode LIKE ? OR normalized_generic LIKE ? OR normalized_trade LIKE ? OR normalized_manufacturer LIKE ? OR normalized_regno LIKE ?)
-     ORDER BY ttmtcode LIMIT 30`,
-    [...(release ? [release.ttmtDatasetId] : []), `${query.trim()}%`, `${normalized}%`, `${normalized}%`, `${normalized}%`, `${normalized}%`],
+    `SELECT p.ttmtcode,p.fsn,p.activeingredient,p.tradename,p.manufacturer,p.registration_number,p.status,p.source_version
+     FROM ${source} WHERE ${conditions.join(" AND ")} ORDER BY p.ttmtcode LIMIT ?`,
+    [...parameters, limit],
   );
   return rows.map((row) => ({
     code: String(row.ttmtcode), fsn: row.fsn === null ? null : String(row.fsn), activeIngredient: row.activeingredient === null ? null : String(row.activeingredient),

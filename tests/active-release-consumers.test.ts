@@ -59,8 +59,8 @@ test("versioned graph joins relationships and concepts inside one dataset", asyn
 test("TTMT search selects only the release dataset while legacy search stays unchanged", async () => {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
   const pool = { query: async (sql: string, params: unknown[]) => { calls.push({ sql, params }); return [[], []]; } } as unknown as Pool;
-  await searchTtmtStandards(pool, "drug", release);
-  await searchTtmtStandards(pool, "drug");
+  await searchTtmtStandards(pool, { genericName: "drug" }, release);
+  await searchTtmtStandards(pool, { genericName: "drug" });
   assert.match(calls[0]!.sql, /FROM ttmt_dataset_products/);
   assert.equal(calls[0]!.params[0], release.ttmtDatasetId);
   assert.match(calls[1]!.sql, /FROM ttmt_products/);

@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.5`
+- Current application version: `0.8.6`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -30,6 +30,7 @@
 
 ## Phase 3–5 usability checkpoint
 
+- Release `0.8.6` คืนตัวกรองค้นหามาตรฐาน 5 ช่องใน Mapping chooser พร้อม debounce, stale-response protection และ clear แบบไม่ reload; TMT ใช้ authoritative search/readiness เดิม ส่วน TTMT ใช้ AND filters ที่คง succeeded-import และ active-dataset isolation.
 - Release `0.8.5` คืนข้อมูลช่วยตัดสินใจใน Mapping worklist: ชื่อสามัญ/ตัวยาสำคัญ, ความแรง, รูปแบบยา, ผู้ผลิต และที่มาของ mapping โดยใช้ batch resolver และ identity TMT/TTMT เดิม; ไม่เพิ่ม query, ไม่เปลี่ยน lifecycle/save/reconcile และไม่แตะ schema.
 - Release `0.8.4` เพิ่ม live monitoring เฉพาะขณะ TMT run มีสถานะ `running`: Admin refresh สถานะ/checkpoint ทุก 15 วินาทีโดยไม่เริ่มงานซ้ำ และแยกข้อความเริ่มงาน, progress, failure และ guarded resume ชัดเจน. การเริ่ม/resume ยังคงเป็น CLI-only จนกว่าจะมี durable execution ที่อนุมัติ.
 - หน้า Export แสดงตัวเลือก `Full` และ `Delta` ชัดเจนขึ้น โดยใช้ preview token และ checkpoint semantics เดิมทั้งหมด.
@@ -211,7 +212,7 @@ Phase 2D production rollout ยังต้องอนุมัติ runbook/b
 ## Last verified checkpoint
 
 - Previous repository checkpoint: `3ccc48107c4ea0e2698164ff21c37c284641128e`
-- Current application version: `0.8.5`
+- Current application version: `0.8.6`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)
