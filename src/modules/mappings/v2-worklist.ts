@@ -32,6 +32,9 @@ export interface V2WorklistRow {
   status: Exclude<MappingLifecycleStatus, "hidden">;
   statusReason: string | null;
   standardName: string | null;
+  standardActiveIngredient: string | null;
+  standardStrength: string | null;
+  standardDosageForm: string | null;
   standardTradeName: string | null;
   standardManufacturer: string | null;
   standardEligible: boolean | null;
@@ -233,6 +236,9 @@ export async function mappingWorklistV2(options: {
       status: lifecycle.status as Exclude<MappingLifecycleStatus, "hidden">,
       statusReason: lifecycle.reason,
       standardName: standard?.fsn ?? null,
+      standardActiveIngredient: standard?.activeIngredient ?? null,
+      standardStrength: standard?.strength ?? null,
+      standardDosageForm: standard?.dosageForm ?? null,
       standardTradeName: standard?.tradeName ?? null,
       standardManufacturer: standard?.manufacturer ?? null,
       standardEligible: row.mappingId ? standard?.eligible ?? false : null,
