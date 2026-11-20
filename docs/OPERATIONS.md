@@ -35,6 +35,14 @@ Windows Tray Agent ที่สถานบริการ
 - ออกแบบ Agent batch ให้ต่ำกว่าข้อจำกัด payload ของ provider (เป้าหมายไม่เกิน 1 MiB ต่อ request)
 - cron ไม่ใช่ช่องสั่ง Agent หลัก Agent poll คำสั่งเป็นระยะเอง
 - ตรวจเงื่อนไข plan ของผู้ให้บริการก่อน production โดยเฉพาะการใช้งานของหน่วยงาน
+- Production ใช้ TiDB instance เดิม; ไม่มี TiDB branch/instance สำหรับทดสอบที่ได้รับอนุมัติ ห้ามสร้างหรือสมมติว่ามีโดยไม่มี approval แยก
+
+### Production data safety boundary
+
+- ห้าม `DROP`, `TRUNCATE` หรือ `DELETE` ข้อมูล production และห้าม reset migration journal นอก runbook/approval ที่ระบุชัด
+- schema, migration, Dataset Release, publish/rollback และ feature-flag change ต้องผ่าน explicit review และ operator approval ตามคำสั่งนั้น
+- Dataset Release publish/activation ไม่เกิดจาก deploy, migration หรือ application startup โดยอัตโนมัติ
+- Developer/test tooling ห้ามเขียนหรือเปลี่ยน `jhcisdb`; การเข้าถึงที่รองรับมีเฉพาะ Windows Agent ซึ่งอ่านฐาน JHCIS แบบ read-only ตามขอบเขตด้านล่าง
 
 ### สิ่งที่ยังไม่ทำในระยะนี้
 
@@ -316,6 +324,10 @@ DELETE FROM schema_migrations WHERE filename = '0013_shared_rate_limits.sql';
 
 ก่อน rollback ต้องหยุด traffic ของ public endpoints หรือ deploy code ที่ไม่เรียกตารางนี้ก่อน ไม่เช่นนั้น limiter จะ fail-open ตาม policy
 
+> **Historical rollout context:** ข้อความสถานะ Phase 2–7X ในคำอธิบาย migration 0014–0017 ด้านล่าง
+> สะท้อนเวลาที่ migration แต่ละตัวถูกออกแบบ ไม่ใช่ production state ปัจจุบัน.
+> ปัจจุบัน production journal ผ่าน 0017 แล้ว; ดู checkpoint ที่ `PROJECT_STATUS.md`.
+
 **0014_tmt_data_model_v2.sql** — เพิ่ม 15 TMT source tables ตามชื่อ endpoint และ `tmt_sync_runs`/`tmt_sync_checkpoints` สำหรับ Phase 3 แบบ additive; ไม่แก้หรือลบ legacy standards/mapping/export tables และยังไม่ถูก apply production ใน Phase 2
 
 Rollback ก่อนมี Phase 3 data/cutover เท่านั้น ต้องหยุด sync v2 และลบตาม dependency order:
@@ -512,7 +524,7 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 
 ### Verified
 
-- [x] migrations production ผ่านถึง `0013_shared_rate_limits.sql`
+- [x] migrations production ผ่านถึง `0017_tmt_run_validations.sql`; Migration 0018 ยังไม่ apply และต้องผ่าน guarded approval แยก
 - [x] shared DB rate limit สำหรับ login/signup/enrollment ผ่าน controlled production verification
 - [x] daily expired rate-limit bucket cleanup และ `CRON_SECRET` เปิดใช้บน production; cron `30 19 * * *` UTC และ controlled invocation ผ่าน
 - [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification

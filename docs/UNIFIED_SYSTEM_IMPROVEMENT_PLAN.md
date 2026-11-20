@@ -1,5 +1,10 @@
 # Drug Master Platform — Unified System Improvement Plan
 
+> **Status: Historical roadmap / preserved execution plan.** Baseline และ phase-approval text ในไฟล์นี้
+> สะท้อนเวลาที่จัดทำและต้องไม่ใช้เป็น current implementation status.
+> ดูสถานะปัจจุบันที่ [PROJECT_STATUS.md](PROJECT_STATUS.md) และกฎถาวรที่ [SPEC.md](SPEC.md).
+> เก็บเนื้อหาเดิมไว้เพื่ออธิบายที่มาและการตัดสินใจของแผนหกระยะ
+
 **Project:** `TonChaiya/drug-master-platform`
 **Baseline:** `49f97c7` · Application `0.5.0`
 **Scope:** 6 Phases · Controlled Implementation

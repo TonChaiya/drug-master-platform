@@ -11,6 +11,10 @@
 4. [docs/OPERATIONS.md](docs/OPERATIONS.md) เฉพาะ runtime, deploy หรือ security ที่เกี่ยวข้อง
 5. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) เมื่อทำงาน local, build, test หรือ deploy
 
+เอกสารตามลำดับข้างต้นเป็น current canonical truth ส่วน
+`docs/UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md` และ `docs/superpowers/**` เป็น roadmap/design/implementation history
+ให้ใช้อธิบายที่มา ไม่ใช่สถานะปัจจุบัน และห้ามลบหรือเปลี่ยนชื่อเอกสารประวัติโดยไม่มีอนุมัติชัดเจน
+
 ---
 
 ## Ponytail: โหมด lazy senior dev

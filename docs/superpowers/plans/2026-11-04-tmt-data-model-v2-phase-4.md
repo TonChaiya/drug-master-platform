@@ -1,5 +1,7 @@
 # TMT Data Model v2 Phase 4 Browser Implementation Plan
 
+> **Status: Historical implementation plan.** Phase-era assumptions และ checkbox ด้านล่างคงไว้ตามต้นฉบับ; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a feature-gated TMT v2 search and hierarchy browser with safe eligibility preview, bounded graph traversal, and the verified `764169` experience while production remains on legacy standards/mapping/export paths.

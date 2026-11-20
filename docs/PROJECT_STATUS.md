@@ -7,9 +7,10 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
+- Production SHA: `b2adb81116f3a1a68c7d1b34d4813ee0a82f7a2b`
 - Current application version: `0.8.13`
-- Hosting: Vercel production deployed through Git integration
+- Hosting: Vercel production deployed through Git integration; deployment ของ SHA ข้างต้นตรวจแล้วเป็น `READY`
+- Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
 - Windows Agent baseline: `1.3.0`
@@ -189,6 +190,17 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 
 Phase 2D production rollout ยังต้องอนุมัติ runbook/backup/restore/storage และ Migration 0018 แยก. Phase 4 ให้ทำ feature-parity regression ต่อโดยคง `/mappings` เป็น route หลัก; ห้าม copy production data, publish release จริง หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` บน production โดยไม่มี approval และ maintenance plan แยก.
 
+Mapping recovery/UX refinement เสร็จและตรวจ production แล้วที่ `0.8.13`. งาน audit ถัดไปให้ทำแยกขอบเขตตามลำดับ:
+
+1. Standard Browser และมาตรฐาน TMT/TTMT
+2. Drug Catalog
+3. Export DrugCat
+4. Dashboard/Admin
+5. internal architecture/`v2` cleanup หลังพิสูจน์ compatibility
+
+ชื่อ `v2` ใน API, schema, feature flags และ internal contracts ยังเป็น compatibility boundary
+ห้าม rename/delete เพียงเพื่อปรับข้อความผู้ใช้หรือทำ cleanup โดยไม่มี dependency evidence และการอนุมัติแยก.
+
 ก่อนทำงาน UI ถัดไป ต้องรักษา TMT v2 result cards/colors/RegNo behavior, ไม่เพิ่ม schema/migration และไม่แก้ production data โดยไม่มี approval แยก
 
 ก่อนเริ่ม implementation ให้ยืนยันว่า `origin/main` ยังตรงกับ checkpoint ที่เอกสารนี้ระบุ หลัง Codex รายงานงานเสร็จต้องตรวจ GitHub commit/diff เทียบ `main` จริง ไม่เชื่อเฉพาะรายงาน
@@ -216,10 +228,13 @@ Phase 2D production rollout ยังต้องอนุมัติ runbook/b
 
 รายการนี้เป็น backlog/analysis เท่านั้น ไม่ใช่งานที่ implement แล้วหรือคำสั่งให้เริ่มทำโดยอัตโนมัติ
 
-## Last verified checkpoint
+## Historical checkpoint (recorded before the 0.8.13 Mapping UX releases)
+
+รายการด้านล่างเก็บไว้เป็นหลักฐานของ checkpoint เดิมและไม่ใช่ current production baseline;
+สถานะปัจจุบันอยู่ที่หัวเอกสารนี้
 
 - Previous repository checkpoint: `3ccc48107c4ea0e2698164ff21c37c284641128e`
-- Current application version: `0.8.6`
+- Application version at that checkpoint: `0.8.6`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
 - Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)

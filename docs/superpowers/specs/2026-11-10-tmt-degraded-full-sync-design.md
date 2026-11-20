@@ -1,5 +1,7 @@
 # TMT Degraded Full Sync Design
 
+> **Status: Historical design record.** เก็บ decision context เดิมไว้; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 ## Intent
 
 Allow an explicitly requested, one-shot full TMT sync while `/version` is unavailable, without weakening the version-bound resume contract. This is preparation only: Phase 7I does not execute a production reset or sync and does not enable v2 consumers.

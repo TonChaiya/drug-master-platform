@@ -1,5 +1,7 @@
 # Shared public rate limiting implementation plan
 
+> **Status: Historical / implemented plan.** เก็บขั้นตอนเดิมเพื่อเป็นหลักฐาน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/OPERATIONS.md`](../../OPERATIONS.md).
+
 1. Add failing unit tests for hashing/privacy, policy/window behavior, failure-open handling, and route short-circuit ordering.
 2. Add a failing Laragon MySQL integration test for concurrent increments.
 3. Add migration 0013 and the matching Drizzle schema.

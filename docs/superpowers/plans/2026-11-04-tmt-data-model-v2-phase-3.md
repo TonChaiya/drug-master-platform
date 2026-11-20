@@ -1,5 +1,7 @@
 # TMT Data Model v2 Phase 3 Sync Engine Implementation Plan
 
+> **Status: Historical implementation plan.** Phase-era assumptions และ checkbox ด้านล่างคงไว้ตามต้นฉบับ; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a dormant, resumable TMT v2 sync engine that can full/incremental sync the approved endpoints into an isolated local database, verify invariants and code `764169`, while leaving every production consumer on the legacy path.

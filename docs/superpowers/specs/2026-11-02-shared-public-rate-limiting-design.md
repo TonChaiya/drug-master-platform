@@ -1,5 +1,7 @@
 # Shared public endpoint rate limiting
 
+> **Status: Historical design record.** เก็บ design decision เดิมไว้; ดู current status ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ operational truth ที่ [`docs/OPERATIONS.md`](../../OPERATIONS.md).
+
 ## Scope
 
 Add a persistent fixed-window limiter only to login, signup, and Agent enrollment. Policies are 15/5 minutes, 5/30 minutes, and 10/10 minutes per client IP respectively.

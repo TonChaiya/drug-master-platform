@@ -1,5 +1,7 @@
 # TMT/TTMT Data Model v2 Phase 6 Implementation Plan
 
+> **Status: Historical implementation plan.** เก็บข้อจำกัดและ task list เดิมเพื่อเป็นหลักฐาน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 **Spec:** `docs/superpowers/specs/2026-11-04-tmt-data-model-v2-design.md` and the approved Phase 6 brief.
 
 **Global constraints:** keep legacy production behavior as the default; do not use `.env.local`, production, or `jhcisdb`; do not add migration 0017 unless a proven schema defect blocks correctness; preserve the 22-column writer and existing review/checkpoint semantics.

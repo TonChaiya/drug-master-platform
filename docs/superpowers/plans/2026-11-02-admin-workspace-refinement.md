@@ -1,5 +1,7 @@
 # Admin Workspace Refinement Implementation Plan
 
+> **Status: Historical / implemented plan.** เก็บ task list ตามสภาพเดิมเพื่อเป็นหลักฐาน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `/admin` faster to scan and shorter without changing any verified Dashboard/Admin business truth.

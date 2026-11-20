@@ -11,7 +11,7 @@ JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  
                                                             TMT API
 ```
 
-## เอกสาร
+## เอกสารปัจจุบัน
 
 | ไฟล์ | เนื้อหา |
 |---|---|
@@ -21,6 +21,17 @@ JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | environment, คำสั่ง build/test และ workflow พัฒนา |
 | [docs/SPEC.md](docs/SPEC.md) | ระบบต้องทำอะไร: กฎธุรกิจ, แบบจำลองข้อมูล, TMT API, สัญญาไฟล์ DrugCat |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | ระบบทำงานอย่างไร: สถาปัตยกรรม, Agent protocol, ความปลอดภัย, การขึ้นระบบ |
+
+## Roadmap และประวัติการออกแบบ
+
+| ที่อยู่ | เนื้อหา |
+|---|---|
+| [docs/UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](docs/UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md) | roadmap หกระยะฉบับตั้งต้น เก็บไว้เป็นประวัติ; ไม่ใช่สถานะปัจจุบัน |
+| [`docs/superpowers/plans/`](docs/superpowers/plans/) | แผน implementation ตามวันที่ |
+| [`docs/superpowers/specs/`](docs/superpowers/specs/) | design/discovery records ตามวันที่ |
+
+สถานะปัจจุบันให้ยึด `PROJECT_STATUS.md`; ข้อกำหนดถาวรให้ยึด `SPEC.md` และ runbook ให้ยึด `OPERATIONS.md`
+ข้อความสถานะในเอกสารประวัติสะท้อนเวลาที่เขียนและอาจถูกงานภายหลังแทนที่
 
 ## เริ่มใช้งาน
 

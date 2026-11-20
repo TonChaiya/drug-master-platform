@@ -1,5 +1,7 @@
 # Phase 7A Cutover Readiness Implementation Plan
 
+> **Status: Historical / implemented readiness plan.** Production state ในไฟล์นี้สะท้อนเวลาที่เขียน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ runbook ที่ [`docs/OPERATIONS.md`](../../OPERATIONS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add locally verified, fail-closed Phase 7 operational tooling without writing to production or enabling v2 features.

@@ -31,6 +31,9 @@
 
 ## 3. ลำดับเตรียมข้อมูลและ map
 
+ระบบมี Drug Master Platform เดียวสำหรับผู้ใช้ และ `/mappings` เป็น canonical mapping workflow;
+ชื่อ route/API/schema ที่มี `v2` เป็น internal compatibility contract ไม่ใช่ระบบอีกชุดหนึ่ง
+
 1. รับยา 01/10 จาก JHCIS
 2. sync MasterTMT พร้อม NLEM/ทะเบียนยา และนำเข้า MasterTTMT
 3. นำเข้า Drug Catalog ปัจจุบันของสถานบริการ
@@ -40,6 +43,7 @@
 7. บันทึกสำเร็จแล้วพร้อม export ทันที **ไม่มี approval workflow**
 
 ชนิดมาตรฐาน: `drugtype 01` ใช้ TMT · `drugtype 10` ใช้ TTMT
+TMT และ TTMT เป็นคนละ namespace/identity; candidate pool ห้ามรวมกันและห้ามบันทึกข้ามชนิด
 
 **สถานะ Mapping จาก Drug Catalog snapshot ล่าสุด**
 
@@ -105,9 +109,9 @@ Logical model สำหรับสร้าง Drizzle schema/migrations
 - commercial TMT mapping ต้องอ้างระดับที่ eligible ตามชนิดสินค้าและ raw source status; สำหรับ PRODUCTCAT `1` เป้าหมายต้องเป็น TPU ที่ `status=0` ส่วน GPU/TP/ระดับอื่นแสดงเพื่ออธิบายได้แต่ห้ามบันทึกแทน TPU
 - TMT Browser ต้องแสดง level ด้วยสีและ text badge พร้อมกัน: GP สีแดง, GPU สีเขียว, TP สีเหลือง, TPU สีน้ำเงิน; ห้ามใช้สีเพียงอย่างเดียว ส่วนสี SUBS/VTM/GPP/TPP ยังไม่กำหนด
 - TMT Browser v2 เป็น read-only preview: exact/prefix/normalized-FSN search ได้ทุก level, แสดง inbound/outbound ตาม API `concept1 -> concept2`, conflict หลายค่าต้องแสดงทั้งหมด และ graph ต้องจำกัด depth/node พร้อม cycle protection
-- commercial mapping eligibility preview ใช้กฎที่อนุมัติเท่านั้น: TPU ต้องมี MasterTMT `status=0`; GPU/ระดับอื่น, cancelled หรือสถานะไม่ทราบต้องไม่แสดงว่าพร้อม และ Phase 4 ห้ามบันทึก mapping
+- commercial mapping eligibility ใช้กฎที่อนุมัติเท่านั้น: TPU ต้องมี MasterTMT `status=0`; MasterTMT เป็นแหล่ง metadata/status ของ TPU ที่ใช้ตัดสิน eligibility. GPU/ระดับอื่น, cancelled หรือสถานะไม่ทราบต้องไม่แสดงว่าพร้อม. GPU ค้นหา/สำรวจและแสดง TPU ที่เกี่ยวข้องได้ แต่ห้าม auto-map หรือบันทึก GPU เป็น TPU
 
-Implementation status ของข้อกำหนดนี้อยู่ใน `PROJECT_STATUS.md`; การมี schema foundation ไม่ได้แปลว่า production cutover แล้ว
+Implementation status อยู่ใน `PROJECT_STATUS.md`; ประวัติการออกแบบและ phase-era assumptions เก็บใน `docs/superpowers/specs/2026-11-04-tmt-data-model-v2-design.md`
 
 **แหล่งยาและ catalog**
 
@@ -141,14 +145,16 @@ Implementation status ของข้อกำหนดนี้อยู่ใ�
 - ไม่พึ่ง FULLTEXT / trigger / stored procedure / event
 - Sync ใช้ staging แล้ว commit แบบ atomic หลังจำนวนแถวและ `officeId` ผ่าน ห้าม upsert ตารางจริงทีละ batch
 
-### Mapping identity v2 (dormant until approved cutover)
+### Mapping identity และ compatibility contract
 
 - `standard_source` เป็น `TMT` หรือ `TTMT`; `standard_code` เป็น string และ `standard_level` เป็น level ที่ source ยืนยัน (`tpu` สำหรับ commercial TMT, `product` สำหรับ TTMT).
-- Legacy rows ที่ source/level เป็น `NULL` เป็น state ที่ยังไม่ cutover: ห้ามเดา namespace จากตัวเลข code.
+- แถว compatibility ที่ source/level เป็น `NULL` ห้ามเดา namespace จากตัวเลข code.
 - PRODUCTCAT 1 ใช้ได้เฉพาะ TMT TPU ที่มี `tmt_concept.level_name=tpu` และ `tmt_mastertmt.status=0`; GPU/GP/TP แสดงเพื่ออธิบายได้แต่บันทึกไม่ได้.
 - TTMT ตรวจ `ttmt_products` และ import ที่สำเร็จตาม contract ของ TTMT โดยไม่ใช้ TMT hierarchy.
 - PRODUCTCAT 2/4 ยังปฏิเสธจนกว่าจะมีกฎ TP/GP-F/GP-X ที่ยืนยันได้.
 - การเปลี่ยน source/code/level เป็น mapping write จึงทำให้ review acknowledgement ที่ผูก `updatedAt` เดิม stale โดยอัตโนมัติ.
+- Manual mapping ห้ามถูก Catalog reconcile เขียนทับ; lifecycle คงเป็น `pending`, `needs_review`, `mapped` และ acknowledgement ผูก exact mapping/catalog state ไม่ใช่การยืนยันถาวร.
+- Dataset Release ต้องผ่าน validation/approval และคำสั่ง publish/activation แบบ explicit เท่านั้น; migration, deploy หรือ application startup ห้าม publish หรือเปิด feature flag อัตโนมัติ.
 
 ---
 

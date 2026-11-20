@@ -1,5 +1,7 @@
 # Validated-Unverified TMT Readiness Implementation Plan
 
+> **Status: Historical / implemented plan.** เก็บ assumptions/checklist เดิมเพื่อเป็นหลักฐาน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Persist fail-closed evidence for a completed `full_unverified` TMT run and let the central readiness guard recognize it as `validated_unverified`, never as verified.

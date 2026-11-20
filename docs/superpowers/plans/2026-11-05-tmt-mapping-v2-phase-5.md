@@ -1,5 +1,7 @@
 # TMT/TTMT Mapping v2 Implementation Plan
 
+> **Status: Historical implementation plan.** Phase-era assumptions และ internal naming คงไว้เป็นประวัติ; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a default-off, source-specific TMT/TTMT mapping path without changing legacy mapping, catalog, or export runtime behavior.

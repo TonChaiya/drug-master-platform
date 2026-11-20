@@ -1,5 +1,7 @@
 # TMT/TTMT Data Model v2 - discovery, design, and Phase 2 foundation
 
+> **Status: Historical design/discovery record.** Phase-era implementation status ด้านล่างไม่ใช่ current truth; ดู [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ durable invariants ที่ [`docs/SPEC.md`](../../SPEC.md).
+
 ## Executive summary
 
 Phase 1 mapped the current implementation, verified the owner-provided TMT API manual against the live read-only API, proved TMT ID `764169`, and proposed a replacement data model and cutover plan. Phase 2 implements the additive persistence and parser/client foundation in migrations 0014/0015 without changing production consumers, applying production migrations, or mutating production domain data.

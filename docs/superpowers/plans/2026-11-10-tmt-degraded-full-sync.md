@@ -1,5 +1,7 @@
 # TMT Degraded Full Sync Implementation Plan
 
+> **Status: Historical implementation plan.** เก็บ assumptions/checklist เดิมเพื่อเป็นหลักฐาน; ดู current truth ที่ [`docs/PROJECT_STATUS.md`](../../PROJECT_STATUS.md) และ [`docs/SPEC.md`](../../SPEC.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a one-shot, explicitly unverified full TMT sync mode without weakening versioned resume.
