@@ -402,6 +402,10 @@ pnpm db:migrate:0018 -- --environment production --env-file C:\secure\drug-maste
 
 คำสั่ง execute ต้องใช้ maintenance mode ที่เปิดอยู่และ approval ของ operator จริง. Executor รัน DDL ทีละ statement, ตรวจ 19 tables, composite PK ที่ขึ้นต้นด้วย `dataset_id` และ dataset FK แล้วจึง insert journal 0018 เพียงครั้งเดียว. TiDB DDL ไม่ rollback ด้วย transaction; หาก statement, schema verification หรือ journal write ล้มเหลว ให้หยุดทันที เก็บ output ที่ redact แล้ว และทำ manual schema/journal reconciliation ตาม incident plan—ห้าม retry, drop table หรือแก้ journal โดยพลการ.
 
+Migration 0019 ต้องรัน **หลัง 0018 เท่านั้น** เพราะเพิ่มคอลัมน์ในทั้ง `ttmt_products` และ `ttmt_dataset_products`. ใช้ `pnpm db:migrate:0019` แยกจาก generic runner; dry-run เป็นค่าเริ่มต้นและ executor ตรวจ exact hash `4c9772d57c1786fe5476b7e309b0ebdce41e709914f94697165ae2fae020a04f`, journal 0001–0018, dependency tables, partial columns, maintenance และ post-schema ก่อนบันทึก journal. การมี schema 0018 ไม่สร้าง pointer/release และไม่เปิด `ACTIVE_STANDARD_RELEASE_ENABLED`.
+
+TTMT baseline replacement เป็น one-time operator action ผ่าน `pnpm ttmt:baseline:replace` ไม่ใช่ normal import mode. Command ต้องใช้ env file นอก repository, dry-run/reference preflight ก่อน, exact workbook hash/sheet/15 columns/9,654 unique codes/17 `CANCEL`, maintenance และ confirmation `REPLACE TTMT BASELINE 20261001`. Execution เก็บ import/audit เดิม, archive identity ของ import เดิมแบบ auditable, ลบเฉพาะ mutable `ttmt_products` และสร้าง import ใหม่ใน transaction; mapped code ที่หายหรือ FK ที่ชี้ product ทำให้ fail closed. Import ปกติยัง reject duplicate version/hash เหมือนเดิม.
+
 ### Phase 2C Active Standard Release gate
 
 - `ACTIVE_STANDARD_RELEASE_ENABLED` เป็น default-off และเปิดเฉพาะค่า exact `1`; การมี migration 0018 อย่างเดียวไม่อนุญาตให้เปิด flag.

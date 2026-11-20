@@ -125,6 +125,8 @@ pnpm exec vitest run tests/tmt-v2-migration-mysql.test.ts
 
 DB integration tests อื่นต้องตั้ง `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_DATABASE` โดยตรง ฐานต้องอยู่ที่ `localhost`/`127.0.0.1` และชื่อตรง pattern `drug_master_*test` เท่านั้น หากไม่ opt-in test จะ skip; หาก opt-in แต่ target ไม่ผ่าน guard จะ fail ก่อนสร้าง connection และไม่มี fallback ไป `.env.local`
 
+Guarded migration chain สำหรับ Dataset Release/TTMT fidelity ใช้ `pnpm db:migrate:0018` แล้ว `pnpm db:migrate:0019`; ทั้งสอง command default dry-run, รับ env file ที่อยู่นอก repository และไม่สร้าง database. Controlled TTMT replacement ใช้ `pnpm ttmt:baseline:replace` และห้ามใช้แทน normal `ttmt:v2:import`; ทดสอบ unit/fake ได้โดยไม่เปิด DB opt-in และ Production execution ต้องมี credential/maintenance/confirmation ที่อนุมัติแยก.
+
 Migration test guard host/port/database/user, สร้างฐานสะอาด, ตรวจ journal/hash/schema/rerun แล้ว drop เฉพาะฐานทดสอบเมื่อจบ
 
 > Incident note (Phase 2): During Phase 2 verification, a DB-backed baseline test inherited `.env.local`. The test completed cleanup, production cleanup was later verified read-only, and a fail-closed integration-test DB guard was added.

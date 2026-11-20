@@ -7,8 +7,9 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production SHA: `b2adb81116f3a1a68c7d1b34d4813ee0a82f7a2b`
-- Current application version: `0.8.14`
+- Production SHA: `e2fe8f42fcd116215207b4318d14ddd5b707e728`
+- Current production application version: `0.8.14`
+- Local release candidate: `0.8.15` (ยังไม่ push/deploy)
 - Hosting: Vercel production deployed through Git integration; deployment ของ SHA ข้างต้นตรวจแล้วเป็น `READY`
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
@@ -20,6 +21,7 @@
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
 - Status: Phase 2D local implementation และ isolated MySQL verification เสร็จแล้ว; release `0.8.2` เพิ่ม guarded Migration 0018 executor ต่อจาก guarded Dataset Release CLI และ migration explicit final schema ของ `0.8.1`. Production ยังคงใช้ legacy live dataset path เพราะ feature flag ปิดอยู่ และ production migration/baseline/publish ยังไม่ได้รับอนุมัติ.
 - Release `0.8.14` เพิ่ม migration 0019 และ source-fidelity preservation สำหรับ `TTMTType`, `Changedate`, `Drug_Group_Nhso` ใน live/versioned TTMT rows. Import ยังคง upsert เฉพาะรหัสที่มีใน workbook, cell ว่างล้างค่าเดิมเป็น `NULL`, ไม่ลบ/deactivate รหัสที่หาย และยังใช้ `Status` เป็น eligibility input โดยไม่ตีความ `TTMTType=CANCEL`.
+- Release `0.8.15` เตรียม guarded Migration 0019 executor สำหรับลำดับ `0018 → 0019` และ CLI one-time TTMT baseline replacement แบบ dry-run/fail-closed ซึ่งรักษา import/audit/mapping/history เดิมและไม่ลด duplicate version/hash protection. ยังไม่มี Production migration, reset หรือ baseline import ใน checkpoint นี้.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
 
 ## Phase 4 consolidation checkpoint
@@ -238,7 +240,7 @@ Mapping recovery/UX refinement เสร็จและตรวจ production �
 - Application version at that checkpoint: `0.8.6`
 - Production cutover: complete
 - TMT assurance: `validated_unverified` under policy `validated-unverified-v1`
-- Latest repository migration: `0018_versioned_standard_dataset_foundation.sql` (production latest applied remains `0017`)
+- Latest repository migration: `0019_ttmt_source_fidelity.sql` (production latest applied remains `0017`)
 - Agent version: `1.3.0`
 - Release preparation: Migration 0018 compatibility rewrite, guarded Migration 0018 executor และ guarded Dataset Release CLI ผ่าน local MySQL verification; Production rollout ยัง blocked ที่ disposable TiDB evidence, storage/headroom และ backup/restore rehearsal
 
