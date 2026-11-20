@@ -29,15 +29,18 @@ function OptionalValue({ label, value }: { label: string; value: string | null }
   return <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 text-xs"><span className="type-caption">{label}</span><span className="break-words text-ink">{value ?? ""}</span></div>;
 }
 
+function CompactValue({ label, value }: { label: string; value: string | null | undefined }) {
+  return value ? <span className="min-w-0 break-words"><span className="text-slate-500">{label}</span> {value}</span> : null;
+}
+
 export function TmtResultCard({ result, children, comparison = false, current = false }: { result: TmtResultSummary; children?: ReactNode; comparison?: boolean; current?: boolean }) {
   const decisionName = comparison && result.activeIngredient ? result.activeIngredient : result.name;
   return (
-    <article className={`min-w-0 rounded-lg border p-3 ${current ? "border-primary-300 bg-primary-50/50" : "border-border"}`}>
-      <div className="flex flex-wrap items-center gap-2"><TmtLevelBadge level={result.level} /><span className="cell-code">{result.tmtId}</span>{current ? <Badge tone="info">รายการปัจจุบัน</Badge> : null}</div>
-      <p className="mt-2 break-words text-xs font-semibold text-ink">{decisionName}{comparison && result.strength ? ` · ${result.strength}` : null}</p>
+    <article className={`min-w-0 rounded-md border bg-surface ${comparison ? "px-2.5 py-2" : "p-3"} ${current ? "border-primary-300 ring-1 ring-primary-100" : "border-border"}`}>
+      <div className="flex flex-wrap items-center gap-1.5"><TmtLevelBadge level={result.level} /><span className="cell-code">{result.tmtId}</span>{current ? <Badge tone="info">รายการปัจจุบัน</Badge> : null}</div>
+      <p className={`${comparison ? "mt-1" : "mt-2"} break-words text-xs font-semibold text-ink`}>{decisionName}{comparison && result.strength ? ` · ${result.strength}` : null}</p>
       {comparison && result.activeIngredient && result.name !== result.activeIngredient ? <p className="type-help mt-0.5 break-words">{result.name}</p> : null}
-      <div className="mt-2 space-y-1">
-        {comparison ? <OptionalValue label="รูปแบบยา" value={result.dosageForm ?? null} /> : null}
+      {comparison ? <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xxs text-ink"><CompactValue label="รูปแบบ" value={result.dosageForm} /><CompactValue label="ชื่อการค้า" value={result.tradeName} /><CompactValue label="ผู้ผลิต" value={result.manufacturer} />{result.registrationConflict ? <Badge tone="warning">เลขทะเบียนมีหลายค่า</Badge> : <CompactValue label="ทะเบียน" value={result.registrationNumber} />}</div> : <div className="mt-2 space-y-1">
         <OptionalValue label="ชื่อการค้า" value={result.tradeName} />
         <OptionalValue label="ผู้ผลิต" value={result.manufacturer} />
         <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2 text-xs">
@@ -46,12 +49,13 @@ export function TmtResultCard({ result, children, comparison = false, current = 
             {result.registrationConflict ? <Badge tone="warning">เลขทะเบียนมีหลายค่า</Badge> : (result.registrationNumber ?? "")}
           </span>
         </div>
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      </div>}
+      <div className={`${comparison ? "mt-1.5 gap-1.5" : "mt-2 gap-2"} flex flex-wrap items-center`}>
         <Badge tone={result.status === "active" ? "success" : result.status === "cancelled" ? "warning" : "neutral"}>{statusLabel(result.status)}</Badge>
         <Badge tone={result.mappingEligible ? "success" : "warning"}>{result.mappingEligibilityReason}</Badge>
+        {comparison && children ? <div className="ml-auto flex flex-wrap gap-1.5">{children}</div> : null}
       </div>
-      {children ? <div className="mt-2 flex flex-wrap justify-end gap-2">{children}</div> : null}
+      {!comparison && children ? <div className="mt-2 flex flex-wrap justify-end gap-2">{children}</div> : null}
     </article>
   );
 }

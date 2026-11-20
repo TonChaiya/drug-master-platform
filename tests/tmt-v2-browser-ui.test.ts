@@ -74,9 +74,11 @@ test("mapping comparison leads with TMT generic details and marks the current ca
       registrationNumber: null, registrationConflict: true, status: "active", mappingEligible: true,
       mappingEligibilityReason: "พร้อมจับคู่",
     },
-  }));
-  for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharma", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่"]) assert.match(html, new RegExp(value));
+  }, createElement("button", { type: "button" }, "รายละเอียด"), createElement("button", { type: "button" }, "เลือก")));
+  for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharma", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่", "รายละเอียด", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("Paracetamol") < html.indexOf("PARACETAMOL 500 MG TABLET"));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "ml-auto", "ring-primary-100"]) assert.match(html, new RegExp(compactClass));
+  assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 
 test("TTMT result stays in its own product namespace and leaves optional fields blank", () => {
@@ -99,6 +101,8 @@ test("mapping comparison leads with TTMT active ingredient and marks the current
   } }));
   for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT maker", "REG-1"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("TTMT ingredient") < html.indexOf("TTMT PRODUCT FSN"));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
+  assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 
 test("browser starts as a compact read-only search workspace", () => {

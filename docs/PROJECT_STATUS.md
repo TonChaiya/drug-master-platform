@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.7`
+- Current application version: `0.8.8`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -30,6 +30,7 @@
 
 ## Phase 3–5 usability checkpoint
 
+- Release `0.8.8` ลดความสูงและช่องว่างของ candidate TMT/TTMT ใน Mapping chooser, รวม metadata สำคัญเป็นแถว compact และแยกพื้นที่ผลค้นหาด้วย neutral surface โดยคง safety badges, current marker และ actions เดิม.
 - Release `0.8.7` เพิ่มบริบทเปรียบเทียบ JHCIS กับมาตรฐานปัจจุบันใน Mapping chooser, ทำเครื่องหมาย candidate ที่เลือกอยู่, แสดงเหตุผลเมื่อ Catalog reconcile ไม่พร้อม และเพิ่ม loading/empty/error states แบบ compact; save/reconcile, lifecycle, acknowledgement และ API contracts เดิมไม่เปลี่ยน.
 - Release `0.8.6` คืนตัวกรองค้นหามาตรฐาน 5 ช่องใน Mapping chooser พร้อม debounce, stale-response protection และ clear แบบไม่ reload; TMT ใช้ authoritative search/readiness เดิม ส่วน TTMT ใช้ AND filters ที่คง succeeded-import และ active-dataset isolation.
 - Release `0.8.5` คืนข้อมูลช่วยตัดสินใจใน Mapping worklist: ชื่อสามัญ/ตัวยาสำคัญ, ความแรง, รูปแบบยา, ผู้ผลิต และที่มาของ mapping โดยใช้ batch resolver และ identity TMT/TTMT เดิม; ไม่เพิ่ม query, ไม่เปลี่ยน lifecycle/save/reconcile และไม่แตะ schema.

@@ -150,4 +150,5 @@ test("chooser keeps edit, review confirmation, and explicit loading empty and er
   assert.match(workbench, /standardSearchStatus === "error"/);
   assert.match(workbench, /<ErrorState compact/);
   assert.match(workbench, /flex flex-wrap items-end/);
+  assert.equal((workbench.match(/space-y-1\.5 rounded-lg border border-border bg-surface-subtle p-2/g) ?? []).length, 2);
 });
