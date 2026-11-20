@@ -64,6 +64,21 @@ test("shared TMT result card leaves missing optional fields blank", () => {
   assert.match(html, /เลขทะเบียนยา<\/span><span[^>]*><\/span>/);
 });
 
+test("mapping comparison leads with TMT generic details and marks the current candidate", () => {
+  const html = renderToStaticMarkup(createElement(TmtResultCard, {
+    comparison: true,
+    current: true,
+    result: {
+      level: "tpu", tmtId: "565818", name: "PARACETAMOL 500 MG TABLET", activeIngredient: "Paracetamol",
+      strength: "500 mg", dosageForm: "tablet", tradeName: "PARA", manufacturer: "Example Pharma",
+      registrationNumber: null, registrationConflict: true, status: "active", mappingEligible: true,
+      mappingEligibilityReason: "พร้อมจับคู่",
+    },
+  }));
+  for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharma", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่"]) assert.match(html, new RegExp(value));
+  assert.ok(html.indexOf("Paracetamol") < html.indexOf("PARACETAMOL 500 MG TABLET"));
+});
+
 test("TTMT result stays in its own product namespace and leaves optional fields blank", () => {
   const html = renderToStaticMarkup(createElement(TtmtResultCard, { result: {
     source: "TTMT", code: "TTMT-001", level: "product", fsn: "TTMT PRODUCT",
@@ -74,6 +89,16 @@ test("TTMT result stays in its own product namespace and leaves optional fields 
   assert.match(html, /TTMT-001/);
   assert.match(html, /TTMT PRODUCT/);
   assert.doesNotMatch(html, /GP|GPU|TPU|MasterTMT|—|N\/A/);
+});
+
+test("mapping comparison leads with TTMT active ingredient and marks the current product", () => {
+  const html = renderToStaticMarkup(createElement(TtmtResultCard, { comparison: true, current: true, result: {
+    source: "TTMT", code: "TTMT-001", level: "product", fsn: "TTMT PRODUCT FSN",
+    activeIngredient: "TTMT ingredient", tradeName: "TTMT trade", manufacturer: "TTMT maker",
+    registrationNumber: "REG-1", active: true, sourceVersion: "20261001",
+  } }));
+  for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT maker", "REG-1"]) assert.match(html, new RegExp(value));
+  assert.ok(html.indexOf("TTMT ingredient") < html.indexOf("TTMT PRODUCT FSN"));
 });
 
 test("browser starts as a compact read-only search workspace", () => {

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { MappedStandardSummary, mappingStandardSearchUrl } from "@/components/mappings/v2-mapping-workbench";
+import { MappedStandardSummary, MappingComparisonContext, isCurrentCandidate, mappingStandardSearchUrl } from "@/components/mappings/v2-mapping-workbench";
 import { EMPTY_STANDARD_FILTERS, type StandardFilterState } from "@/components/standard-search";
 import type { V2WorklistRow } from "@/modules/mappings/v2-worklist";
 
@@ -39,6 +39,19 @@ test("unmapped row stays compact and does not invent standard metadata", () => {
   const html = renderToStaticMarkup(createElement(MappedStandardSummary, { row: row({ standardCode: null, standardSource: null, standardLevel: null }) }));
   assert.match(html, /ยังไม่จับคู่/);
   assert.doesNotMatch(html, /Paracetamol|Example Pharma|ที่มา:/);
+});
+
+test("inline chooser compares the JHCIS drug with the current source-aware identity", () => {
+  const html = renderToStaticMarkup(createElement(MappingComparisonContext, { row: row() }));
+  for (const value of ["รายการยา JHCIS", "J-001", "Local drug", "Local generic", "มาตรฐานที่จับคู่ปัจจุบัน", "TMT", "TPU", "565818"]) assert.match(html, new RegExp(value));
+  assert.match(html, /sm:grid-cols-2/);
+});
+
+test("current candidate matching requires the complete source code and level identity", () => {
+  assert.equal(isCurrentCandidate(row(), "TMT", "565818", "tpu"), true);
+  assert.equal(isCurrentCandidate(row(), "TTMT", "565818", "product"), false);
+  assert.equal(isCurrentCandidate(row(), "TMT", "565818", "gpu"), false);
+  assert.equal(isCurrentCandidate(row(), "TMT", "other", "tpu"), false);
 });
 
 test("mapping chooser maps each independent filter to the source-specific query contract", () => {
@@ -120,7 +133,21 @@ test("reconcile action is only rendered when the current catalog pipeline is ava
   assert.match(page, /tmtV2CatalogEnabled/);
   assert.match(page, /reconcileAvailable=\{tmtV2CatalogEnabled\(\)\}/);
   assert.match(workbench, /reconcileAvailable \? <Button/);
+  assert.match(workbench, /จับคู่อัตโนมัติยังไม่พร้อม — ยังจับคู่ด้วยตนเองได้/);
   assert.match(workbench, /\/api\/v1\/mappings\/reconcile/);
   assert.match(service, /if \(tmtV2CatalogEnabled\(\)\)/);
   assert.match(service, /return reconcileFromLatestCatalogV2\(facilityId, userId\)/);
+});
+
+test("chooser keeps edit, review confirmation, and explicit loading empty and error states", async () => {
+  const workbench = await source("src/components/mappings/v2-mapping-workbench.tsx");
+  assert.match(workbench, /row\.standardCode \? "แก้ไข" : "จับคู่"/);
+  assert.match(workbench, /บันทึกและยืนยันว่าตรวจสอบแล้ว/);
+  assert.match(workbench, /standardSearchStatus === "loading"/);
+  assert.match(workbench, /aria-label="กำลังโหลดผลค้นหา"/);
+  assert.match(workbench, /standardSearchStatus === "empty"/);
+  assert.match(workbench, /<EmptyState compact/);
+  assert.match(workbench, /standardSearchStatus === "error"/);
+  assert.match(workbench, /<ErrorState compact/);
+  assert.match(workbench, /flex flex-wrap items-end/);
 });

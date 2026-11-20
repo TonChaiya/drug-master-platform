@@ -68,6 +68,26 @@ export function MappedStandardSummary({ row }: { row: V2WorklistRow }) {
   </>;
 }
 
+export function isCurrentCandidate(row: V2WorklistRow, source: "TMT" | "TTMT", code: string, level: string): boolean {
+  return row.standardSource === source && row.standardCode === code && row.standardLevel === level;
+}
+
+export function MappingComparisonContext({ row }: { row: V2WorklistRow }) {
+  return <div className="mt-3 grid gap-2 sm:grid-cols-2">
+    <section className="min-w-0 rounded-lg border border-border bg-surface-subtle p-3">
+      <div className="type-caption">รายการยา JHCIS</div>
+      <div className="mt-1 flex flex-wrap items-center gap-2"><span className="cell-code">{row.drugcode}</span><Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge></div>
+      <div className="mt-1 font-semibold text-ink">{row.drugname ?? row.drugnamethai ?? "—"}</div>
+      {row.druggenericname ? <div className="type-help">{row.druggenericname}</div> : null}
+    </section>
+    <section className="min-w-0 rounded-lg border border-border bg-surface-subtle p-3">
+      <div className="type-caption">มาตรฐานที่จับคู่ปัจจุบัน</div>
+      {row.standardSource ? <div className="mt-1 flex flex-wrap gap-1"><Badge tone={row.standardSource === "TMT" ? "info" : "success"}>{row.standardSource}</Badge>{row.standardLevel ? <Badge>{row.standardLevel.toUpperCase()}</Badge> : null}</div> : null}
+      <div className="mt-1"><MappedStandardSummary row={row} /></div>
+    </section>
+  </div>;
+}
+
 export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable: boolean }) {
   const { push } = useToast();
   const [query, setQuery] = useState("");
@@ -130,6 +150,7 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
     }
     const source = selected.drugtype === "10" ? "TTMT" : "TMT";
     setStandardSearchStatus("loading");
+    setTmtRows([]); setTtmtRows([]); setDetail(null);
     try {
       const response = await fetch(mappingStandardSearchUrl(source, standardFilters));
       if (source === "TMT") {
@@ -193,7 +214,7 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
 
   const filtered = Boolean(query.trim()) || status !== "pending" || drugType !== "all";
   return <div className="space-y-3.5">
-    <Card><CardBody><FilterBar actions={<><Button size="sm" icon={<IconClose size={13} />} disabled={!filtered} onClick={resetFilters}>ล้างตัวกรอง</Button>{reconcileAvailable ? <Button size="sm" variant="primary" icon={<IconRefresh size={13} />} loading={busy === "reconcile"} disabled={busy !== null} onClick={() => void reconcile()}>จับคู่อัตโนมัติจาก Drug Catalog</Button> : null}</>}>
+    <Card><CardBody><FilterBar actions={<><Button size="sm" icon={<IconClose size={13} />} disabled={!filtered} onClick={resetFilters}>ล้างตัวกรอง</Button>{reconcileAvailable ? <Button size="sm" variant="primary" icon={<IconRefresh size={13} />} loading={busy === "reconcile"} disabled={busy !== null} onClick={() => void reconcile()}>จับคู่อัตโนมัติจาก Drug Catalog</Button> : <span className="type-help max-w-52">จับคู่อัตโนมัติยังไม่พร้อม — ยังจับคู่ด้วยตนเองได้</span>}</>}>
       <Field label="ค้นหารายการยา" htmlFor="mapping-v2-worklist-query" className="min-w-52 flex-1"><SearchInput id="mapping-v2-worklist-query" placeholder="รหัสยา หรือชื่อยา" value={query} autoComplete="off" onChange={(event) => { setPage(1); setQuery(event.target.value); }} /></Field>
       <Field label="สถานะ" htmlFor="mapping-v2-worklist-status"><SelectInput id="mapping-v2-worklist-status" className="w-32" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as LifecycleFilter); }}><option value="pending">คงค้าง</option><option value="needs_review">ต้องตรวจสอบ</option><option value="mapped">จับคู่แล้ว</option><option value="all">ทั้งหมด</option></SelectInput></Field>
       <Field label="ประเภท" htmlFor="mapping-v2-worklist-type"><SelectInput id="mapping-v2-worklist-type" className="w-32" value={drugType} onChange={(event) => { setPage(1); setDrugType(event.target.value as DrugTypeFilter); }}><option value="all">ทั้งหมด</option><option value="01">01 · TMT</option><option value="10">10 · TTMT</option></SelectInput></Field>
@@ -204,6 +225,7 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
           const open = selected?.sourceDrugId === row.sourceDrugId;
           return <Fragment key={row.sourceDrugId}><tr className={open ? "row-selected" : undefined}><td className="cell-code">{row.drugcode}</td><td className="max-w-56"><div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>{row.druggenericname ? <div className="type-help">{row.druggenericname}</div> : null}</td><td><Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge></td><td className="max-w-72"><MappedStandardSummary row={row} /></td><td>{row.standardSource ? <div className="flex flex-wrap gap-1"><Badge tone={row.standardSource === "TMT" ? "info" : "success"}>{row.standardSource}</Badge><Badge>{row.standardLevel?.toUpperCase()}</Badge></div> : <span className="type-caption">—</span>}</td><td>{row.updateFlag ? <Badge>{row.updateFlag}</Badge> : <span className="type-caption">—</span>}</td><td className="max-w-56"><Badge tone={statusTone(row.status)} dot>{statusLabel(row.status)}</Badge>{row.statusReason ? <div className="type-help mt-1">{row.statusReason}</div> : null}</td><td><Button size="sm" variant={open ? "secondary" : row.standardCode ? "ghost" : "outline"} icon={open ? <IconClose size={13} /> : <IconLink size={13} />} disabled={busy !== null && busy !== row.sourceDrugId} loading={busy === row.sourceDrugId} onClick={() => openChooser(row)}>{open ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}</Button></td></tr>
             {open ? <tr className="hover:bg-transparent"><td colSpan={COLUMNS} className="border-b-0 bg-primary-50/40 p-0"><div ref={chooserRef} className="border-y border-primary-200 bg-surface p-3.5"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="type-card-title">เลือกมาตรฐานให้ <span className="cell-code">{row.drugcode}</span> — {row.drugname ?? row.drugnamethai ?? ""}</h3><p className="type-help mt-0.5">drugtype {row.drugtype} ใช้คลัง {row.drugtype === "10" ? "TTMT" : "TMT"} เท่านั้น</p></div><Button size="sm" icon={<IconClose size={13} />} onClick={() => setSelected(null)}>ปิด</Button></div>
+              <MappingComparisonContext row={row} />
               {row.status === "needs_review" && row.standardSource && row.standardCode && row.standardLevel ? <Alert tone="warning" className="mt-3" title="รายการนี้ต้องยืนยันหลังตรวจสอบ"><div className="flex flex-wrap items-center justify-between gap-2"><span>{row.statusReason}</span><Button size="sm" variant="primary" disabled={busy !== null} loading={busy === row.sourceDrugId} onClick={() => void save(row, row.standardSource!, row.standardCode!, row.standardLevel!, true)}>บันทึกและยืนยันว่าตรวจสอบแล้ว</Button></div></Alert> : null}
               <div className="mt-3 flex flex-wrap items-end gap-2.5">
                 <Badge tone={row.drugtype === "10" ? "success" : "info"} className="mb-2">คลัง {row.drugtype === "10" ? "TTMT" : "TMT"}</Badge>
@@ -222,7 +244,18 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
                 {standardSearchStatus === "ready" && `พบ ${(row.drugtype === "10" ? ttmtRows : tmtRows).length.toLocaleString("th-TH")} รายการ`}
               </p>
               {standardSearchStatus === "error" ? <div className="mt-2 rounded-lg border border-border"><ErrorState compact title="ค้นหามาตรฐานไม่สำเร็จ" description="ระบบติดต่อคลังมาตรฐานไม่ได้ ตัวกรองที่กรอกไว้ยังคงอยู่" onRetry={() => void searchStandards()} /></div> : null}
-              {row.drugtype === "01" ? <div className="mt-3 space-y-2">{tmtRows.map((item) => <TmtResultCard key={item.tmtId} result={{ level: item.level, tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" onClick={() => void openDetail(item.tmtId)}>รายละเอียด</Button><Button size="sm" variant="primary" disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, item.level)}>เลือก</Button></TmtResultCard>)}{detail?.concept.level === "gpu" ? <section className="rounded-md border border-border p-3"><h4 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง ({detail.relatedTpu.length})</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((item) => <TmtResultCard key={item.tmtId} result={{ level: "tpu", tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" variant="primary" disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, "tpu")}>เลือก TPU</Button></TmtResultCard>)}</div></section> : null}</div> : <div className="mt-3 space-y-2">{ttmtRows.map((item) => <TtmtResultCard key={item.code} result={item}><Button size="sm" variant="primary" disabled={!item.active || busy !== null} onClick={() => void save(row, "TTMT", item.code, "product")}>เลือก</Button></TtmtResultCard>)}</div>}
+              {standardSearchStatus === "loading" ? <div className="mt-3 grid gap-2 sm:grid-cols-2" role="status" aria-label="กำลังโหลดผลค้นหา"><div className="h-28 animate-pulse rounded-lg bg-slate-100" /><div className="hidden h-28 animate-pulse rounded-lg bg-slate-100 sm:block" /></div> : null}
+              {standardSearchStatus === "empty" ? <div className="mt-3 rounded-lg border border-border"><EmptyState compact icon={<IconSearch size={18} />} title="ไม่พบรายการที่ตรงกับตัวกรอง" description="ลองลดจำนวนตัวกรองหรือใช้คำค้นอื่น" /></div> : null}
+              {row.drugtype === "01" ? <div className="mt-3 space-y-2">{tmtRows.map((item) => {
+                const current = isCurrentCandidate(row, "TMT", item.tmtId, item.level);
+                return <TmtResultCard key={item.tmtId} comparison current={current} result={{ level: item.level, tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, activeIngredient: item.activeIngredient, strength: item.strength, dosageForm: item.dosageForm, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" onClick={() => void openDetail(item.tmtId)}>รายละเอียด</Button><Button size="sm" variant={current ? "secondary" : "primary"} disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, item.level)}>{current ? "เลือกอยู่" : "เลือก"}</Button></TmtResultCard>;
+              })}{detail?.concept.level === "gpu" ? <section className="rounded-md border border-border p-3"><h4 className="type-card-title">รายการ TPU ที่เกี่ยวข้อง ({detail.relatedTpu.length})</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{detail.relatedTpu.map((item) => {
+                const current = isCurrentCandidate(row, "TMT", item.tmtId, "tpu");
+                return <TmtResultCard key={item.tmtId} comparison current={current} result={{ level: "tpu", tmtId: item.tmtId, name: item.endpointFsn ?? item.conceptFsn, tradeName: item.tradeName, manufacturer: item.manufacturer, registrationNumber: item.registrationNumber, registrationConflict: item.registrationConflict, status: item.status, mappingEligible: item.mappingEligible, mappingEligibilityReason: item.mappingEligibilityReason }}><Button size="sm" variant={current ? "secondary" : "primary"} disabled={!item.mappingEligible || busy !== null} onClick={() => void save(row, "TMT", item.tmtId, "tpu")}>{current ? "เลือกอยู่" : "เลือก TPU"}</Button></TmtResultCard>;
+              })}</div></section> : null}</div> : <div className="mt-3 space-y-2">{ttmtRows.map((item) => {
+                const current = isCurrentCandidate(row, "TTMT", item.code, "product");
+                return <TtmtResultCard key={item.code} comparison current={current} result={item}><Button size="sm" variant={current ? "secondary" : "primary"} disabled={!item.active || busy !== null} onClick={() => void save(row, "TTMT", item.code, "product")}>{current ? "เลือกอยู่" : "เลือก"}</Button></TtmtResultCard>;
+              })}</div>}
             </div></td></tr> : null}</Fragment>;
         })}</tbody>}</Table></TableScroll>}
     </CardBody><Pagination page={worklist.page} pageCount={worklist.pageCount} total={worklist.total} disabled={loading} onPageChange={setPage} /></Card>
