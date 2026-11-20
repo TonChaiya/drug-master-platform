@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.9`
+- Current application version: `0.8.10`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -30,6 +30,7 @@
 
 ## Phase 3–5 usability checkpoint
 
+- Release `0.8.10` ปรับ candidate TMT/TTMT เป็นสัดส่วน desktop 48/28/24, รวม metadata เป็น vertical block และจัด status/current marker กับ actions เป็นกลุ่มด้านขวา โดยยัง stack/wrap ได้และไม่เปลี่ยน semantics.
 - Release `0.8.9` จัด Mapping chooser ให้อยู่ใน workspace กึ่งกลางกว้างสูงสุด 72rem, ปรับสัดส่วนตัวกรอง และจัด candidate TMT/TTMT เป็น 3-zone rows บน desktop ที่ stack/wrap ได้บนจอเล็ก โดยไม่เปลี่ยน search หรือ mapping behavior.
 - Release `0.8.8` ลดความสูงและช่องว่างของ candidate TMT/TTMT ใน Mapping chooser, รวม metadata สำคัญเป็นแถว compact และแยกพื้นที่ผลค้นหาด้วย neutral surface โดยคง safety badges, current marker และ actions เดิม.
 - Release `0.8.7` เพิ่มบริบทเปรียบเทียบ JHCIS กับมาตรฐานปัจจุบันใน Mapping chooser, ทำเครื่องหมาย candidate ที่เลือกอยู่, แสดงเหตุผลเมื่อ Catalog reconcile ไม่พร้อม และเพิ่ม loading/empty/error states แบบ compact; save/reconcile, lifecycle, acknowledgement และ API contracts เดิมไม่เปลี่ยน.

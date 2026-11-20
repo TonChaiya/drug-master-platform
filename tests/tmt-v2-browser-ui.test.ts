@@ -70,14 +70,15 @@ test("mapping comparison leads with TMT generic details and marks the current ca
     current: true,
     result: {
       level: "tpu", tmtId: "565818", name: "PARACETAMOL 500 MG TABLET", activeIngredient: "Paracetamol",
-      strength: "500 mg", dosageForm: "tablet", tradeName: "PARA", manufacturer: "Example Pharma",
+      strength: "500 mg", dosageForm: "tablet", tradeName: "PARA", manufacturer: "Example Pharmaceutical Manufacturing Company",
       registrationNumber: null, registrationConflict: true, status: "active", mappingEligible: true,
       mappingEligibilityReason: "พร้อมจับคู่",
     },
   }, createElement("button", { type: "button" }, "รายละเอียด"), createElement("button", { type: "button" }, "เลือก")));
-  for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharma", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่", "รายละเอียด", "เลือก"]) assert.match(html, new RegExp(value));
+  for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharmaceutical Manufacturing Company", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่", "รายละเอียด", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("Paracetamol") < html.indexOf("PARACETAMOL 500 MG TABLET"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "lg:grid-cols-", "lg:items-center", "lg:justify-end", "ring-primary-100"]) assert.match(html, new RegExp(compactClass));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2.5", "gap-x-4", "space-y-0.5", "flex-col", "lg:items-center", "lg:items-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
+  assert.ok(html.includes("lg:grid-cols-[minmax(0,2fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)]"));
   assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 
@@ -96,12 +97,13 @@ test("TTMT result stays in its own product namespace and leaves optional fields 
 test("mapping comparison leads with TTMT active ingredient and marks the current product", () => {
   const html = renderToStaticMarkup(createElement(TtmtResultCard, { comparison: true, current: true, result: {
     source: "TTMT", code: "TTMT-001", level: "product", fsn: "TTMT PRODUCT FSN",
-    activeIngredient: "TTMT ingredient", tradeName: "TTMT trade", manufacturer: "TTMT maker",
+    activeIngredient: "TTMT ingredient", tradeName: "TTMT trade", manufacturer: "TTMT Pharmaceutical Manufacturing Company",
     registrationNumber: "REG-1", active: true, sourceVersion: "20261001",
   } }, createElement("button", { type: "button" }, "เลือก")));
-  for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT maker", "REG-1", "ใช้งานอยู่", "เลือก"]) assert.match(html, new RegExp(value));
+  for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT Pharmaceutical Manufacturing Company", "REG-1", "ใช้งานอยู่", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("TTMT ingredient") < html.indexOf("TTMT PRODUCT FSN"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2", "gap-x-3", "lg:grid-cols-", "lg:items-center", "lg:justify-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
+  for (const compactClass of ["bg-surface", "px-2.5", "py-2.5", "gap-x-4", "space-y-0.5", "flex-col", "lg:items-center", "lg:items-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
+  assert.ok(html.includes("lg:grid-cols-[minmax(0,2fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)]"));
   assert.doesNotMatch(html, /bg-primary-50\/50/);
 });
 
