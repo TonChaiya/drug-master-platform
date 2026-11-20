@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { MappedStandardSummary, MappingComparisonContext, isCurrentCandidate, mappingStandardSearchUrl } from "@/components/mappings/v2-mapping-workbench";
+import { MappedStandardSummary, MappingComparisonContext, canBrowseRelatedTpu, isCurrentCandidate, mappingStandardSearchUrl } from "@/components/mappings/v2-mapping-workbench";
 import { EMPTY_STANDARD_FILTERS, type StandardFilterState } from "@/components/standard-search";
 import type { V2WorklistRow } from "@/modules/mappings/v2-worklist";
 
@@ -43,8 +43,10 @@ test("unmapped row stays compact and does not invent standard metadata", () => {
 
 test("inline chooser compares the JHCIS drug with the current source-aware identity", () => {
   const html = renderToStaticMarkup(createElement(MappingComparisonContext, { row: row() }));
-  for (const value of ["รายการยา JHCIS", "J-001", "Local drug", "Local generic", "มาตรฐานที่จับคู่ปัจจุบัน", "TMT", "TPU", "565818"]) assert.match(html, new RegExp(value));
+  for (const value of ["รายการยา JHCIS", "รหัสยา", "ชื่อยา", "J-001", "Local drug", "Local generic", "มาตรฐานที่จับคู่ปัจจุบัน", "แหล่งข้อมูล / ระดับ", "รหัสมาตรฐาน", "TMT", "TPU", "565818"]) assert.match(html, new RegExp(value));
   assert.match(html, /sm:grid-cols-2/);
+  assert.equal((html.match(/bg-primary-50\/40/g) ?? []).length, 2);
+  assert.equal((html.match(/overflow-hidden/g) ?? []).length, 2);
 });
 
 test("current candidate matching requires the complete source code and level identity", () => {
@@ -52,6 +54,11 @@ test("current candidate matching requires the complete source code and level ide
   assert.equal(isCurrentCandidate(row(), "TTMT", "565818", "product"), false);
   assert.equal(isCurrentCandidate(row(), "TMT", "565818", "gpu"), false);
   assert.equal(isCurrentCandidate(row(), "TMT", "other", "tpu"), false);
+});
+
+test("only GPU exposes the related-TPU action", () => {
+  assert.equal(canBrowseRelatedTpu("gpu"), true);
+  for (const level of ["gp", "tp", "tpu", "product"]) assert.equal(canBrowseRelatedTpu(level), false);
 });
 
 test("mapping chooser maps each independent filter to the source-specific query contract", () => {
@@ -139,7 +146,7 @@ test("reconcile action is only rendered when the current catalog pipeline is ava
   assert.match(service, /return reconcileFromLatestCatalogV2\(facilityId, userId\)/);
 });
 
-test("chooser keeps edit, review confirmation, and explicit loading empty and error states", async () => {
+test("chooser keeps structured results and explicit search and related-TPU states", async () => {
   const workbench = await source("src/components/mappings/v2-mapping-workbench.tsx");
   assert.match(workbench, /row\.standardCode \? "แก้ไข" : "จับคู่"/);
   assert.match(workbench, /บันทึกและยืนยันว่าตรวจสอบแล้ว/);
@@ -149,11 +156,19 @@ test("chooser keeps edit, review confirmation, and explicit loading empty and er
   assert.match(workbench, /<EmptyState compact/);
   assert.match(workbench, /standardSearchStatus === "error"/);
   assert.match(workbench, /<ErrorState compact/);
-  assert.match(workbench, /flex flex-wrap items-end/);
-  assert.equal((workbench.match(/space-y-1\.5 rounded-lg border border-border bg-surface-subtle p-2/g) ?? []).length, 2);
+  assert.match(workbench, /grid gap-2 rounded-lg border border-border bg-surface-subtle/);
+  assert.match(workbench, /aria-label="ตัวกรองค้นหามาตรฐาน"/);
+  assert.match(workbench, /aria-label="ผลการค้นหามาตรฐาน"/);
+  assert.match(workbench, /ผลการค้นหามาตรฐาน/);
+  assert.match(workbench, /CandidateResultsPanel count=\{tmtRows\.length\}/);
+  assert.match(workbench, /CandidateResultsPanel count=\{ttmtRows\.length\}/);
+  assert.match(workbench, /ดู TPU ที่เกี่ยวข้อง/);
+  assert.doesNotMatch(workbench, />รายละเอียด</);
+  for (const state of ["detailStatus === \"loading\"", "detailStatus === \"empty\"", "detailStatus === \"error\"", "detailStatus === \"ready\""]) assert.match(workbench, new RegExp(state));
+  assert.match(workbench, /TPU ที่เกี่ยวข้องกับ GPU/);
   assert.match(workbench, /w-full border-y border-primary-200/);
   assert.match(workbench, /mx-auto w-full max-w-6xl/);
-  assert.match(workbench, /nth-child\(2\).*9rem/);
-  assert.match(workbench, /nth-child\(3\).*12rem/);
-  assert.match(workbench, /nth-child\(6\).*10rem/);
+  assert.match(workbench, /xl:grid-cols-\[minmax\(8rem,0\.75fr\)_minmax\(12rem,1\.15fr\)_minmax\(12rem,1\.15fr\)_minmax\(11rem,1fr\)_minmax\(9rem,0\.8fr\)_auto\]/);
+  assert.match(workbench, /จับคู่รายการยา JHCIS กับมาตรฐาน/);
+  assert.match(workbench, /IconStandards size=\{16\}/);
 });
