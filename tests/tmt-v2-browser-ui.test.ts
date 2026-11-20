@@ -77,9 +77,9 @@ test("mapping comparison leads with TMT generic details and marks the current ca
   }, createElement("button", { type: "button" }, "รายละเอียด"), createElement("button", { type: "button" }, "เลือก")));
   for (const value of ["รายการปัจจุบัน", "Paracetamol", "500 mg", "PARACETAMOL 500 MG TABLET", "tablet", "Example Pharmaceutical Manufacturing Company", "เลขทะเบียนมีหลายค่า", "พร้อมจับคู่", "รายละเอียด", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("Paracetamol") < html.indexOf("PARACETAMOL 500 MG TABLET"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2.5", "gap-x-4", "space-y-0.5", "flex-col", "lg:items-center", "lg:items-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
-  assert.ok(html.includes("lg:grid-cols-[minmax(0,2fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)]"));
-  assert.doesNotMatch(html, /bg-primary-50\/50/);
+  for (const compactClass of ["bg-surface", "px-3", "py-1.5", "gap-x-3", "space-y-0.5", "flex-col", "md:grid-cols-2", "xl:items-center", "xl:items-end", "md:col-span-2", "border-l-primary-400", "break-words"]) assert.match(html, new RegExp(compactClass));
+  assert.ok(html.includes("xl:grid-cols-[minmax(0,1.75fr)_minmax(12rem,1.1fr)_minmax(17rem,1.35fr)]"));
+  assert.match(html, /bg-primary-50\/40/);
 });
 
 test("TTMT result stays in its own product namespace and leaves optional fields blank", () => {
@@ -102,9 +102,9 @@ test("mapping comparison leads with TTMT active ingredient and marks the current
   } }, createElement("button", { type: "button" }, "เลือก")));
   for (const value of ["TTMT-001", "รายการปัจจุบัน", "TTMT ingredient", "TTMT PRODUCT FSN", "TTMT Pharmaceutical Manufacturing Company", "REG-1", "ใช้งานอยู่", "เลือก"]) assert.match(html, new RegExp(value));
   assert.ok(html.indexOf("TTMT ingredient") < html.indexOf("TTMT PRODUCT FSN"));
-  for (const compactClass of ["bg-surface", "px-2.5", "py-2.5", "gap-x-4", "space-y-0.5", "flex-col", "lg:items-center", "lg:items-end", "ring-primary-100", "break-words"]) assert.match(html, new RegExp(compactClass));
-  assert.ok(html.includes("lg:grid-cols-[minmax(0,2fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)]"));
-  assert.doesNotMatch(html, /bg-primary-50\/50/);
+  for (const compactClass of ["bg-surface", "px-3", "py-1.5", "gap-x-3", "space-y-0.5", "flex-col", "md:grid-cols-2", "xl:items-center", "xl:items-end", "md:col-span-2", "border-l-primary-400", "break-words"]) assert.match(html, new RegExp(compactClass));
+  assert.ok(html.includes("xl:grid-cols-[minmax(0,1.75fr)_minmax(12rem,1.1fr)_minmax(17rem,1.35fr)]"));
+  assert.match(html, /bg-primary-50\/40/);
 });
 
 test("browser starts as a compact read-only search workspace", () => {

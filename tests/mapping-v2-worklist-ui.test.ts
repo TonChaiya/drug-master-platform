@@ -45,7 +45,7 @@ test("inline chooser compares the JHCIS drug with the current source-aware ident
   const html = renderToStaticMarkup(createElement(MappingComparisonContext, { row: row() }));
   for (const value of ["รายการยา JHCIS", "รหัสยา", "ชื่อยา", "J-001", "Local drug", "Local generic", "มาตรฐานที่จับคู่ปัจจุบัน", "แหล่งข้อมูล / ระดับ", "รหัสมาตรฐาน", "TMT", "TPU", "565818"]) assert.match(html, new RegExp(value));
   assert.match(html, /sm:grid-cols-2/);
-  assert.equal((html.match(/bg-primary-50\/40/g) ?? []).length, 2);
+  assert.equal((html.match(/bg-primary-50\/70/g) ?? []).length, 2);
   assert.equal((html.match(/overflow-hidden/g) ?? []).length, 2);
 });
 
@@ -156,7 +156,7 @@ test("chooser keeps structured results and explicit search and related-TPU state
   assert.match(workbench, /<EmptyState compact/);
   assert.match(workbench, /standardSearchStatus === "error"/);
   assert.match(workbench, /<ErrorState compact/);
-  assert.match(workbench, /grid gap-2 rounded-lg border border-border bg-surface-subtle/);
+  assert.match(workbench, /grid gap-2 px-1 sm:grid-cols-2/);
   assert.match(workbench, /aria-label="ตัวกรองค้นหามาตรฐาน"/);
   assert.match(workbench, /aria-label="ผลการค้นหามาตรฐาน"/);
   assert.match(workbench, /ผลการค้นหามาตรฐาน/);
@@ -166,8 +166,10 @@ test("chooser keeps structured results and explicit search and related-TPU state
   assert.doesNotMatch(workbench, />รายละเอียด</);
   for (const state of ["detailStatus === \"loading\"", "detailStatus === \"empty\"", "detailStatus === \"error\"", "detailStatus === \"ready\""]) assert.match(workbench, new RegExp(state));
   assert.match(workbench, /TPU ที่เกี่ยวข้องกับ GPU/);
-  assert.match(workbench, /w-full border-y border-primary-200/);
-  assert.match(workbench, /mx-auto w-full max-w-6xl/);
+  assert.match(workbench, /m-2\.5 rounded-xl border border-primary-200 bg-surface p-3/);
+  assert.match(workbench, /mx-auto w-full max-w-7xl/);
+  assert.match(workbench, /border border-primary-200 bg-primary-50\/60 p-2/);
+  assert.match(workbench, /divide-y divide-primary-100 overflow-hidden/);
   assert.match(workbench, /xl:grid-cols-\[minmax\(8rem,0\.75fr\)_minmax\(12rem,1\.15fr\)_minmax\(12rem,1\.15fr\)_minmax\(11rem,1fr\)_minmax\(9rem,0\.8fr\)_auto\]/);
   assert.match(workbench, /จับคู่รายการยา JHCIS กับมาตรฐาน/);
   assert.match(workbench, /IconStandards size=\{16\}/);

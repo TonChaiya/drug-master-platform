@@ -80,17 +80,17 @@ export function canBrowseRelatedTpu(level: string): boolean {
 export function MappingComparisonContext({ row }: { row: V2WorklistRow }) {
   const standardName = row.standardActiveIngredient ?? row.standardName;
   return <div className="mt-3 grid gap-2 sm:grid-cols-2">
-    <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface-subtle">
-      <div className="border-b border-border bg-primary-50/40 px-3 py-2 type-caption">รายการยา JHCIS</div>
-      <dl className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 p-3 text-xs">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-primary-100 bg-surface">
+      <div className="border-b border-primary-100 bg-primary-50/70 px-3 py-1.5 font-medium text-primary-700">รายการยา JHCIS</div>
+      <dl className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 p-2.5 text-xs">
         <dt className="type-caption">รหัสยา</dt><dd className="flex min-w-0 flex-wrap items-center gap-2"><span className="cell-code">{row.drugcode}</span><Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge></dd>
         <dt className="type-caption">ชื่อยา</dt><dd className="min-w-0 break-words font-semibold text-ink">{row.drugname ?? row.drugnamethai ?? "—"}</dd>
         {row.druggenericname ? <><dt className="type-caption">ชื่อสามัญ</dt><dd className="min-w-0 break-words text-ink">{row.druggenericname}</dd></> : null}
       </dl>
     </section>
-    <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface-subtle">
-      <div className="border-b border-border bg-primary-50/40 px-3 py-2 type-caption">มาตรฐานที่จับคู่ปัจจุบัน</div>
-      {row.standardCode ? <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1 p-3 text-xs">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-primary-100 bg-surface">
+      <div className="border-b border-primary-100 bg-primary-50/70 px-3 py-1.5 font-medium text-primary-700">มาตรฐานที่จับคู่ปัจจุบัน</div>
+      {row.standardCode ? <dl className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 p-2.5 text-xs">
         <dt className="type-caption">แหล่งข้อมูล / ระดับ</dt><dd className="flex flex-wrap gap-1"><Badge tone={row.standardSource === "TMT" ? "info" : "success"}>{row.standardSource}</Badge>{row.standardLevel ? <Badge>{row.standardLevel.toUpperCase()}</Badge> : null}</dd>
         <dt className="type-caption">รหัสมาตรฐาน</dt><dd className="cell-code min-w-0 break-words">{row.standardCode}</dd>
         {standardName || row.standardStrength ? <><dt className="type-caption">ชื่อมาตรฐาน</dt><dd className="min-w-0 break-words font-semibold text-ink">{standardName ?? "—"}{row.standardStrength ? ` · ${row.standardStrength}` : null}</dd></> : null}
@@ -103,9 +103,9 @@ export function MappingComparisonContext({ row }: { row: V2WorklistRow }) {
 }
 
 function CandidateResultsPanel({ count, children }: { count: number; children: ReactNode }) {
-  return <section className="mt-2 overflow-hidden rounded-lg border border-border bg-surface-subtle" aria-label="ผลการค้นหามาตรฐาน">
-    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-primary-100 bg-primary-50/70 px-3 py-2"><h4 className="flex items-center gap-2 type-card-title"><IconStandards size={16} />ผลการค้นหามาตรฐาน</h4><span className="type-caption tabular-nums">พบ {count.toLocaleString("th-TH")} รายการ</span></header>
-    <div className="space-y-1.5 p-2">{children}</div>
+  return <section className="mt-2 rounded-lg border border-primary-200 bg-primary-50/60 p-2" aria-label="ผลการค้นหามาตรฐาน">
+    <header className="mb-1.5 flex flex-wrap items-center justify-between gap-2 px-1"><h4 className="flex items-center gap-2 type-card-title text-primary-800"><IconStandards size={16} />ผลการค้นหามาตรฐาน</h4><span className="type-caption tabular-nums">พบ {count.toLocaleString("th-TH")} รายการ</span></header>
+    <div className="divide-y divide-primary-100 overflow-hidden rounded-md border border-primary-100 bg-surface">{children}</div>
   </section>;
 }
 
@@ -247,10 +247,10 @@ export function V2MappingWorkbench({ reconcileAvailable }: { reconcileAvailable:
         {loading && worklist.rows.length === 0 ? <TableSkeleton rows={8} columns={COLUMNS} /> : <tbody>{worklist.rows.length === 0 ? <TableMessage colSpan={COLUMNS}><EmptyState compact icon={filtered ? <IconSearch size={18} /> : <IconPill size={18} />} title={filtered ? "ไม่พบรายการตามตัวกรองนี้" : "ยังไม่มีรายการยาที่คงค้าง"} description={filtered ? "ลองลดเงื่อนไขลง หรือเปลี่ยนสถานะเป็น “ทั้งหมด”" : "รายการยาจะปรากฏหลัง Agent ดึงข้อมูลจาก JHCIS"} action={filtered ? <Button size="sm" icon={<IconClose size={13} />} onClick={resetFilters}>ล้างตัวกรอง</Button> : null} /></TableMessage> : worklist.rows.map((row) => {
           const open = selected?.sourceDrugId === row.sourceDrugId;
           return <Fragment key={row.sourceDrugId}><tr className={open ? "row-selected" : undefined}><td className="cell-code">{row.drugcode}</td><td className="max-w-56"><div className="font-medium">{row.drugname ?? row.drugnamethai ?? "—"}</div>{row.druggenericname ? <div className="type-help">{row.druggenericname}</div> : null}</td><td><Badge>{row.drugtype === "10" ? "10 · TTMT" : "01 · TMT"}</Badge></td><td className="max-w-72"><MappedStandardSummary row={row} /></td><td>{row.standardSource ? <div className="flex flex-wrap gap-1"><Badge tone={row.standardSource === "TMT" ? "info" : "success"}>{row.standardSource}</Badge><Badge>{row.standardLevel?.toUpperCase()}</Badge></div> : <span className="type-caption">—</span>}</td><td>{row.updateFlag ? <Badge>{row.updateFlag}</Badge> : <span className="type-caption">—</span>}</td><td className="max-w-56"><Badge tone={statusTone(row.status)} dot>{statusLabel(row.status)}</Badge>{row.statusReason ? <div className="type-help mt-1">{row.statusReason}</div> : null}</td><td><Button size="sm" variant={open ? "secondary" : row.standardCode ? "ghost" : "outline"} icon={open ? <IconClose size={13} /> : <IconLink size={13} />} disabled={busy !== null && busy !== row.sourceDrugId} loading={busy === row.sourceDrugId} onClick={() => openChooser(row)}>{open ? "ปิด" : row.standardCode ? "แก้ไข" : "จับคู่"}</Button></td></tr>
-            {open ? <tr className="hover:bg-transparent"><td colSpan={COLUMNS} className="border-b-0 bg-primary-50/40 p-0"><div ref={chooserRef} className="w-full border-y border-primary-200 bg-surface p-3.5"><div className="mx-auto w-full max-w-6xl"><div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 items-start gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-700"><IconLink size={18} /></span><div className="min-w-0"><h3 className="type-card-title">เลือกมาตรฐานให้ <span className="cell-code">{row.drugcode}</span> — {row.drugname ?? row.drugnamethai ?? ""}</h3><p className="type-help mt-0.5">จับคู่รายการยา JHCIS กับมาตรฐาน {row.drugtype === "10" ? "TTMT" : "TMT"} ที่เหมาะสม</p></div></div><Button size="sm" icon={<IconClose size={13} />} onClick={() => setSelected(null)}>ปิด</Button></div>
+            {open ? <tr className="hover:bg-transparent"><td colSpan={COLUMNS} className="border-b-0 bg-primary-50/40 p-0"><div ref={chooserRef} className="m-2.5 rounded-xl border border-primary-200 bg-surface p-3"><div className="mx-auto w-full max-w-7xl"><div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 items-start gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-700"><IconLink size={18} /></span><div className="min-w-0"><h3 className="type-card-title">เลือกมาตรฐานให้ <span className="cell-code">{row.drugcode}</span> — {row.drugname ?? row.drugnamethai ?? ""}</h3><p className="type-help mt-0.5">จับคู่รายการยา JHCIS กับมาตรฐาน {row.drugtype === "10" ? "TTMT" : "TMT"} ที่เหมาะสม</p></div></div><Button size="sm" icon={<IconClose size={13} />} onClick={() => setSelected(null)}>ปิด</Button></div>
               <MappingComparisonContext row={row} />
               {row.status === "needs_review" && row.standardSource && row.standardCode && row.standardLevel ? <Alert tone="warning" className="mt-3" title="รายการนี้ต้องยืนยันหลังตรวจสอบ"><div className="flex flex-wrap items-center justify-between gap-2"><span>{row.statusReason}</span><Button size="sm" variant="primary" disabled={busy !== null} loading={busy === row.sourceDrugId} onClick={() => void save(row, row.standardSource!, row.standardCode!, row.standardLevel!, true)}>บันทึกและยืนยันว่าตรวจสอบแล้ว</Button></div></Alert> : null}
-              <div className="mt-3 grid gap-2 rounded-lg border border-border bg-surface-subtle p-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.75fr)_minmax(12rem,1.15fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_auto] xl:items-end" aria-label="ตัวกรองค้นหามาตรฐาน">
+              <div className="mt-2.5 grid gap-2 px-1 sm:grid-cols-2 xl:grid-cols-[minmax(8rem,0.75fr)_minmax(12rem,1.15fr)_minmax(12rem,1.15fr)_minmax(11rem,1fr)_minmax(9rem,0.8fr)_auto] xl:items-end" aria-label="ตัวกรองค้นหามาตรฐาน">
                 <StandardFilterInputs
                   filters={standardFilters}
                   idPrefix={`mapping-standard-${row.sourceDrugId}`}

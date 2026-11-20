@@ -8,7 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Previous UX/version-policy checkpoint: `75f21f29a018cd82d9fd400f92f3f5efabc91a02`
-- Current application version: `0.8.11`
+- Current application version: `0.8.12`
 - Hosting: Vercel production deployed through Git integration
 - Production database: TiDB Cloud
 - Latest applied migration: `0017_tmt_run_validations.sql`
@@ -30,6 +30,7 @@
 
 ## Phase 3–5 usability checkpoint
 
+- Release `0.8.12` ปรับ Mapping chooser ให้ใกล้ visual target: workspace กว้างขึ้นและผูกกับ selected row, context cards กระชับ, filters เรียงเป็นแถวเดียว และ results เป็น cool-tinted panel ที่มี candidate rows ต่อเนื่องแบบตาราง; interaction และ mapping semantics เดิมไม่เปลี่ยน.
 - Release `0.8.11` จัด Mapping chooser เป็น context cards, filter group และ results panel ที่แยกชั้นชัดเจน; แสดง action “ดู TPU ที่เกี่ยวข้อง” เฉพาะ GPU พร้อม loading/empty/error state และไม่แสดงปุ่มรายละเอียดที่ไม่มีพฤติกรรมบน TPU โดยไม่เปลี่ยน search หรือ mapping semantics.
 - Release `0.8.10` ปรับ candidate TMT/TTMT เป็นสัดส่วน desktop 48/28/24, รวม metadata เป็น vertical block และจัด status/current marker กับ actions เป็นกลุ่มด้านขวา โดยยัง stack/wrap ได้และไม่เปลี่ยน semantics.
 - Release `0.8.9` จัด Mapping chooser ให้อยู่ใน workspace กึ่งกลางกว้างสูงสุด 72rem, ปรับสัดส่วนตัวกรอง และจัด candidate TMT/TTMT เป็น 3-zone rows บน desktop ที่ stack/wrap ได้บนจอเล็ก โดยไม่เปลี่ยน search หรือ mapping behavior.
