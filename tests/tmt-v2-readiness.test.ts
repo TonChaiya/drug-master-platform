@@ -15,7 +15,7 @@ function degraded() {
     ],
     blockingInvariants: { missingConceptCounterparts: 0, missingEndpointCounterparts: 0, levelMismatch: 0, masterTmtMissingTpu: 0, masterTmtMissingConcept: 0, tpuMissingMasterTmt: 0, unknownLevels: 0, duplicateRelationshipPairs: 0, unknownMasterStatuses: 0 },
     gpu: { code: "764169", level: "gpu", outboundTpu: 9, relatedTpuPresent: 9, relatedMasterTmtPresent: 9, relatedConceptPresent: 9, activeMasterCount: 9 },
-    ttmt: { id: "46ac7956-4a52-43da-8f0a-c54fa392a70c", version: "20261001", contentHash: "7be50149229747f2799039fbc27b0ae1cf19b6a16c40381355d40f36c6d19bf9", rowCount: 9654, status: "succeeded", productCount: 9654, activeCount: 9654, inactiveCount: 0, foreignProductCount: 0 },
+    ttmt: { id: "46ac7956-4a52-43da-8f0a-c54fa392a70c", version: "20261001", contentHash: "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057", rowCount: 9654, status: "succeeded", productCount: 9654, activeCount: 9654, inactiveCount: 0, foreignProductCount: 0 },
   };
   const validation = buildValidatedUnverifiedEvidence(input, new Date("2026-11-10T09:00:00.000Z"));
   return {

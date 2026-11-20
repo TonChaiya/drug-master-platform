@@ -7,7 +7,7 @@ import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
 export const VALIDATED_UNVERIFIED_POLICY_VERSION = "validated-unverified-v1";
 export const APPROVED_TTMT_V1 = {
   version: "20261001",
-  contentHash: "7be50149229747f2799039fbc27b0ae1cf19b6a16c40381355d40f36c6d19bf9",
+  contentHash: "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057",
   rowCount: 9_654,
 } as const;
 

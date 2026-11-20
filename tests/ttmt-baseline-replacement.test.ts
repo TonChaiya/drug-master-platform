@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { Pool } from "mysql2/promise";
 import { writeXls, type CellValue } from "@/lib/excel/biff-writer";
 import {
+  APPROVED_TTMT_REPLACEMENT,
   TtmtBaselineReplacementError,
   analyzeTtmtBaselineReplacement,
   runTtmtBaselineReplacement,
@@ -13,6 +14,10 @@ import {
   type TtmtReplacementContract,
   type TtmtReplacementPreflight,
 } from "@/modules/standards/ttmt-baseline-replacement";
+import { APPROVED_TTMT_V1 } from "@/modules/tmt/validation";
+
+const APPROVED_MASTER_TTMT_HASH = "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057";
+const FORMER_MASTER_TTMT_HASH = "e78b3030c8bb63bfc78b96254edc43bc0d70ca81e2b5dc75d9040392440f489a";
 
 const headers = ["TTMTCode", "ActiveIngredient", "Strength", "Dosageform", "Contvalue", "Contunit", "DispUnit", "TradeName", "Manufacturer", "FSN", "Status", "TTMTType", "Changedate", "ED", "Drug_Group_Nhso"];
 const cells = (values: Array<string | null>): CellValue[] => values.map((value) => value === null ? { kind: "blank" } : { kind: "text", value });
@@ -36,6 +41,12 @@ function store(preflight = safePreflight()): TtmtBaselineReplacementStore {
 }
 
 describe("controlled TTMT baseline replacement", () => {
+  test("uses the explicitly approved re-audited MasterTTMT evidence", () => {
+    assert.equal(APPROVED_TTMT_REPLACEMENT.contentHash, APPROVED_MASTER_TTMT_HASH);
+    assert.equal(APPROVED_TTMT_V1.contentHash, APPROVED_MASTER_TTMT_HASH);
+    assert.notEqual(APPROVED_TTMT_REPLACEMENT.contentHash, FORMER_MASTER_TTMT_HASH);
+  });
+
   test("enforces exact sheet, hash, columns, row count, unique codes and CANCEL count", () => {
     const data = workbook(rows);
     const analysis = analyzeTtmtBaselineReplacement({ filename: "MasterTTMT.xls", data }, contract(data));
