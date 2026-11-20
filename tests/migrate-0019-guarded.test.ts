@@ -20,7 +20,8 @@ const prior = [
 ];
 const request = (overrides: Partial<Migration0019Request> = {}): Migration0019Request => ({
   environment: "production", envFile: "C:\\secure\\production.env", execute: false,
-  maintenanceApproved: false, actorUserId: "00000000-0000-4000-8000-000000000001", reason: "approved TTMT fidelity migration", ...overrides,
+  maintenanceApproved: false, rehearsalIntent: false,
+  actorUserId: "00000000-0000-4000-8000-000000000001", reason: "approved TTMT fidelity migration", ...overrides,
 });
 const snapshot = (overrides: Partial<Migration0019Snapshot> = {}): Migration0019Snapshot => ({
   host: "gateway.prod.tidbcloud.com", port: 4000, database: "drug_master_platform", serverVersion: "TiDB-v8.5.3",

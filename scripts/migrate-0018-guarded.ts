@@ -7,9 +7,9 @@ import {
   assertExternalEnvFile,
   createMigration0018PoolDependencies,
   executeGuardedMigration0018,
+  migration0018ErrorDiagnostic,
   parseMigration0018Cli,
   readMigrationFile,
-  redactMigration0018Error,
   type MigrationJournalEntry,
 } from "@/db/migration-0018-guard";
 import { maintenanceStoreForPool, readMaintenanceState } from "@/modules/maintenance/service";
@@ -74,6 +74,6 @@ try {
 } catch (error) {
   const code = error instanceof Migration0018GuardError ? error.code : "MIGRATION_0018_FAILED";
   const statementIndex = error instanceof Migration0018GuardError ? error.statementIndex : undefined;
-  console.error(JSON.stringify({ code, statementIndex, message: redactMigration0018Error(error) }));
+  console.error(JSON.stringify({ code, statementIndex, ...migration0018ErrorDiagnostic(error) }));
   process.exitCode = 1;
 }

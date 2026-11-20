@@ -235,7 +235,10 @@ test("0018 explicit shadow tables preserve the source schema with dataset-scoped
   }
 
   const metadataPrefix = migration.slice(0, migration.indexOf("CREATE TABLE tmt_dataset_subs"));
-  assert.equal(createHash("sha256").update(metadataPrefix).digest("hex"), "308ad199b9651149ff4d3f09ecd3e3d5834fa64b8fa20451617a734d300fddf1");
+  assert.match(metadataPrefix, /tmt_sync_run_id CHAR\(36\) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL/);
+  assert.match(metadataPrefix, /ttmt_import_id CHAR\(36\) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL/);
+  assert.match(metadataPrefix, /validation_run_id CHAR\(36\) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL/);
+  assert.equal(createHash("sha256").update(metadataPrefix).digest("hex"), "db954f5e33b7b27f72dd4b9e88f6e2cb78c6d73c826bdfb4c6d1176a59d16729");
 });
 
 test("0018 compatibility rewrite has an explicit journal hash transition and remains fail closed", async () => {
@@ -246,7 +249,7 @@ test("0018 compatibility rewrite has an explicit journal hash transition and rem
   const oldHash = "a8280d06412549e7f745ea138350d4113b8430d20a0322fcaed7e74d7a8c04ff";
   const newHash = createHash("sha256").update(migration).digest("hex");
   assert.notEqual(newHash, oldHash);
-  assert.equal(newHash, "95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e");
+  assert.equal(newHash, "321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41");
   assert.match(runner, /SELECT content_hash FROM schema_migrations WHERE filename = \?/);
   assert.match(runner, /Applied migration was modified/);
   assert.doesNotMatch(runner, /UPDATE\s+schema_migrations/i);

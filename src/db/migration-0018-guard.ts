@@ -3,9 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { Pool, RowDataPacket } from "mysql2/promise";
+import { GuardedTargetClassificationError, classifyGuardedTarget } from "@/modules/phase7/target-classification";
 
 export const MIGRATION_0018_FILENAME = "0018_versioned_standard_dataset_foundation.sql";
-export const EXPECTED_MIGRATION_0018_SHA256 = "95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e";
+export const EXPECTED_MIGRATION_0018_SHA256 = "321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41";
 
 export const MIGRATION_0018_TABLES = [
   "standard_datasets", "standard_releases", "standard_dataset_pointers", "standard_dataset_manifests",
@@ -33,6 +34,7 @@ export interface Migration0018Request {
   confirmMigration?: string;
   confirmHash?: string;
   maintenanceApproved: boolean;
+  rehearsalIntent: boolean;
   actorUserId: string;
   reason: string;
 }
@@ -100,6 +102,7 @@ export function parseMigration0018Cli(argv: string[]): Migration0018Request {
         "confirm-migration": { type: "string" },
         "confirm-hash": { type: "string" },
         "maintenance-approved": { type: "boolean" },
+        rehearsal: { type: "boolean" },
         "actor-user-id": { type: "string" },
         reason: { type: "string" },
       },
@@ -120,6 +123,7 @@ export function parseMigration0018Cli(argv: string[]): Migration0018Request {
     confirmMigration: stringValue(parsed.values["confirm-migration"]),
     confirmHash: stringValue(parsed.values["confirm-hash"]),
     maintenanceApproved: parsed.values["maintenance-approved"] === true,
+    rehearsalIntent: parsed.values.rehearsal === true,
     actorUserId: stringValue(parsed.values["actor-user-id"]) ?? "",
     reason: stringValue(parsed.values.reason) ?? "",
   };
@@ -145,20 +149,16 @@ function sameJournal(actual: readonly MigrationJournalEntry[], expected: readonl
 }
 
 function assertTarget(request: Migration0018Request, target: Migration0018TargetSnapshot): void {
-  if (target.database.toLowerCase() === "jhcisdb") refuse("DATABASE_FORBIDDEN", "jhcisdb is never an allowed target");
-  if (request.environment === "production") {
-    if (!target.host.toLowerCase().endsWith(".tidbcloud.com")) refuse("PRODUCTION_HOST_INVALID", "Production host is not TiDB Cloud");
-    if (target.port !== 4000) refuse("PRODUCTION_PORT_INVALID", "Production port must be 4000");
-    if (target.database !== "drug_master_platform") refuse("PRODUCTION_DATABASE_INVALID", "Production database identity mismatch");
-    if (!/tidb/i.test(target.serverVersion)) refuse("PRODUCTION_ENGINE_INVALID", "Production engine is not TiDB");
-    if (!target.tlsVerified) refuse("TLS_REQUIRED", "Verified TLS is required for Production");
-  } else {
-    if (process.env.NODE_ENV !== "test" || process.env.ALLOW_DB_INTEGRATION_TESTS !== "1") {
-      refuse("LOCAL_TEST_OPT_IN_REQUIRED", "Local execution requires the explicit integration-test opt-in");
-    }
-    if (target.host !== "127.0.0.1" || target.port !== 3306) refuse("LOCAL_TARGET_INVALID", "Local target must be 127.0.0.1:3306");
-    if (target.database !== "drug_master_mapping_v2_test") refuse("LOCAL_DATABASE_INVALID", "Local target database identity mismatch");
-    if (!/^8\.4\.3(?:\D|$)/.test(target.serverVersion)) refuse("LOCAL_ENGINE_INVALID", "Local target must be MySQL 8.4.3");
+  try {
+    const targetClass = classifyGuardedTarget({
+      environment: request.environment, host: target.host, port: target.port, database: target.database,
+      serverVersion: target.serverVersion, rehearsalIntent: request.rehearsalIntent,
+      testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+    });
+    if (targetClass === "PRODUCTION" && !target.tlsVerified) refuse("TLS_REQUIRED", "Verified TLS is required for Production");
+  } catch (error) {
+    if (error instanceof GuardedTargetClassificationError) refuse(error.code, error.message);
+    throw error;
   }
 }
 
@@ -393,7 +393,24 @@ export function redactMigration0018Error(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message
     .replace(/(password|secret|token|credential|authorization|DB_PASSWORD)\s*[=:]\s*[^\s,;]+/gi, "$1=[REDACTED]")
-    .replace(/mysql:\/\/[^\s@]+@/gi, "mysql://[REDACTED]@");
+    .replace(/mysql:\/\/[^\s@]+@/gi, "mysql://[REDACTED]@")
+    .replace(/[a-z0-9.-]+\.tidbcloud\.com/gi, "[REDACTED_HOST]");
+}
+
+export function migration0018ErrorDiagnostic(error: unknown): {
+  message: string;
+  mysqlCode?: string;
+  sqlState?: string;
+} {
+  const cause = error instanceof Error && error.cause !== undefined ? error.cause : error;
+  const candidate = typeof cause === "object" && cause !== null
+    ? cause as { code?: unknown; sqlState?: unknown }
+    : {};
+  return {
+    message: redactMigration0018Error(cause),
+    ...(typeof candidate.code === "string" ? { mysqlCode: candidate.code } : {}),
+    ...(typeof candidate.sqlState === "string" ? { sqlState: candidate.sqlState } : {}),
+  };
 }
 
 export function readMigrationFile(path: string): { sql: string; hash: string } {

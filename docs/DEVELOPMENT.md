@@ -125,7 +125,7 @@ pnpm exec vitest run tests/tmt-v2-migration-mysql.test.ts
 
 DB integration tests อื่นต้องตั้ง `NODE_ENV=test`, `ALLOW_DB_INTEGRATION_TESTS=1` และ `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_DATABASE` โดยตรง ฐานต้องอยู่ที่ `localhost`/`127.0.0.1` และชื่อตรง pattern `drug_master_*test` เท่านั้น หากไม่ opt-in test จะ skip; หาก opt-in แต่ target ไม่ผ่าน guard จะ fail ก่อนสร้าง connection และไม่มี fallback ไป `.env.local`
 
-Guarded migration chain สำหรับ Dataset Release/TTMT fidelity ใช้ `pnpm db:migrate:0018` แล้ว `pnpm db:migrate:0019`; ทั้งสอง command default dry-run, รับ env file ที่อยู่นอก repository และไม่สร้าง database. Controlled TTMT replacement ใช้ `pnpm ttmt:baseline:replace` และห้ามใช้แทน normal `ttmt:v2:import`; ทดสอบ unit/fake ได้โดยไม่เปิด DB opt-in และ Production execution ต้องมี credential/maintenance/confirmation ที่อนุมัติแยก.
+Guarded migration chain สำหรับ Dataset Release/TTMT fidelity ใช้ `pnpm db:migrate:0018` แล้ว `pnpm db:migrate:0019`; ทั้งสอง command default dry-run, รับ env file ที่อยู่นอก repository และไม่สร้าง database. Controlled TTMT replacement ใช้ `pnpm ttmt:baseline:replace` พร้อม explicit `--expected-current-hash` และห้ามใช้แทน normal `ttmt:v2:import`; ทดสอบ unit/fake ได้โดยไม่เปิด DB opt-in และ Production execution ต้องมี credential/maintenance/confirmation ที่อนุมัติแยก. Local clone rehearsal ใช้ target exact `127.0.0.1:3306/drug_master_platform` พร้อม `--rehearsal`; test database ชื่อเดิมเป็น compatibility fixture เท่านั้น. Guard ร่วมปฏิเสธ port 3333, `jhcisdb`, remote rehearsal target และ target ที่ไม่รู้จัก.
 
 Migration test guard host/port/database/user, สร้างฐานสะอาด, ตรวจ journal/hash/schema/rerun แล้ว drop เฉพาะฐานทดสอบเมื่อจบ
 
@@ -277,7 +277,7 @@ pnpm dataset:release -- baseline --environment local --env-file <explicit-test.e
 pnpm exec vitest run tests/dataset-release-cli.test.ts
 ```
 
-ห้ามใช้ CLI กับ Production เพียงเพราะ dry-run หรือ MySQL integration ผ่าน; Migration 0018 hash ปัจจุบันคือ `95d21cae6ded4f5f24b05f9caaab9338599f404ca904a404940001547b02c57e` และยังต้องผ่าน disposable TiDB DDL/journal/locking test, backup/restore rehearsal, storage review และ operator approval แยก.
+ห้ามใช้ CLI กับ Production เพียงเพราะ dry-run หรือ MySQL integration ผ่าน; Migration 0018 hash ปัจจุบันคือ `321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41` และยังต้องผ่าน disposable TiDB DDL/journal/locking test, backup/restore rehearsal, storage review และ operator approval แยก. Local clone rehearsal วันที่ 2026-11-20 ผ่าน 0017→0018→0019 และ TTMT replacement 9,654 rows โดย mappings/history เดิมคงอยู่; ผลนี้ไม่ใช่ Production authorization.
 
 ### Catalog/Export v2 (Phase 6, local only)
 

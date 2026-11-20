@@ -25,7 +25,7 @@ export function createOperationalPool(environment: OperationalEnvironment): Pool
 
 export async function inspectOperationalTarget(
   pool: Pool,
-  input: { environment: OperationalEnvironment; executeRequested: boolean; confirmDatabase?: string },
+  input: { environment: OperationalEnvironment; executeRequested: boolean; confirmDatabase?: string; rehearsalIntent?: boolean },
 ): Promise<OperationalTarget> {
   const [identityRows] = await pool.query<RowDataPacket[]>("SELECT DATABASE() AS databaseName, VERSION() AS serverVersion, @@hostname AS serverHost");
   const [journal] = await pool.query<RowDataPacket[]>("SELECT filename FROM schema_migrations ORDER BY filename");
@@ -42,6 +42,7 @@ export async function inspectOperationalTarget(
     maintenanceEnabled: maintenance.enabled,
     executeRequested: input.executeRequested,
     confirmDatabase: input.confirmDatabase,
+    rehearsalIntent: input.rehearsalIntent === true,
   };
 }
 

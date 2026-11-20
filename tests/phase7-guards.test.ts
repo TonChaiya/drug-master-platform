@@ -63,7 +63,19 @@ test("missing migration and unsafe local target fail closed", () => {
   );
   assert.throws(
     () => assertOperationalTarget({ ...production, environment: "local", host: "localhost", port: 3307, database: "drug_master_local" }, { forExecution: false, requiredMigrations: migrations }),
-    (error: unknown) => error instanceof Phase7GuardError && error.code === "LOCAL_DATABASE_INVALID",
+    (error: unknown) => error instanceof Phase7GuardError && error.code === "LOCAL_PORT_INVALID",
+  );
+});
+
+test("local clone operations require explicit rehearsal intent", () => {
+  const clone = {
+    ...production, environment: "local" as const, host: "127.0.0.1", port: 3306,
+    database: "drug_master_platform", serverVersion: "8.4.3", rehearsalIntent: true,
+  };
+  assert.doesNotThrow(() => assertOperationalTarget(clone, { forExecution: true, requiredMigrations: migrations }));
+  assert.throws(
+    () => assertOperationalTarget({ ...clone, rehearsalIntent: false }, { forExecution: true, requiredMigrations: migrations }),
+    (error: unknown) => error instanceof Phase7GuardError && error.code === "REHEARSAL_INTENT_REQUIRED",
   );
 });
 

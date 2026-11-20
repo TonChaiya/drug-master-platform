@@ -123,6 +123,8 @@ describe("controlled TTMT baseline replacement", () => {
     assert.match(importer, /TTMT_FILE_EXISTS/);
     assert.doesNotMatch(importer, /baseline|replacement/i);
     assert.doesNotMatch(script, /\.env\.local|CREATE\s+DATABASE|process\.loadEnvFile/i);
+    assert.match(script, /expected-current-hash/);
+    assert.doesNotMatch(script, /expectedCurrentHash:\s*APPROVED_TTMT_V1\.contentHash/);
   });
 
   test("database replacement rolls back the full transaction when a product insert fails", async () => {

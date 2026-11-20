@@ -11,6 +11,7 @@ const args = parseArgs({
     environment: { type: "string" }, "env-file": { type: "string" }, status: { type: "boolean" },
     enable: { type: "boolean" }, disable: { type: "boolean" }, execute: { type: "boolean" },
     "confirm-db": { type: "string" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
+    rehearsal: { type: "boolean" },
   },
   strict: true,
 });
@@ -34,6 +35,7 @@ try {
     serverVersion: identity?.serverVersion ?? "", appliedMigrations: journal.map((row) => row.filename),
     maintenanceEnabled: current.enabled, executeRequested: args.values.execute === true,
     confirmDatabase: args.values["confirm-db"],
+    rehearsalIntent: args.values.rehearsal === true,
   };
   assertOperationalTarget(target, {
     forExecution: args.values.status !== true,

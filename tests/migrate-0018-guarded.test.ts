@@ -14,6 +14,7 @@ import {
   createMigration0018PoolDependencies,
   executeGuardedMigration0018,
   parseMigration0018Cli,
+  migration0018ErrorDiagnostic,
   redactMigration0018Error,
   splitMigrationStatements,
   type Migration0018Dependencies,
@@ -43,6 +44,7 @@ const request = (overrides: Partial<Migration0018Request> = {}): Migration0018Re
   confirmMigration: undefined,
   confirmHash: undefined,
   maintenanceApproved: false,
+  rehearsalIntent: false,
   actorUserId: "00000000-0000-4000-8000-000000000001",
   reason: "approved migration window",
   ...overrides,
@@ -202,6 +204,9 @@ describe("guarded Migration 0018 safety", () => {
     const output = redactMigration0018Error(new Error("password=super-secret token=abc DB_PASSWORD=hunter2"));
     assert.doesNotMatch(output, /super-secret|abc|hunter2/);
     assert.match(output, /\[REDACTED\]/);
+    const driver = Object.assign(new Error("Access denied password=super-secret"), { code: "ER_ACCESS_DENIED_ERROR", sqlState: "28000" });
+    const diagnostic = migration0018ErrorDiagnostic(new Migration0018GuardError("PARTIAL_DDL_FAILURE", "stopped", 1, { cause: driver }));
+    assert.deepEqual(diagnostic, { message: "Access denied password=[REDACTED]", mysqlCode: "ER_ACCESS_DENIED_ERROR", sqlState: "28000" });
   });
 
   test("requires an explicit environment file outside the repository and rejects implicit .env.local", async () => {

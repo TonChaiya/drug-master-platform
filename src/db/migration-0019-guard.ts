@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { parseArgs } from "node:util";
 import type { Pool, RowDataPacket } from "mysql2/promise";
+import { GuardedTargetClassificationError, classifyGuardedTarget } from "@/modules/phase7/target-classification";
 import {
   EXPECTED_MIGRATION_0018_SHA256,
   assertExternalEnvFile,
@@ -23,6 +24,7 @@ export interface Migration0019Request {
   confirmMigration?: string;
   confirmHash?: string;
   maintenanceApproved: boolean;
+  rehearsalIntent: boolean;
   actorUserId: string;
   reason: string;
 }
@@ -67,7 +69,7 @@ export function parseMigration0019Cli(argv: string[]): Migration0019Request {
     parsed = parseArgs({ args: argv, strict: true, allowPositionals: false, options: {
       environment: { type: "string" }, "env-file": { type: "string" }, execute: { type: "boolean" },
       "confirm-db": { type: "string" }, "confirm-migration": { type: "string" }, "confirm-hash": { type: "string" },
-      "maintenance-approved": { type: "boolean" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
+      "maintenance-approved": { type: "boolean" }, rehearsal: { type: "boolean" }, "actor-user-id": { type: "string" }, reason: { type: "string" },
     } });
   } catch (error) {
     throw new Migration0019GuardError("ARGUMENT_INVALID", "Migration 0019 arguments are invalid", undefined, { cause: error });
@@ -81,20 +83,22 @@ export function parseMigration0019Cli(argv: string[]): Migration0019Request {
     environment, envFile, execute: parsed.values.execute === true,
     confirmDatabase: text(parsed.values["confirm-db"]), confirmMigration: text(parsed.values["confirm-migration"]),
     confirmHash: text(parsed.values["confirm-hash"]), maintenanceApproved: parsed.values["maintenance-approved"] === true,
+    rehearsalIntent: parsed.values.rehearsal === true,
     actorUserId: text(parsed.values["actor-user-id"]) ?? "", reason: text(parsed.values.reason) ?? "",
   };
 }
 
 function assertTarget(request: Migration0019Request, target: Migration0019Snapshot): void {
-  if (target.database.toLowerCase() === "jhcisdb") refuse("DATABASE_FORBIDDEN", "jhcisdb is never an allowed target");
-  if (request.environment === "production") {
-    if (!target.host.toLowerCase().endsWith(".tidbcloud.com")) refuse("PRODUCTION_HOST_INVALID", "Production host is not TiDB Cloud");
-    if (target.port !== 4000 || target.database !== "drug_master_platform") refuse("PRODUCTION_DATABASE_INVALID", "Production identity mismatch");
-    if (!/tidb/i.test(target.serverVersion) || !target.tlsVerified) refuse("PRODUCTION_TLS_ENGINE_INVALID", "Verified TiDB TLS is required");
-  } else {
-    if (process.env.NODE_ENV !== "test" || process.env.ALLOW_DB_INTEGRATION_TESTS !== "1") refuse("LOCAL_TEST_OPT_IN_REQUIRED", "Local execution requires test opt-in");
-    if (target.host !== "127.0.0.1" || target.port !== 3306 || target.database !== "drug_master_mapping_v2_test") refuse("LOCAL_TARGET_INVALID", "Unexpected local target");
-    if (!/^8\.4\.3(?:\D|$)/.test(target.serverVersion)) refuse("LOCAL_ENGINE_INVALID", "Local target must be MySQL 8.4.3");
+  try {
+    const targetClass = classifyGuardedTarget({
+      environment: request.environment, host: target.host, port: target.port, database: target.database,
+      serverVersion: target.serverVersion, rehearsalIntent: request.rehearsalIntent,
+      testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+    });
+    if (targetClass === "PRODUCTION" && !target.tlsVerified) refuse("PRODUCTION_TLS_ENGINE_INVALID", "Verified TiDB TLS is required");
+  } catch (error) {
+    if (error instanceof GuardedTargetClassificationError) refuse(error.code, error.message);
+    throw error;
   }
 }
 

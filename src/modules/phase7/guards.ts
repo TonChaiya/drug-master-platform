@@ -1,3 +1,5 @@
+import { GuardedTargetClassificationError, classifyGuardedTarget } from "./target-classification";
+
 export type OperationalEnvironment = "local" | "production";
 
 export interface OperationalTarget {
@@ -10,6 +12,7 @@ export interface OperationalTarget {
   maintenanceEnabled: boolean;
   executeRequested: boolean;
   confirmDatabase?: string;
+  rehearsalIntent?: boolean;
 }
 
 export class Phase7GuardError extends Error {
@@ -27,16 +30,15 @@ export function assertOperationalTarget(
   target: OperationalTarget,
   options: { forExecution: boolean; requiredMigrations: readonly string[]; requireMaintenance?: boolean },
 ): void {
-  if (target.database.toLowerCase() === "jhcisdb") refuse("DATABASE_FORBIDDEN", "jhcisdb is never an operational target");
-
-  if (target.environment === "production") {
-    if (!target.host.toLowerCase().endsWith(".tidbcloud.com")) refuse("PRODUCTION_HOST_INVALID", "Production host is not TiDB Cloud");
-    if (target.port !== 4000) refuse("PRODUCTION_PORT_INVALID", "Production port must be 4000");
-    if (target.database !== "drug_master_platform") refuse("PRODUCTION_DATABASE_INVALID", "Production database identity mismatch");
-    if (!/TiDB/i.test(target.serverVersion)) refuse("PRODUCTION_ENGINE_INVALID", "Production server is not TiDB");
-  } else {
-    if (target.host !== "127.0.0.1" && target.host !== "localhost") refuse("LOCAL_HOST_INVALID", "Local operation must use localhost");
-    if (!/^drug_master_[a-z0-9_]*test$/.test(target.database)) refuse("LOCAL_DATABASE_INVALID", "Local operation requires a guarded test database");
+  try {
+    classifyGuardedTarget({
+      environment: target.environment, host: target.host, port: target.port, database: target.database,
+      serverVersion: target.serverVersion, rehearsalIntent: target.rehearsalIntent,
+      testOptIn: process.env.NODE_ENV === "test" && process.env.ALLOW_DB_INTEGRATION_TESTS === "1",
+    });
+  } catch (error) {
+    if (error instanceof GuardedTargetClassificationError) refuse(error.code, error.message);
+    throw error;
   }
 
   for (const migration of options.requiredMigrations) {
