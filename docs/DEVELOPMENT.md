@@ -82,6 +82,7 @@ pnpm db:migrate
 ## Migration rules
 
 - เปลี่ยน schema ด้วย migration หมายเลขใหม่เท่านั้น ห้ามแก้ migration ที่ applied แล้วแม้แต่คอมเมนต์
+- Migration `0019_ttmt_source_fidelity.sql` ต้องคงสาม source fields ในทั้ง live/versioned TTMT schema; focused verification ใช้ `tests/tmt-v2-schema.test.ts`, `tests/ttmt-v2-import.test.ts` และ `tests/standard-release-mysql.test.ts` โดยไม่ต้อง import workbook จริงหรือเปิด DB integration.
 - runner บันทึกและตรวจ SHA-256 ใน migration journal
 - production migration ต้องยืนยัน environment และ journal ก่อนใช้ runner เดิม
 - local migration verification ใช้ Laragon MySQL ได้

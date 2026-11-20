@@ -69,6 +69,29 @@ test("baseline batch copy is copy-only, dataset-scoped, and bounded", async () =
   assert.doesNotMatch(copy.sql, /ON DUPLICATE KEY UPDATE|DELETE|TRUNCATE/i);
 });
 
+test("TTMT baseline projection preserves source-fidelity fields", async () => {
+  const calls: Array<{ sql: string; values: unknown[] | undefined }> = [];
+  const columns = [
+    "ttmtcode", "activeingredient", "status", "ttmt_type", "change_date", "drug_group_nhso",
+    "source_version", "source_import_id", "created_at", "updated_at",
+  ];
+  const execute = async (sql: string, values?: unknown[]) => {
+    calls.push({ sql, values });
+    if (sql.includes("SELECT state FROM standard_datasets")) return [[{ state: "writing" }]];
+    if (sql.includes("COUNT(*) AS total") && sql.includes("ttmt_dataset_products")) return [[{ total: 0 }]];
+    if (sql.includes("COUNT(*) AS total") && sql.includes("ttmt_products")) return [[{ total: 1 }]];
+    if (sql.includes("information_schema.COLUMNS")) return [columns.map((column_name) => ({ column_name }))];
+    return [{ affectedRows: 1 }];
+  };
+  const pool = { execute, async query(sql: string, values?: unknown[]) { return execute(sql, values); } } as never;
+  const { baseline } = standardDatasetLifecycleStoresForPool(pool);
+  await baseline.copyNextBatch({ datasetId: "10000000-0000-4000-8000-000000000001", source: "TTMT", batchSize: 10 });
+  const copy = calls.find((call) => call.sql.includes("INSERT IGNORE INTO `ttmt_dataset_products`"));
+  assert.ok(copy);
+  for (const name of ["ttmt_type", "change_date", "drug_group_nhso"]) assert.ok(copy.sql.includes(`\`${name}\``));
+  assert.doesNotMatch(copy.sql, /ON DUPLICATE KEY UPDATE|DELETE|TRUNCATE/i);
+});
+
 test("baseline batch state check and copy share the candidate row lock transaction", async () => {
   const events: string[] = [];
   const connection = {

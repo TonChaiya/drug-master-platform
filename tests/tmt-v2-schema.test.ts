@@ -6,6 +6,7 @@ import { getTableConfig } from "drizzle-orm/mysql-core";
 import { test } from "vitest";
 import * as tmt from "@/db/schema/tmt";
 import * as ttmt from "@/db/schema/ttmt";
+import * as datasets from "@/db/schema/standard-datasets";
 import { drugMappings } from "@/db/schema/mappings";
 
 function tableBody(sql: string, table: string): string {
@@ -127,6 +128,30 @@ test("TMT and TTMT identifiers live in independent namespaces", () => {
   assert.equal(getTableConfig(tmt.tmtMastertmt).columns.find((column) => column.name === "tpucode")?.primary, true);
   assert.equal(getTableConfig(ttmt.ttmtProducts).columns.find((column) => column.name === "ttmtcode")?.primary, true);
   assert.notEqual(getTableName(tmt.tmtMastertmt), getTableName(ttmt.ttmtProducts));
+});
+
+test("0019 preserves nullable MasterTTMT source fields in live and versioned rows", async () => {
+  const live = getTableConfig(ttmt.ttmtProducts);
+  const versioned = getTableConfig(datasets.ttmtDatasetProducts);
+  for (const name of ["ttmt_type", "change_date", "drug_group_nhso"]) {
+    const liveColumn = live.columns.find((column) => column.name === name);
+    const versionedColumn = versioned.columns.find((column) => column.name === name);
+    assert.ok(liveColumn, `missing live ${name}`);
+    assert.ok(versionedColumn, `missing versioned ${name}`);
+    assert.equal(liveColumn.notNull, false);
+    assert.equal(versionedColumn.notNull, false);
+    assert.equal(liveColumn.getSQLType(), versionedColumn.getSQLType());
+  }
+
+  const sql = await readFile(new URL("../src/db/migrations/0019_ttmt_source_fidelity.sql", import.meta.url), "utf8");
+  const statements = sql.split(";").map((statement) => statement.trim()).filter(Boolean);
+  assert.equal(statements.length, 2);
+  assert.match(statements[0] ?? "", /^ALTER TABLE ttmt_products\b/i);
+  assert.match(statements[1] ?? "", /^ALTER TABLE ttmt_dataset_products\b/i);
+  for (const name of ["ttmt_type", "change_date", "drug_group_nhso"]) {
+    assert.equal((sql.match(new RegExp(`ADD COLUMN ${name} `, "gi")) ?? []).length, 2);
+  }
+  assert.doesNotMatch(sql, /\b(?:DROP|DELETE|TRUNCATE|UPDATE|RENAME)\b/i);
 });
 
 test("0014 and 0015 are additive contracts and leave legacy schema untouched", async () => {

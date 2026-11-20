@@ -377,6 +377,8 @@ DELETE FROM schema_migrations WHERE filename = '0016_mapping_v2_identity.sql';
 
 **0017_tmt_run_validations.sql** — เพิ่ม current validation evidence หนึ่ง row ต่อ `tmt_sync_runs.id` สำหรับ policy `validated-unverified-v1`; ผูก approved TTMT import, checkpoint/invariant/GPU evidence และ canonical SHA-256. FK ไป run ใช้ `ON DELETE CASCADE` เพื่อให้ `tmt-v2-only` reset invalidate evidence โดยไม่เพิ่มตารางลง 17-table DELETE allowlist. Migration นี้ยังไม่ apply production ใน Phase 7X.
 
+**0019_ttmt_source_fidelity.sql** — เพิ่ม nullable `ttmt_type`, `change_date` และ `drug_group_nhso` แบบ additive ใน `ttmt_products` และ `ttmt_dataset_products`. Migration ไม่เปลี่ยน eligibility, ไม่แก้ approved TTMT hash และไม่ลบ/deactivate รหัสที่หายจาก import ใหม่. Rollback ก่อนมีข้อมูลที่อาศัยคอลัมน์เหล่านี้ทำได้ด้วยการ drop เฉพาะหกคอลัมน์หลังหยุด runtime; หลังเริ่มเก็บ source values ต้อง restore จาก backup/approved workbook แทนการ drop โดยพลการ.
+
 Rollback ทำได้เฉพาะก่อนเปิด v2 flags/สร้าง validation production โดยหยุด runtime ที่อ้าง schema ก่อน:
 
 ```sql

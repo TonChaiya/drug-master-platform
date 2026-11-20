@@ -9,6 +9,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   contentValue: ["contvalue", "content"], contentUnit: ["contunit"],
   dispensingUnit: ["dispunit", "unit", "หน่วย"], tradeName: ["tradename", "ชื่อการค้า"],
   manufacturer: ["manufacturer", "ผู้ผลิต"], fsn: ["fsn"], status: ["status", "สถานะ"],
+  ttmtType: ["ttmttype"], changeDate: ["changedate"], drugGroupNhso: ["druggroupnhso"],
   nlem: ["nlem", "ed", "ised"], registrationNumber: ["regno", "registrationnumber", "เลขทะเบียน"],
 };
 
@@ -31,6 +32,9 @@ export interface ParsedTtmtProduct {
   manufacturer: string | null;
   fsn: string | null;
   status: "active" | "inactive";
+  ttmtType: string | null;
+  changeDate: string | null;
+  drugGroupNhso: string | null;
   nlem: string | null;
   registrationNumber: string | null;
   normalizedGeneric: string | null;
@@ -93,6 +97,8 @@ export function parseMasterTtmt(
       contvalue: field(rowIndex, "contentValue"), contunit: field(rowIndex, "contentUnit"),
       dispunit: field(rowIndex, "dispensingUnit"), tradename: tradeName, manufacturer,
       fsn: field(rowIndex, "fsn"), status: status === "0" || status === "active" ? "active" : "inactive",
+      ttmtType: field(rowIndex, "ttmtType"), changeDate: field(rowIndex, "changeDate"),
+      drugGroupNhso: field(rowIndex, "drugGroupNhso"),
       nlem: field(rowIndex, "nlem"), registrationNumber,
       normalizedGeneric: normalizeSearchText(activeIngredient), normalizedTrade: normalizeSearchText(tradeName),
       normalizedManufacturer: normalizeSearchText(manufacturer), normalizedRegno: normalizeRegistrationNumber(registrationNumber),
