@@ -166,10 +166,12 @@ test("chooser keeps structured results and explicit search and related-TPU state
   assert.doesNotMatch(workbench, />รายละเอียด</);
   for (const state of ["detailStatus === \"loading\"", "detailStatus === \"empty\"", "detailStatus === \"error\"", "detailStatus === \"ready\""]) assert.match(workbench, new RegExp(state));
   assert.match(workbench, /TPU ที่เกี่ยวข้องกับ GPU/);
-  assert.match(workbench, /m-2\.5 rounded-xl border border-primary-200 bg-surface p-3/);
+  assert.match(workbench, /w-full border-y border-primary-200 bg-surface px-3 py-3/);
+  assert.doesNotMatch(workbench, /m-2\.5 rounded-xl border border-primary-200 bg-surface/);
   assert.match(workbench, /mx-auto w-full max-w-7xl/);
-  assert.match(workbench, /border border-primary-200 bg-primary-50\/60 p-2/);
-  assert.match(workbench, /divide-y divide-primary-100 overflow-hidden/);
+  assert.match(workbench, /border-y border-primary-100 bg-primary-50\/60 p-2/);
+  assert.match(workbench, /divide-y divide-primary-100 bg-surface/);
+  assert.doesNotMatch(workbench, /divide-y divide-primary-100 overflow-hidden rounded-md border/);
   assert.match(workbench, /xl:grid-cols-\[minmax\(8rem,0\.75fr\)_minmax\(12rem,1\.15fr\)_minmax\(12rem,1\.15fr\)_minmax\(11rem,1fr\)_minmax\(9rem,0\.8fr\)_auto\]/);
   assert.match(workbench, /จับคู่รายการยา JHCIS กับมาตรฐาน/);
   assert.match(workbench, /IconStandards size=\{16\}/);
