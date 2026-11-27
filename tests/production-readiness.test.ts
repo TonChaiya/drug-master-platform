@@ -10,6 +10,7 @@ import {
   assertExternalOperatorFile,
   assertProductionReadiness,
   loadProductionReadinessFile,
+  productionReadinessSchema,
   redactOperatorMessage,
   type ProductionReadinessEvidence,
 } from "@/modules/phase7/production-readiness";
@@ -77,6 +78,25 @@ test("requires storage, maintenance, and successful probe evidence for Productio
     }), "migrate-0018", { requireProbe: true }),
     (error: unknown) => error instanceof ProductionReadinessError && error.code === "STORAGE_EVIDENCE_MISSING",
   );
+});
+
+test("accepts operator capacity confirmation without measurements and scopes it to the approved operation", () => {
+  const storage = {
+    observationTimestamp: evidence().storage.observationTimestamp,
+    headroomEvidence: "Operator confirmed sufficient capacity for the compatibility probe",
+    adequateForOperations: ["tidb-probe"],
+    operatorConfirmedAdequate: true,
+  };
+  const input = { ...evidence(), storage };
+  const parsed = productionReadinessSchema.parse(input);
+  assert.doesNotThrow(() => assertProductionReadiness(parsed, "tidb-probe", { requireProbe: false }));
+  assert.throws(
+    () => assertProductionReadiness(parsed, "migrate-0018", { requireProbe: true }),
+    (error: unknown) => error instanceof ProductionReadinessError && error.code === "STORAGE_EVIDENCE_MISSING",
+  );
+  assert.equal(productionReadinessSchema.safeParse({ ...input, storage: { ...storage, operatorConfirmedAdequate: false } }).success, false);
+  assert.equal(productionReadinessSchema.safeParse({ ...input, storage: { ...storage, headroomEvidence: " " } }).success, false);
+  assert.equal(productionReadinessSchema.safeParse({ ...input, storage: { ...storage, availableBytes: -1 } }).success, false);
 });
 
 test("rejects repository env files and clears inherited database values", () => {

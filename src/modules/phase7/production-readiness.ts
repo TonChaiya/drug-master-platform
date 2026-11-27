@@ -17,15 +17,13 @@ export const productionReadinessSchema = z.object({
   database: z.literal("drug_master_platform"),
   storage: z.object({
     observationTimestamp: timestamp,
-    currentUsageBytes: z.number().int().nonnegative(),
-    quotaBytes: z.number().int().positive().nullable(),
-    availableBytes: z.number().int().nonnegative().nullable(),
-    headroomEvidence: z.string().min(1),
+    currentUsageBytes: z.number().int().nonnegative().optional(),
+    quotaBytes: z.number().int().positive().nullish(),
+    availableBytes: z.number().int().nonnegative().nullish(),
+    headroomEvidence: z.string().trim().min(1),
     adequateForOperations: z.array(operation).min(1),
     operatorConfirmedAdequate: z.literal(true),
-  }).strict().refine((value) => value.quotaBytes !== null || value.availableBytes !== null, {
-    message: "Storage quota or available-headroom evidence is required",
-  }),
+  }).strict(),
   backup: z.object({
     exportId: z.string().min(1),
     manifestSha256: sha256,

@@ -7,9 +7,9 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production SHA before this release: `f29f51961f322d31d0d35b48102aeb832a36bf24`
-- Current production application version before this release: `0.8.17`
-- Local release candidate: `0.8.18`
+- Production SHA before this release: `4f6a1e61d7da02d8a2664ef80f4f9323055b3b7c`
+- Current production application version before this release: `0.8.18`
+- Release candidate: `0.8.19`
 - Hosting: Vercel production deployed through Git integration; deployment ของ SHA ข้างต้นตรวจแล้วเป็น `READY`
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
@@ -25,6 +25,7 @@
 - Release `0.8.16` ประสาน canonical TTMT validation/replacement evidence ไปยัง MasterTTMT `20261001` hash `88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057` หลัง re-audit โครงสร้างและสถิติสำคัญผ่านครบ. Artifact นี้ได้รับอนุมัติใหม่หลัง binary identity เปลี่ยน โดยไม่ได้อ้างว่า binary-equivalent กับ workbook เดิม; migration, baseline replacement และ Dataset Release ยังไม่ได้ execute.
 - Release `0.8.17` รวม guard เป้าหมายเป็น `LOCAL_CLONE_REHEARSAL`, `TEST`, `PRODUCTION` โดย local clone ต้องใช้ `--rehearsal` และยังปฏิเสธ port 3333/`jhcisdb`/remote target. Local Production clone บน Laragon ผ่าน 0017→0018→0019 และ controlled TTMT replacement ครบ: 9,654 unique codes, `RECIPE/SINGLE/CANCEL` 6,790/2,847/17, mappings/history เดิมคงอยู่ และ maintenance ถูกปิดหลัง rehearsal. Production database ยังไม่ถูก migrate หรือ rebuild.
 - Release `0.8.18` เพิ่ม Production readiness contract แบบ external non-secret evidence, บังคับ explicit intent/operation/TiDB Cloud/mysql2/TLS ใน shared target guard และเพิ่ม ownership-guarded TiDB probe สำหรับ FK/collation/nullable ALTER/transaction rollback/row lock/partial DDL. TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` ผ่าน restore rehearsal บน isolated MySQL 8.4.3 แล้ว; probe จริง, Migration 0018/0019 และ TTMT replacement บน Production ยัง **ไม่ execute**.
+- Release `0.8.19` ให้ readiness guard รับคำยืนยันเรื่องพื้นที่ที่ระบุเวลาและ operation จาก operator โดยตัวเลขพื้นที่เป็น optional. Production probe, Migration 0018/0019 และ TTMT replacement ยังไม่ดำเนินการใน release นี้.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
 
 ## Phase 4 consolidation checkpoint
