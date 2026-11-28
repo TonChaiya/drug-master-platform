@@ -58,9 +58,9 @@ test("TTMT mapping route rejects empty and short filters before search", async (
   assert.equal(mocks.search.mock.calls.length, 0);
 });
 
-test("TTMT mapping route fails closed when standards are not ready", async () => {
-  mocks.ready.mockRejectedValueOnce(new Error("not ready"));
+test("TTMT search is independent of TMT readiness", async () => {
   const response = await GET(new Request("https://example.test/api/v1/mappings/v2/standards?source=TTMT&code=TT"));
-  assert.equal(response.status, 503);
-  assert.equal(mocks.search.mock.calls.length, 0);
+  assert.equal(response.status, 200);
+  assert.equal(mocks.ready.mock.calls.length, 0);
+  assert.equal(mocks.search.mock.calls.length, 1);
 });

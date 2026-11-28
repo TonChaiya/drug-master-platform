@@ -7,7 +7,7 @@ import type { ParsedTtmtProduct } from "./ttmt-parser";
 
 export const APPROVED_TTMT_REPLACEMENT = {
   version: "20261001",
-  contentHash: "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057",
+  contentHash: "071cb3d3708865f8d1428e23f25216ba65e6acb21e436070587d98a59dbce5c3",
   rowCount: 9_654,
   sheetName: "l_ttmt_master_ed",
   cancelCount: 17,

@@ -14,9 +14,9 @@ import {
   type TtmtReplacementContract,
   type TtmtReplacementPreflight,
 } from "@/modules/standards/ttmt-baseline-replacement";
-import { APPROVED_TTMT_V1 } from "@/modules/tmt/validation";
+import { APPROVED_TTMT_WORKBOOK_SHA256 } from "@/modules/phase7/production-readiness";
 
-const APPROVED_MASTER_TTMT_HASH = "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057";
+const APPROVED_MASTER_TTMT_HASH = "071cb3d3708865f8d1428e23f25216ba65e6acb21e436070587d98a59dbce5c3";
 const FORMER_MASTER_TTMT_HASH = "e78b3030c8bb63bfc78b96254edc43bc0d70ca81e2b5dc75d9040392440f489a";
 
 const headers = ["TTMTCode", "ActiveIngredient", "Strength", "Dosageform", "Contvalue", "Contunit", "DispUnit", "TradeName", "Manufacturer", "FSN", "Status", "TTMTType", "Changedate", "ED", "Drug_Group_Nhso"];
@@ -43,7 +43,7 @@ function store(preflight = safePreflight()): TtmtBaselineReplacementStore {
 describe("controlled TTMT baseline replacement", () => {
   test("uses the explicitly approved re-audited MasterTTMT evidence", () => {
     assert.equal(APPROVED_TTMT_REPLACEMENT.contentHash, APPROVED_MASTER_TTMT_HASH);
-    assert.equal(APPROVED_TTMT_V1.contentHash, APPROVED_MASTER_TTMT_HASH);
+    assert.equal(APPROVED_TTMT_WORKBOOK_SHA256, APPROVED_MASTER_TTMT_HASH);
     assert.notEqual(APPROVED_TTMT_REPLACEMENT.contentHash, FORMER_MASTER_TTMT_HASH);
   });
 

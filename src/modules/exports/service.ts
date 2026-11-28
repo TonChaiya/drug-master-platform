@@ -12,7 +12,6 @@ import { buildExportCandidates, type ExportCandidate, type ExportSelection } fro
 import { buildExportCandidatesV2 } from "./rows-v2";
 import { buildDrugCatWorkbook, exportFilename } from "./writer";
 import { activeStandardReleaseEnabled, tmtV2ExportEnabled } from "@/modules/tmt/feature";
-import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 import { readActiveStandardRelease, readLockedActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface ExportBundle {
@@ -34,7 +33,6 @@ const PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 async function exportCandidateBuilder(release?: ActiveStandardRelease) {
   if (!tmtV2ExportEnabled()) return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidates(facilityId, selection, database, lockRows);
-  if (!release) await requireTmtV2Ready();
   return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidatesV2(facilityId, selection, database, lockRows, release);
 }
 

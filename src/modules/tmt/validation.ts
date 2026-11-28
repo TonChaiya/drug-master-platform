@@ -5,14 +5,9 @@ import { buildTmtInvariantReport, verifyTmtGpuAcceptance } from "./invariants";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
 
 export const VALIDATED_UNVERIFIED_POLICY_VERSION = "validated-unverified-v1";
-export const APPROVED_TTMT_V1 = {
-  version: "20261001",
-  contentHash: "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057",
-  rowCount: 9_654,
-} as const;
+export const TMT_SOURCE_VALIDATION_POLICY = "validated-unverified-v2";
 
-const persistedEvidenceSchema = z.object({
-  policyVersion: z.literal(VALIDATED_UNVERIFIED_POLICY_VERSION),
+const tmtEvidenceSchema = z.object({
   run: z.object({
     id: z.string().uuid(), mode: z.literal("full_unverified"), status: z.literal("unverified"),
     errorCode: z.literal("TMT_VERSION_UNVERIFIED"), tmtVersion: z.string().startsWith("unverified:"),
@@ -38,13 +33,20 @@ const persistedEvidenceSchema = z.object({
     relatedTpuPresent: z.number().int().nonnegative(), relatedMasterTmtPresent: z.number().int().nonnegative(),
     relatedConceptPresent: z.number().int().nonnegative(), activeMasterCount: z.number().int().positive(),
   }).strict(),
-  ttmt: z.object({
+}).strict();
+
+const persistedEvidenceSchema = z.discriminatedUnion("policyVersion", [
+  tmtEvidenceSchema.extend({ policyVersion: z.literal(TMT_SOURCE_VALIDATION_POLICY) }),
+  tmtEvidenceSchema.extend({
+    policyVersion: z.literal(VALIDATED_UNVERIFIED_POLICY_VERSION),
+    ttmt: z.object({
     id: z.string().uuid(), version: z.string().min(1), contentHash: z.string().regex(/^[a-f0-9]{64}$/),
     rowCount: z.number().int().positive(), status: z.literal("succeeded"), productCount: z.number().int().positive(),
     activeCount: z.number().int().nonnegative(), inactiveCount: z.number().int().nonnegative(),
     foreignProductCount: z.number().int().nonnegative(),
-  }).strict(),
-}).strict();
+    }).strict(),
+  }),
+]);
 
 export function parseTmtValidationEvidence(raw: string) {
   try {
@@ -116,6 +118,11 @@ export interface TmtRunValidationEvidence {
   evidenceSha256: string;
 }
 
+type TmtSourceValidationInput = Omit<ValidatedUnverifiedInput, "ttmt">;
+type TmtSourceValidationEvidence = Omit<TmtRunValidationEvidence, "policyVersion" | "ttmtImportId" | "ttmtContentHash" | "ttmtRowCount"> & {
+  policyVersion: typeof TMT_SOURCE_VALIDATION_POLICY;
+};
+
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -164,12 +171,11 @@ function checkpointEvidence(checkpoints: ValidatedUnverifiedInput["checkpoints"]
   };
 }
 
-function assertTtmt(input: ValidatedUnverifiedInput["ttmt"]): void {
-  if (input.status !== "succeeded" || input.version !== APPROVED_TTMT_V1.version
-    || input.contentHash !== APPROVED_TTMT_V1.contentHash || input.rowCount !== APPROVED_TTMT_V1.rowCount
-    || input.productCount !== APPROVED_TTMT_V1.rowCount || input.activeCount !== APPROVED_TTMT_V1.rowCount
+function assertHistoricalTtmtEvidence(input: ValidatedUnverifiedInput["ttmt"]): void {
+  if (input.status !== "succeeded" || !input.version || !/^[a-f0-9]{64}$/.test(input.contentHash) || input.rowCount <= 0
+    || input.productCount !== input.rowCount || input.activeCount !== input.rowCount
     || input.inactiveCount !== 0 || input.foreignProductCount !== 0) {
-    fail("Approved TTMT import identity or product state does not match");
+    fail("Historical TTMT import identity or product state does not match");
   }
 }
 
@@ -182,7 +188,9 @@ function assertGpu(input: ValidatedUnverifiedInput["gpu"]): void {
   if (!complete) fail("GPU 764169 acceptance failed");
 }
 
-export function buildValidatedUnverifiedEvidence(input: ValidatedUnverifiedInput, validatedAt: Date): TmtRunValidationEvidence {
+export function buildValidatedUnverifiedEvidence(input: ValidatedUnverifiedInput, validatedAt: Date): TmtRunValidationEvidence;
+export function buildValidatedUnverifiedEvidence(input: TmtSourceValidationInput, validatedAt: Date): TmtSourceValidationEvidence;
+export function buildValidatedUnverifiedEvidence(input: TmtSourceValidationInput | ValidatedUnverifiedInput, validatedAt: Date) {
   assertRun(input.run);
   const checkpoint = checkpointEvidence(input.checkpoints);
   const blockingInvariants = {
@@ -199,10 +207,7 @@ export function buildValidatedUnverifiedEvidence(input: ValidatedUnverifiedInput
   const blockingInvariantCount = Object.values(blockingInvariants).reduce((sum, count) => sum + count, 0);
   if (blockingInvariantCount !== 0) fail(`TMT blocking invariant validation failed with ${blockingInvariantCount} rows`);
   assertGpu(input.gpu);
-  assertTtmt(input.ttmt);
-
-  const evidence = {
-    policyVersion: VALIDATED_UNVERIFIED_POLICY_VERSION,
+  const tmtEvidence = {
     run: {
       id: input.run.id, mode: input.run.mode, status: input.run.status,
       errorCode: input.run.errorCode, tmtVersion: input.run.tmtVersion,
@@ -214,35 +219,36 @@ export function buildValidatedUnverifiedEvidence(input: ValidatedUnverifiedInput
       relatedTpuPresent: input.gpu.relatedTpuPresent, relatedMasterTmtPresent: input.gpu.relatedMasterTmtPresent,
       relatedConceptPresent: input.gpu.relatedConceptPresent, activeMasterCount: input.gpu.activeMasterCount,
     },
-    ttmt: {
-      id: input.ttmt.id, version: input.ttmt.version, contentHash: input.ttmt.contentHash,
-      rowCount: input.ttmt.rowCount, status: input.ttmt.status, productCount: input.ttmt.productCount,
-      activeCount: input.ttmt.activeCount, inactiveCount: input.ttmt.inactiveCount,
-      foreignProductCount: input.ttmt.foreignProductCount,
-    },
   };
-  const invariantEvidence = JSON.stringify(evidence);
-  return {
+  const result = {
     runId: input.run.id,
-    policyVersion: VALIDATED_UNVERIFIED_POLICY_VERSION,
-    status: "passed",
+    status: "passed" as const,
     validatedAt,
     requiredCheckpointCount: checkpoint.requiredCheckpointCount,
     requiredSucceededCount: checkpoint.requiredSucceededCount,
     optionalFailureCount: checkpoint.optionalFailureCount,
     blockingInvariantCount,
-    invariantEvidence,
-    gpu764169Passed: true,
-    ttmtImportId: input.ttmt.id,
-    ttmtContentHash: input.ttmt.contentHash,
-    ttmtRowCount: input.ttmt.rowCount,
-    evidenceSha256: createHash("sha256").update(invariantEvidence).digest("hex"),
+    gpu764169Passed: true as const,
   };
+  const serialize = (evidence: object) => {
+    const invariantEvidence = JSON.stringify(evidence);
+    return { invariantEvidence, evidenceSha256: createHash("sha256").update(invariantEvidence).digest("hex") };
+  };
+  if ("ttmt" in input) {
+    assertHistoricalTtmtEvidence(input.ttmt);
+    const { id, version, contentHash, rowCount, status, productCount, activeCount, inactiveCount, foreignProductCount } = input.ttmt;
+    return { ...result, ...serialize({ policyVersion: VALIDATED_UNVERIFIED_POLICY_VERSION, ...tmtEvidence,
+      ttmt: { id, version, contentHash, rowCount, status, productCount, activeCount, inactiveCount, foreignProductCount } }),
+      policyVersion: VALIDATED_UNVERIFIED_POLICY_VERSION, ttmtImportId: input.ttmt.id,
+      ttmtContentHash: input.ttmt.contentHash, ttmtRowCount: input.ttmt.rowCount };
+  }
+  return { ...result, ...serialize({ policyVersion: TMT_SOURCE_VALIDATION_POLICY, ...tmtEvidence }),
+    policyVersion: TMT_SOURCE_VALIDATION_POLICY };
 }
 
 export interface ValidatedUnverifiedRevalidationDependencies {
-  load(runId: string): Promise<ValidatedUnverifiedInput>;
-  save(evidence: TmtRunValidationEvidence): Promise<void>;
+  load(runId: string): Promise<TmtSourceValidationInput>;
+  save(evidence: TmtSourceValidationEvidence): Promise<void>;
   now(): Date;
 }
 
@@ -250,12 +256,13 @@ export async function runValidatedUnverifiedRevalidation(
   input: { runId: string; execute: boolean },
   dependencies: ValidatedUnverifiedRevalidationDependencies,
 ) {
-  const evidence = buildValidatedUnverifiedEvidence(await dependencies.load(input.runId), dependencies.now());
+  const { run, checkpoints, blockingInvariants, gpu } = await dependencies.load(input.runId);
+  const evidence = buildValidatedUnverifiedEvidence({ run, checkpoints, blockingInvariants, gpu }, dependencies.now());
   if (input.execute) await dependencies.save(evidence);
   return { ...evidence, executed: input.execute };
 }
 
-async function loadValidatedUnverifiedInput(connection: PoolConnection, runId: string): Promise<ValidatedUnverifiedInput> {
+async function loadValidatedUnverifiedInput(connection: PoolConnection, runId: string): Promise<TmtSourceValidationInput> {
   const [runRows] = await connection.query<RowDataPacket[]>(
     "SELECT id,mode,status,error_code,tmt_version FROM tmt_sync_runs WHERE id=? FOR UPDATE",
     [runId],
@@ -268,17 +275,6 @@ async function loadValidatedUnverifiedInput(connection: PoolConnection, runId: s
   );
   const invariants = await buildTmtInvariantReport(connection);
   const gpu = await verifyTmtGpuAcceptance(connection, "764169");
-  const [ttmtRows] = await connection.query<RowDataPacket[]>(
-    `SELECT i.id,i.version,i.content_hash,i.row_count,i.status,
-      (SELECT COUNT(*) FROM ttmt_products) AS product_count,
-      (SELECT COUNT(*) FROM ttmt_products p WHERE p.source_import_id=i.id AND p.status='active') AS active_count,
-      (SELECT COUNT(*) FROM ttmt_products p WHERE p.source_import_id=i.id AND p.status<>'active') AS inactive_count,
-      (SELECT COUNT(*) FROM ttmt_products p WHERE p.source_import_id<>i.id) AS foreign_product_count
-     FROM ttmt_imports i WHERE i.version=? AND i.content_hash=? LIMIT 1`,
-    [APPROVED_TTMT_V1.version, APPROVED_TTMT_V1.contentHash],
-  );
-  const ttmt = ttmtRows[0];
-  if (!ttmt) throw new Error("Approved TTMT import is missing");
   return {
     run: {
       id: String(run.id), mode: String(run.mode), status: String(run.status),
@@ -307,37 +303,31 @@ async function loadValidatedUnverifiedInput(connection: PoolConnection, runId: s
       relatedConceptPresent: gpu.relatedConceptPresent,
       activeMasterCount: gpu.masterStatuses.filter((row) => row.status === 0).length,
     },
-    ttmt: {
-      id: String(ttmt.id), version: String(ttmt.version), contentHash: String(ttmt.content_hash),
-      rowCount: Number(ttmt.row_count), status: String(ttmt.status), productCount: Number(ttmt.product_count),
-      activeCount: Number(ttmt.active_count), inactiveCount: Number(ttmt.inactive_count),
-      foreignProductCount: Number(ttmt.foreign_product_count),
-    },
   };
 }
 
-async function saveEvidence(connection: PoolConnection, evidence: TmtRunValidationEvidence): Promise<void> {
+async function saveEvidence(connection: PoolConnection, evidence: TmtSourceValidationEvidence): Promise<void> {
+  const [existing] = await connection.execute<RowDataPacket[]>(
+    "SELECT evidence_sha256 FROM tmt_run_validations WHERE run_id=? FOR UPDATE", [evidence.runId],
+  );
+  if (existing[0]) {
+    if (existing[0].evidence_sha256 !== evidence.evidenceSha256) fail("TMT validation evidence for this run is immutable");
+    return;
+  }
   await connection.execute(
     `INSERT INTO tmt_run_validations
       (run_id,policy_version,status,validated_at,required_checkpoint_count,required_succeeded_count,
        optional_failure_count,blocking_invariant_count,invariant_evidence,gpu_764169_passed,
-       ttmt_import_id,ttmt_content_hash,ttmt_row_count,evidence_sha256)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       policy_version=VALUES(policy_version),status=VALUES(status),validated_at=VALUES(validated_at),
-       required_checkpoint_count=VALUES(required_checkpoint_count),required_succeeded_count=VALUES(required_succeeded_count),
-       optional_failure_count=VALUES(optional_failure_count),blocking_invariant_count=VALUES(blocking_invariant_count),
-       invariant_evidence=VALUES(invariant_evidence),gpu_764169_passed=VALUES(gpu_764169_passed),
-       ttmt_import_id=VALUES(ttmt_import_id),ttmt_content_hash=VALUES(ttmt_content_hash),
-       ttmt_row_count=VALUES(ttmt_row_count),evidence_sha256=VALUES(evidence_sha256)`,
+       evidence_sha256)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     [
       evidence.runId, evidence.policyVersion, evidence.status, evidence.validatedAt,
       evidence.requiredCheckpointCount, evidence.requiredSucceededCount, evidence.optionalFailureCount,
-      evidence.blockingInvariantCount, evidence.invariantEvidence, 1, evidence.ttmtImportId,
-      evidence.ttmtContentHash, evidence.ttmtRowCount, evidence.evidenceSha256,
+      evidence.blockingInvariantCount, evidence.invariantEvidence, 1, evidence.evidenceSha256,
     ],
   );
 }
+
 
 export async function revalidateTmtRun(
   pool: Pool,

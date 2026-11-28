@@ -30,7 +30,6 @@ export async function GET(request: Request) {
   if (!tmtV2MappingEnabled()) return apiJson({ ok: false, errorCode: "TMT_V2_MAPPING_DISABLED", message: "การจับคู่รายการยายังไม่เปิดใช้งาน" }, 503);
   const context = await withFacilityContext();
   if (!context.ok) return context.response;
-  try { await requireTmtV2Ready(); } catch { return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503); }
   const parsed = lookupSchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_QUERY", message: "ตัวกรองไม่ถูกต้อง" }, 400);
   const [mapping] = await db.select({ standardSource: drugMappings.standardSource, standardCode: drugMappings.standardCode, standardLevel: drugMappings.standardLevel, updatedAt: drugMappings.updatedAt })
@@ -46,9 +45,11 @@ export async function POST(request: Request) {
   if (!context.ok) return context.response;
   const maintenance = await maintenanceMutationResponse();
   if (maintenance) return maintenance;
-  try { await requireTmtV2Ready(); } catch { return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503); }
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiJson({ ok: false, errorCode: "INVALID_INPUT", message: "ข้อมูลการจับคู่ไม่ถูกต้อง" }, 400);
+  if (parsed.data.standardSource === "TMT") {
+    try { await requireTmtV2Ready(); } catch { return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503); }
+  }
   try {
     const result = await saveV2Mapping({ facilityId: context.context.facilityId, userId: context.context.actorUserId, ...parsed.data });
     return apiJson({ ok: true, ...result });

@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.8.19",
+  "version": "0.8.20",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:migrate:0018": "tsx scripts/migrate-0018-guarded.ts",
     "db:migrate:0019": "tsx scripts/migrate-0019-guarded.ts",
+    "db:migrate:0020": "tsx scripts/migrate-0020-guarded.ts",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "keys:generate": "node scripts/generate-keys.mjs",
     "phase7:maintenance": "tsx scripts/phase7-maintenance.ts",

@@ -74,9 +74,9 @@ export interface ReleaseValidationBundle {
     gpu764169Passed: boolean;
     invariantEvidence: string;
     evidenceSha256: string;
-    ttmtImportId: string;
-    ttmtContentHash: string;
-    ttmtRowCount: number;
+    ttmtImportId: string | null;
+    ttmtContentHash: string | null;
+    ttmtRowCount: number | null;
   };
   ttmtImport: { id: string; version: string; status: string; contentHash: string; rowCount: number };
 }
@@ -255,8 +255,7 @@ function assertValidatedUnverifiedPair(bundle: ReleaseValidationBundle): void {
   if (bundle.versionedBlockingInvariantCount !== 0 || !bundle.versionedGpu764169Passed || bundle.tmtForeignVersionRowCount !== 0) {
     throw new DatasetReleaseError("Versioned TMT snapshot does not satisfy its persisted validation invariants", "VERSIONED_TMT_INVARIANT_INVALID");
   }
-  if (tmtDataset.tmtSyncRunId !== run.id || validation.runId !== run.id || ttmtDataset.ttmtImportId !== ttmtImport.id
-    || validation.ttmtImportId !== ttmtImport.id) {
+  if (tmtDataset.tmtSyncRunId !== run.id || validation.runId !== run.id || ttmtDataset.ttmtImportId !== ttmtImport.id) {
     throw new DatasetReleaseError("Release source run/import linkage is inconsistent", "SOURCE_LINKAGE_INVALID");
   }
   const evidence = parseTmtValidationEvidence(validation.invariantEvidence);
@@ -264,7 +263,7 @@ function assertValidatedUnverifiedPair(bundle: ReleaseValidationBundle): void {
   const marker = `unverified:${run.id.replaceAll("-", "").slice(0, 20)}`;
   const requiredEndpoints = new Set<string>(TMT_UNVERIFIED_REQUIRED_ENDPOINTS);
   const evidenceRequired = evidence?.checkpoints.filter((checkpoint) => requiredEndpoints.has(checkpoint.endpoint)) ?? [];
-  if (!evidence || validation.policyVersion !== VALIDATED_UNVERIFIED_POLICY_VERSION || validation.status !== "passed"
+  if (!evidence || validation.policyVersion !== evidence.policyVersion || validation.status !== "passed"
     || validation.blockingInvariantCount !== 0 || !validation.gpu764169Passed
     || evidenceHash !== validation.evidenceSha256 || !bundle.checkpointEvidenceMatches
     || validation.requiredCheckpointCount <= 0
@@ -276,15 +275,41 @@ function assertValidatedUnverifiedPair(bundle: ReleaseValidationBundle): void {
     || bundle.currentOptionalFailureCount !== validation.optionalFailureCount
     || bundle.disallowedCheckpointCount !== 0 || bundle.nonterminalOptionalCheckpointCount !== 0
     || run.mode !== "full_unverified" || run.status !== "unverified" || run.errorCode !== "TMT_VERSION_UNVERIFIED" || run.tmtVersion !== marker
-    || evidence.run.id !== run.id || evidence.ttmt.id !== ttmtImport.id) {
+    || evidence.run.id !== run.id || evidence.run.tmtVersion !== run.tmtVersion
+    || Object.values(evidence.blockingInvariants).some((count) => count !== 0)
+    || evidence.gpu.relatedTpuPresent !== evidence.gpu.outboundTpu
+    || evidence.gpu.relatedMasterTmtPresent !== evidence.gpu.outboundTpu
+    || evidence.gpu.relatedConceptPresent !== evidence.gpu.outboundTpu
+    || (evidence.policyVersion === VALIDATED_UNVERIFIED_POLICY_VERSION
+      && (evidence.ttmt.id !== validation.ttmtImportId || evidence.ttmt.contentHash !== validation.ttmtContentHash
+        || evidence.ttmt.rowCount !== validation.ttmtRowCount))) {
     throw new DatasetReleaseError("Validated-unverified evidence is missing or inconsistent", "VALIDATION_EVIDENCE_INVALID");
   }
-  if (ttmtImport.status !== "succeeded" || validation.ttmtContentHash !== ttmtImport.contentHash
-    || validation.ttmtRowCount !== ttmtImport.rowCount || bundle.ttmtDatasetRowCount !== ttmtImport.rowCount
-    || bundle.ttmtForeignImportRowCount !== 0 || evidence.ttmt.contentHash !== ttmtImport.contentHash
-    || evidence.ttmt.rowCount !== ttmtImport.rowCount) {
+  if (ttmtImport.status !== "succeeded" || !/^[a-f0-9]{64}$/.test(ttmtImport.contentHash) || ttmtImport.rowCount <= 0
+    || bundle.ttmtDatasetRowCount !== ttmtImport.rowCount || bundle.ttmtForeignImportRowCount !== 0
+    || !tmtDataset.contentHash || !ttmtDataset.contentHash
+    || (ttmtDataset.sourceVersion !== ttmtImport.version
+      && ttmtImport.version !== `${ttmtDataset.sourceVersion}#replaced#${ttmtImport.id}`)) {
     throw new DatasetReleaseError("TTMT evidence or versioned dataset does not match the approved import", "TTMT_EVIDENCE_INVALID");
   }
+}
+
+function pairedEvidenceSha256(bundle: ReleaseValidationBundle): string {
+  return createHash("sha256").update(JSON.stringify([
+    "standard-release-pair-v2",
+    bundle.tmtDataset.id, bundle.tmtDataset.contentHash, bundle.validation.evidenceSha256,
+    bundle.ttmtDataset.id, bundle.ttmtDataset.contentHash, bundle.ttmtImport.id,
+    bundle.ttmtImport.contentHash, bundle.ttmtImport.rowCount,
+  ])).digest("hex");
+}
+
+function matchesPinnedEvidence(bundle: ReleaseValidationBundle, pinned: string | null): boolean {
+  if (pinned === pairedEvidenceSha256(bundle)) return true;
+  const { validation, ttmtImport } = bundle;
+  return validation.policyVersion === VALIDATED_UNVERIFIED_POLICY_VERSION
+    && pinned === validation.evidenceSha256
+    && validation.ttmtImportId === ttmtImport.id && validation.ttmtContentHash === ttmtImport.contentHash
+    && validation.ttmtRowCount === ttmtImport.rowCount;
 }
 
 export async function prepareStandardReleaseCandidate(
@@ -300,7 +325,7 @@ export async function prepareStandardReleaseCandidate(
       tmtDatasetId: input.tmtDatasetId,
       ttmtDatasetId: input.ttmtDatasetId,
       validationRunId: bundle.validation.runId,
-      validationEvidenceSha256: bundle.validation.evidenceSha256,
+      validationEvidenceSha256: pairedEvidenceSha256(bundle),
     });
     await tx.recordAudit({ action: "standard_release.candidate_validated", releaseId: input.releaseId, actorUserId: input.actorUserId ?? null, assurance: "validated_unverified" });
   });
@@ -314,7 +339,7 @@ async function validatedRelease(store: ReleaseLifecycleStore, releaseId: string,
   }
   const bundle = await store.loadValidationBundle(release.tmtDatasetId, release.ttmtDatasetId);
   assertValidatedUnverifiedPair(bundle);
-  if (bundle.validation.evidenceSha256 !== release.validationEvidenceSha256) {
+  if (!matchesPinnedEvidence(bundle, release.validationEvidenceSha256)) {
     throw new DatasetReleaseError("Release validation evidence changed", "RELEASE_EVIDENCE_CHANGED");
   }
   return release;
@@ -332,7 +357,7 @@ export async function approveStandardRelease(
     }
     const bundle = await tx.loadValidationBundle(release.tmtDatasetId, release.ttmtDatasetId);
     assertValidatedUnverifiedPair(bundle);
-    if (release.validationEvidenceSha256 !== bundle.validation.evidenceSha256) {
+    if (!matchesPinnedEvidence(bundle, release.validationEvidenceSha256)) {
       throw new DatasetReleaseError("Candidate validation evidence changed before approval", "RELEASE_EVIDENCE_CHANGED");
     }
     await tx.approveRelease(input.releaseId, input.approvedAt ?? new Date());

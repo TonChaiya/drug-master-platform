@@ -36,8 +36,7 @@ try {
     optionalFailureCount: result.optionalFailureCount,
     blockingInvariantCount: result.blockingInvariantCount,
     gpu764169Passed: result.gpu764169Passed,
-    ttmtImportId: result.ttmtImportId, ttmtContentHash: result.ttmtContentHash,
-    ttmtRowCount: result.ttmtRowCount, evidenceSha256: result.evidenceSha256,
+    evidenceSha256: result.evidenceSha256,
     validatedAt: result.validatedAt.toISOString(), executed: result.executed,
   }));
 } finally {

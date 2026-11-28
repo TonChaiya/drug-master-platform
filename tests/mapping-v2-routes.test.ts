@@ -20,13 +20,24 @@ beforeEach(() => {
 
 test("enabled mapping fails closed after auth and maintenance but before write access when TMT is not ready", async () => {
   mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
-  const response = await POST(new Request("https://example.test/api/v1/mappings/v2", { method: "POST", body: "{}" }));
+  const response = await POST(new Request("https://example.test/api/v1/mappings/v2", { method: "POST",
+    body: JSON.stringify({ sourceDrugId: "00000000-0000-4000-8000-000000000003", standardSource: "TMT", standardCode: "565818", standardLevel: "tpu" }),
+  }));
   assert.equal(response.status, 503);
   assert.equal(mocks.context.mock.calls.length, 1);
   assert.equal(mocks.maintenance.mock.calls.length, 1);
   assert.equal(mocks.save.mock.calls.length, 0);
 });
 afterEach(() => vi.unstubAllEnvs());
+
+test("TTMT mapping reaches its own eligibility check without reading TMT readiness", async () => {
+  const response = await POST(new Request("https://example.test/api/v1/mappings/v2", { method: "POST",
+    body: JSON.stringify({ sourceDrugId: "00000000-0000-4000-8000-000000000003", standardSource: "TTMT", standardCode: "TT001", standardLevel: "product" }),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(mocks.requireReady.mock.calls.length, 0);
+  assert.equal(mocks.save.mock.calls[0]?.[0].standardSource, "TTMT");
+});
 
 test("v2 save is default-off before context or service access", async () => {
   vi.stubEnv("TMT_V2_MAPPING_ENABLED", "0");

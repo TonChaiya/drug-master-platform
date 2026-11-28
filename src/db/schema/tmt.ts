@@ -352,9 +352,9 @@ export const tmtRunValidations = mysqlTable("tmt_run_validations", {
   blockingInvariantCount: int("blocking_invariant_count", { unsigned: true }).notNull(),
   invariantEvidence: text("invariant_evidence").notNull(),
   gpu764169Passed: tinyint("gpu_764169_passed", { unsigned: true }).notNull(),
-  ttmtImportId: varchar("ttmt_import_id", { length: 36 }).notNull().references(() => ttmtImports.id),
-  ttmtContentHash: varchar("ttmt_content_hash", { length: 64 }).notNull(),
-  ttmtRowCount: int("ttmt_row_count", { unsigned: true }).notNull(),
+  ttmtImportId: varchar("ttmt_import_id", { length: 36 }).references(() => ttmtImports.id),
+  ttmtContentHash: varchar("ttmt_content_hash", { length: 64 }),
+  ttmtRowCount: int("ttmt_row_count", { unsigned: true }),
   evidenceSha256: varchar("evidence_sha256", { length: 64 }).notNull(),
   createdAt: datetime("created_at", { mode: "date", fsp: 3 }).notNull().default(now),
 });

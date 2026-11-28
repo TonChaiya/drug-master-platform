@@ -6,7 +6,7 @@ import {
   type GuardedProductionOperation,
 } from "./target-classification";
 
-export const APPROVED_TTMT_WORKBOOK_SHA256 = "88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057";
+export const APPROVED_TTMT_WORKBOOK_SHA256 = "071cb3d3708865f8d1428e23f25216ba65e6acb21e436070587d98a59dbce5c3";
 
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/i);
 const timestamp = z.string().datetime({ offset: true });

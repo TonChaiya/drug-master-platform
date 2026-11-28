@@ -18,6 +18,7 @@ describe("ownership-guarded TiDB Production probe", () => {
     assert.match(plan.createParent, /CHAR\(36\).*utf8mb4_unicode_ci.*PRIMARY KEY.*UNIQUE KEY/is);
     assert.match(plan.createChild, /FOREIGN KEY.*REFERENCES/is);
     assert.match(plan.alterNullable, /ALTER TABLE.*ADD COLUMN.*NULL/is);
+    assert.match(plan.alterLegacyEvidenceNullable, /MODIFY COLUMN evidence_import_id CHAR\(36\).*utf8mb4_unicode_ci NULL.*MODIFY COLUMN evidence_hash CHAR\(64\) NULL.*MODIFY COLUMN evidence_rows INT UNSIGNED NULL/is);
     assert.match(plan.ownerComment, /^dm_probe_owner:[a-f0-9]{64}$/);
   });
 

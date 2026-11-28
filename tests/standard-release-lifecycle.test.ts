@@ -14,7 +14,8 @@ import {
   type ReleaseValidationBundle,
 } from "@/modules/standards/dataset-release";
 import { ACTIVE_STANDARD_RELEASE_POINTER_KEY } from "@/modules/standards/active-release";
-import { APPROVED_TTMT_V1, VALIDATED_UNVERIFIED_POLICY_VERSION } from "@/modules/tmt/validation";
+import { VALIDATED_UNVERIFIED_POLICY_VERSION } from "@/modules/tmt/validation";
+import { APPROVED_TTMT_REPLACEMENT as APPROVED_TTMT_V1 } from "@/modules/standards/ttmt-baseline-replacement";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "@/modules/tmt/sync";
 
 const TMT_DATASET_ID = "10000000-0000-4000-8000-000000000001";
@@ -193,7 +194,8 @@ describe("release validation and approval", () => {
     const target = lifecycleStore();
     await prepareStandardReleaseCandidate({ releaseId: RELEASE_ID, tmtDatasetId: TMT_DATASET_ID, ttmtDatasetId: TTMT_DATASET_ID }, target.store);
     assert.equal(target.releases.get(RELEASE_ID)?.state, "candidate");
-    assert.equal(target.releases.get(RELEASE_ID)?.validationEvidenceSha256, validationBundle().validation.evidenceSha256);
+    assert.match(target.releases.get(RELEASE_ID)?.validationEvidenceSha256 ?? "", /^[a-f0-9]{64}$/);
+    assert.notEqual(target.releases.get(RELEASE_ID)?.validationEvidenceSha256, validationBundle().validation.evidenceSha256);
     await approveStandardRelease({ releaseId: RELEASE_ID, approvedAt: new Date("2026-02-01") }, target.store);
     assert.equal(target.releases.get(RELEASE_ID)?.state, "approved");
     assert.deepEqual(target.audits, ["standard_release.candidate_validated", "standard_release.approved"]);
@@ -210,6 +212,19 @@ describe("release validation and approval", () => {
     bundle.validation.requiredSucceededCount = 0;
     const invalid = lifecycleStore(bundle);
     await assert.rejects(() => prepareStandardReleaseCandidate({ releaseId: RELEASE_ID, tmtDatasetId: TMT_DATASET_ID, ttmtDatasetId: TTMT_DATASET_ID }, invalid.store), /evidence/i);
+  });
+
+  test("binds a new approved TTMT snapshot without rewriting the historic TMT validation", async () => {
+    const bundle = validationBundle();
+    const newId = "00000000-0000-4000-8000-000000000099";
+    bundle.ttmtDataset.ttmtImportId = newId;
+    bundle.ttmtDataset.sourceVersion = "future";
+    bundle.ttmtImport = { ...bundle.ttmtImport, id: newId, version: "future", contentHash: "f".repeat(64) };
+    const target = lifecycleStore(bundle);
+    await prepareStandardReleaseCandidate({ releaseId: RELEASE_ID, tmtDatasetId: TMT_DATASET_ID, ttmtDatasetId: TTMT_DATASET_ID }, target.store);
+    assert.equal(bundle.validation.ttmtImportId, TTMT_IMPORT_ID);
+    bundle.ttmtImport.contentHash = "e".repeat(64);
+    await assert.rejects(() => approveStandardRelease({ releaseId: RELEASE_ID }, target.store), /evidence changed/i);
   });
 
   test("rejects a copied snapshot that no longer satisfies the persisted TMT invariants", async () => {

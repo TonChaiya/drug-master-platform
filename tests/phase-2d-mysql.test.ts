@@ -11,7 +11,8 @@ import {
 } from "@/modules/standards/dataset-release";
 import { manifestRowsMatchDataset, standardDatasetLifecycleStoresForPool } from "@/modules/standards/dataset-release-mysql";
 import { ACTIVE_STANDARD_RELEASE_POINTER_KEY } from "@/modules/standards/active-release";
-import { APPROVED_TTMT_V1, buildValidatedUnverifiedEvidence } from "@/modules/tmt/validation";
+import { buildValidatedUnverifiedEvidence } from "@/modules/tmt/validation";
+import { APPROVED_TTMT_REPLACEMENT as APPROVED_TTMT_V1 } from "@/modules/standards/ttmt-baseline-replacement";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "@/modules/tmt/sync";
 import {
   cleanupPhase2dTestDatabase,

@@ -6,6 +6,7 @@ export const GUARDED_PRODUCTION_OPERATIONS = [
   "tidb-probe",
   "migrate-0018",
   "migrate-0019",
+  "migrate-0020",
   "ttmt-replacement",
 ] as const;
 

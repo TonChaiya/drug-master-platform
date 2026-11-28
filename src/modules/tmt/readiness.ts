@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { Pool, RowDataPacket } from "mysql2/promise";
 import { dbPool } from "@/db/client";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
-import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, VALIDATED_UNVERIFIED_POLICY_VERSION } from "./validation";
+import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, TMT_SOURCE_VALIDATION_POLICY, VALIDATED_UNVERIFIED_POLICY_VERSION } from "./validation";
 import { activeStandardReleaseEnabled } from "./feature";
 import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
@@ -24,9 +24,6 @@ export interface TmtReadinessValidation {
   blockingInvariantCount: number;
   invariantEvidence: string;
   gpu764169Passed: boolean;
-  ttmtImportId: string;
-  ttmtContentHash: string;
-  ttmtRowCount: number;
   evidenceSha256: string;
   currentRequiredCheckpointCount: number;
   currentRequiredSucceededCount: number;
@@ -34,11 +31,6 @@ export interface TmtReadinessValidation {
   nonterminalOptionalCheckpointCount: number;
   currentOptionalCheckpointCount: number;
   currentOptionalFailureCount: number;
-  ttmtStatus: string | null;
-  currentTtmtContentHash: string | null;
-  currentTtmtRowCount: number | null;
-  currentTtmtProductCount: number;
-  currentTtmtForeignProductCount: number;
   checkpointEvidenceMatches: boolean;
   evidenceIdentityMatches: boolean;
 }
@@ -69,7 +61,8 @@ function validationMatches(run: TmtReadinessRun, validation: TmtReadinessValidat
   const marker = `unverified:${run.id.replaceAll("-", "").slice(0, 20)}`;
   return run.mode === "full_unverified" && run.status === "unverified"
     && run.errorCode === "TMT_VERSION_UNVERIFIED" && run.tmtVersion === marker
-    && validation.runId === run.id && validation.policyVersion === VALIDATED_UNVERIFIED_POLICY_VERSION
+    && validation.runId === run.id
+    && (validation.policyVersion === VALIDATED_UNVERIFIED_POLICY_VERSION || validation.policyVersion === TMT_SOURCE_VALIDATION_POLICY)
     && validation.status === "passed" && validation.requiredCheckpointCount > 0
     && validation.requiredCheckpointCount === validation.requiredSucceededCount
     && validation.currentRequiredCheckpointCount === validation.requiredCheckpointCount
@@ -80,11 +73,6 @@ function validationMatches(run: TmtReadinessRun, validation: TmtReadinessValidat
     && validation.checkpointEvidenceMatches
     && validation.evidenceIdentityMatches
     && validation.blockingInvariantCount === 0 && validation.gpu764169Passed
-    && validation.ttmtStatus === "succeeded"
-    && validation.currentTtmtContentHash === validation.ttmtContentHash
-    && validation.currentTtmtRowCount === validation.ttmtRowCount
-    && validation.currentTtmtProductCount === validation.ttmtRowCount
-    && validation.currentTtmtForeignProductCount === 0
     && createHash("sha256").update(validation.invariantEvidence).digest("hex") === validation.evidenceSha256;
 }
 
@@ -111,13 +99,7 @@ export async function readTmtV2Readiness(pool: Pick<Pool, "query"> = dbPool()): 
   };
   if (run.mode !== "full_unverified" && !run.tmtVersion.startsWith("unverified:")) return evaluateTmtV2Readiness(run);
 
-  const [validationRows] = await pool.query<RowDataPacket[]>(
-    `SELECT v.*,i.status AS ttmt_status,i.content_hash AS current_ttmt_content_hash,i.row_count AS current_ttmt_row_count,
-      (SELECT COUNT(*) FROM ttmt_products) AS current_ttmt_product_count,
-      (SELECT COUNT(*) FROM ttmt_products p WHERE p.source_import_id<>v.ttmt_import_id) AS current_ttmt_foreign_product_count
-     FROM tmt_run_validations v LEFT JOIN ttmt_imports i ON i.id=v.ttmt_import_id WHERE v.run_id=? LIMIT 1`,
-    [run.id],
-  );
+  const [validationRows] = await pool.query<RowDataPacket[]>("SELECT * FROM tmt_run_validations WHERE run_id=? LIMIT 1", [run.id]);
   const validationRow = validationRows[0];
   if (!validationRow) return evaluateTmtV2Readiness(run, null);
   const [checkpointRows] = await pool.query<RowDataPacket[]>(
@@ -134,33 +116,39 @@ export async function readTmtV2Readiness(pool: Pick<Pool, "query"> = dbPool()): 
   const currentCheckpointEvidence = canonicalizeTmtValidationCheckpoints(checkpointRows.map((checkpoint) => ({
     endpoint: String(checkpoint.endpoint), status: String(checkpoint.status),
     errorCode: checkpoint.error_code === null ? null : String(checkpoint.error_code),
-    windowBegin: String(checkpoint.window_begin), windowEnd: String(checkpoint.window_end),
-    receivedRows: Number(checkpoint.received_rows), writtenRows: Number(checkpoint.written_rows),
+    windowBegin: checkpoint.window_begin === null ? undefined : String(checkpoint.window_begin),
+    windowEnd: checkpoint.window_end === null ? undefined : String(checkpoint.window_end),
+    receivedRows: checkpoint.received_rows === null ? undefined : Number(checkpoint.received_rows),
+    writtenRows: checkpoint.written_rows === null ? undefined : Number(checkpoint.written_rows),
   })));
   return evaluateTmtV2Readiness(run, {
     runId: String(validationRow.run_id), policyVersion: String(validationRow.policy_version), status: String(validationRow.status),
     requiredCheckpointCount: Number(validationRow.required_checkpoint_count), requiredSucceededCount: Number(validationRow.required_succeeded_count),
     optionalFailureCount: Number(validationRow.optional_failure_count), blockingInvariantCount: Number(validationRow.blocking_invariant_count),
     invariantEvidence: String(validationRow.invariant_evidence), gpu764169Passed: Number(validationRow.gpu_764169_passed) === 1,
-    ttmtImportId: String(validationRow.ttmt_import_id), ttmtContentHash: String(validationRow.ttmt_content_hash),
-    ttmtRowCount: Number(validationRow.ttmt_row_count), evidenceSha256: String(validationRow.evidence_sha256),
+    evidenceSha256: String(validationRow.evidence_sha256),
     currentRequiredCheckpointCount: currentRequired.length,
     currentRequiredSucceededCount: currentRequired.filter((checkpoint) => String(checkpoint.status) === "succeeded").length,
     disallowedCheckpointCount: disallowed.length, nonterminalOptionalCheckpointCount: nonterminalOptional.length,
     currentOptionalCheckpointCount: currentOptional.length,
     currentOptionalFailureCount: currentOptional.filter((checkpoint) => String(checkpoint.status) === "failed").length,
-    ttmtStatus: validationRow.ttmt_status === null ? null : String(validationRow.ttmt_status),
-    currentTtmtContentHash: validationRow.current_ttmt_content_hash === null ? null : String(validationRow.current_ttmt_content_hash),
-    currentTtmtRowCount: validationRow.current_ttmt_row_count === null ? null : Number(validationRow.current_ttmt_row_count),
-    currentTtmtProductCount: Number(validationRow.current_ttmt_product_count),
-    currentTtmtForeignProductCount: Number(validationRow.current_ttmt_foreign_product_count),
     checkpointEvidenceMatches: JSON.stringify(storedCheckpoints) === JSON.stringify(currentCheckpointEvidence),
     evidenceIdentityMatches: storedEvidence !== null
+      && storedEvidence.policyVersion === String(validationRow.policy_version)
       && storedEvidence.run.id === run.id
       && storedEvidence.run.tmtVersion === run.tmtVersion
-      && storedEvidence.ttmt.id === String(validationRow.ttmt_import_id)
-      && storedEvidence.ttmt.contentHash === String(validationRow.ttmt_content_hash)
-      && storedEvidence.ttmt.rowCount === Number(validationRow.ttmt_row_count),
+      && storedEvidence.run.mode === run.mode
+      && storedEvidence.run.status === run.status
+      && storedEvidence.run.errorCode === run.errorCode
+      && Object.values(storedEvidence.blockingInvariants).every((count) => count === 0)
+      && storedEvidence.gpu.relatedTpuPresent === storedEvidence.gpu.outboundTpu
+      && storedEvidence.gpu.relatedMasterTmtPresent === storedEvidence.gpu.outboundTpu
+      && storedEvidence.gpu.relatedConceptPresent === storedEvidence.gpu.outboundTpu
+      && (storedEvidence.policyVersion === TMT_SOURCE_VALIDATION_POLICY || (
+        storedEvidence.ttmt.id === String(validationRow.ttmt_import_id)
+        && storedEvidence.ttmt.contentHash === String(validationRow.ttmt_content_hash)
+        && storedEvidence.ttmt.rowCount === Number(validationRow.ttmt_row_count)
+      )),
   });
 }
 

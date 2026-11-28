@@ -148,11 +148,9 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
         label: "TMT / TTMT",
         ready: tmtReadiness.ready && latestTtmtImport.length > 0 && ttmtTotal > 0,
         detail:
-          !tmtReadiness.ready
-            ? "TMT v2 ยังไม่ผ่าน readiness"
-            : latestTtmtImport.length === 0 || ttmtTotal === 0
-              ? "TMT v2 พร้อม · ยังไม่มี TTMT ที่นำเข้าสำเร็จ"
-              : `TMT ${tmtReadiness.assurance === "validated_unverified" ? "พร้อมแบบ degraded" : "ยืนยันเวอร์ชันแล้ว"} · TTMT ${ttmtTotal.toLocaleString("th-TH")} (เวอร์ชัน ${latestTtmtImport[0]?.version})`,
+          `TMT ${tmtReadiness.ready ? tmtReadiness.assurance === "validated_unverified" ? "ผ่านการตรวจสอบ" : "ยืนยันเวอร์ชันแล้ว" : "ยังไม่พร้อม"} · TTMT ${
+            latestTtmtImport.length > 0 && ttmtTotal > 0 ? `${ttmtTotal.toLocaleString("th-TH")} รายการ (เวอร์ชัน ${latestTtmtImport[0]?.version})` : "ยังไม่มีข้อมูลที่นำเข้าสำเร็จ"
+          }`,
         href: "/standards",
         actionLabel: "เปิด Standards Hub",
       },

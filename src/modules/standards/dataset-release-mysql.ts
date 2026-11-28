@@ -455,7 +455,9 @@ async function loadValidationBundle(executor: Executor, tmtDatasetId: string, tt
       requiredCheckpointCount: Number(row.required_checkpoint_count), requiredSucceededCount: Number(row.required_succeeded_count), optionalFailureCount: Number(row.optional_failure_count),
       blockingInvariantCount: Number(row.blocking_invariant_count),
       gpu764169Passed: Number(row.gpu_764169_passed) === 1, invariantEvidence: String(row.invariant_evidence), evidenceSha256: String(row.evidence_sha256),
-      ttmtImportId: String(row.validation_ttmt_import_id), ttmtContentHash: String(row.ttmt_content_hash), ttmtRowCount: Number(row.ttmt_row_count),
+      ttmtImportId: row.validation_ttmt_import_id === null ? null : String(row.validation_ttmt_import_id),
+      ttmtContentHash: row.ttmt_content_hash === null ? null : String(row.ttmt_content_hash),
+      ttmtRowCount: row.ttmt_row_count === null ? null : Number(row.ttmt_row_count),
     },
     ttmtImport: { id: String(row.import_id), version: String(row.import_version), status: String(row.import_status), contentHash: String(row.import_content_hash), rowCount: Number(row.import_row_count) },
   };

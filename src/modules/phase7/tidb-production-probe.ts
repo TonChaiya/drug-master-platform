@@ -9,6 +9,7 @@ export interface TidbProbePlan {
   createParent: string;
   createChild: string;
   alterNullable: string;
+  alterLegacyEvidenceNullable: string;
   duplicateAlter: string;
 }
 
@@ -53,8 +54,9 @@ export function buildTidbProbePlan(operationId: string, ownerToken: string): Tid
     childTable,
     ownerComment,
     createParent: `CREATE TABLE ${parent} (id CHAR(36) COLLATE utf8mb4_unicode_ci NOT NULL, owner_token CHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL, payload VARCHAR(64) COLLATE utf8mb4_unicode_ci NULL, PRIMARY KEY (id), UNIQUE KEY uq_owner_token (owner_token)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='${ownerComment}'`,
-    createChild: `CREATE TABLE ${child} (parent_id CHAR(36) COLLATE utf8mb4_unicode_ci NOT NULL, seq INT NOT NULL, PRIMARY KEY (parent_id,seq), CONSTRAINT fk_probe_parent FOREIGN KEY (parent_id) REFERENCES ${parent} (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='${ownerComment}'`,
+    createChild: `CREATE TABLE ${child} (parent_id CHAR(36) COLLATE utf8mb4_unicode_ci NOT NULL, seq INT NOT NULL, evidence_import_id CHAR(36) COLLATE utf8mb4_unicode_ci NOT NULL, evidence_hash CHAR(64) NOT NULL, evidence_rows INT UNSIGNED NOT NULL, PRIMARY KEY (parent_id,seq), CONSTRAINT fk_${suffix}_probe_parent FOREIGN KEY (parent_id) REFERENCES ${parent} (id), CONSTRAINT fk_${suffix}_evidence_import FOREIGN KEY (evidence_import_id) REFERENCES ${parent} (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='${ownerComment}'`,
     alterNullable: `ALTER TABLE ${parent} ADD COLUMN optional_note VARCHAR(120) COLLATE utf8mb4_unicode_ci NULL`,
+    alterLegacyEvidenceNullable: `ALTER TABLE ${child} MODIFY COLUMN evidence_import_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL, MODIFY COLUMN evidence_hash CHAR(64) NULL, MODIFY COLUMN evidence_rows INT UNSIGNED NULL`,
     duplicateAlter: `ALTER TABLE ${parent} ADD COLUMN optional_note VARCHAR(120) COLLATE utf8mb4_unicode_ci NULL`,
   };
 }
@@ -110,6 +112,7 @@ async function cleanupOwnedProbeTables(pool: Pool, plan: TidbProbePlan): Promise
   const names = new Set(existing.map((row) => row.tableName));
   if (names.has(plan.childTable)) await pool.query(`DROP TABLE ${safeIdentifier(plan.childTable)}`);
   if (names.has(plan.parentTable)) await pool.query(`DROP TABLE ${safeIdentifier(plan.parentTable)}`);
+  if ((await existingProbeTables(pool, plan)).length) refuse("PROBE_OBJECTS_REMAIN", "Owned probe tables remain after cleanup");
 }
 
 async function expectForeignKeyFailure(connection: PoolConnection, plan: TidbProbePlan): Promise<void> {
@@ -154,7 +157,7 @@ export async function runTidbProductionProbe(input: {
   const ownerToken = randomBytes(32).toString("hex");
   const plan = buildTidbProbePlan(input.operationId, ownerToken);
   assertNoProbeCollisions((await existingProbeTables(input.pool, plan)).map((row) => row.tableName));
-  const checks = ["CHAR36_COLLATION", "PRIMARY_INDEX_FOREIGN_KEY", "NULLABLE_ALTER", "TRANSACTION_ROLLBACK", "SELECT_FOR_UPDATE", "DDL_PARTIAL_STATE"] as const;
+  const checks = ["CHAR36_COLLATION", "PRIMARY_INDEX_FOREIGN_KEY", "NULLABLE_ALTER", "FK_COLUMN_NULLABILITY", "TRANSACTION_ROLLBACK", "SELECT_FOR_UPDATE", "DDL_PARTIAL_STATE"] as const;
   if (!input.execute) return { operation: "tidb-probe", operationId: input.operationId, result: "DRY_RUN", checks };
 
   let cleanup: "PASS" | "FAIL" = "FAIL";
@@ -162,6 +165,17 @@ export async function runTidbProductionProbe(input: {
     await input.pool.query(plan.createParent);
     await input.pool.query(plan.createChild);
     await input.pool.query(plan.alterNullable);
+    await input.pool.query(plan.alterLegacyEvidenceNullable);
+    const [fkColumns] = await input.pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME IN ('evidence_import_id','evidence_hash','evidence_rows') AND IS_NULLABLE='YES'",
+      [plan.childTable],
+    );
+    if (Number(fkColumns[0]?.total ?? 0) !== 3) refuse("PROBE_PARTIAL_DDL_STATE", "Evidence columns did not all become nullable");
+    const [foreignKeys] = await input.pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME='evidence_import_id' AND REFERENCED_TABLE_NAME=?",
+      [plan.childTable, plan.parentTable],
+    );
+    if (Number(foreignKeys[0]?.total ?? 0) !== 1) refuse("PROBE_FK_NOT_ENFORCED", "Evidence import foreign key did not survive nullable ALTER");
     try {
       await input.pool.query(plan.duplicateAlter);
       refuse("PROBE_DDL_FAILURE_NOT_DETECTED", "Duplicate ALTER unexpectedly succeeded");

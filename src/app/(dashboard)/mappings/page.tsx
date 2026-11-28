@@ -25,20 +25,11 @@ export default async function MappingsPage() {
 
   if (tmtV2MappingEnabled() && tmtV2BrowserEnabled()) {
     const { readiness } = await readTmtConsumerContext(dbPool());
-    if (!readiness.ready) {
-      return (
-        <div className="space-y-4">
-          <PageHeader title="จับคู่รายการยา" description="จับคู่รายการ JHCIS กับมาตรฐาน TMT/TTMT ปัจจุบัน" />
-          <Alert tone="warning" title="ข้อมูล TMT ยังไม่พร้อมใช้งาน">
-            ข้อมูล TMT ล่าสุดต้องมีสถานะพร้อมใช้ที่ตรวจสอบแล้วก่อนเปิดการจับคู่รายการยา ระบบจะไม่สลับไปใช้ข้อมูลชุดอื่นโดยอัตโนมัติ
-          </Alert>
-        </div>
-      );
-    }
     return (
       <div className="space-y-4">
         <PageHeader eyebrow={`${facility.code} · ${facility.name} · การจับคู่รายการยา`} title="จับคู่รายการยา" description="ค้นหา กรอง และจับคู่รายการ JHCIS ด้วย identity TMT/TTMT ตามชนิดยา" />
         {readiness.assurance === "validated_unverified" ? <Alert tone="warning" title="ข้อมูล TMT ผ่านการตรวจสอบแล้ว">ชุดข้อมูลผ่าน validation แล้ว แต่ยังไม่ยืนยันเวอร์ชันจาก upstream</Alert> : null}
+        {!readiness.ready ? <Alert tone="warning" title="ข้อมูล TMT ยังไม่พร้อมใช้งาน">ยังค้นหาและจับคู่รายการ TTMT ได้ตามชนิดยา</Alert> : null}
         <V2MappingWorkbench reconcileAvailable={tmtV2CatalogEnabled()} />
       </div>
     );

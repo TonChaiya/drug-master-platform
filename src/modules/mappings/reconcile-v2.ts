@@ -9,6 +9,7 @@ import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } f
 import type { ReconcileResult } from "./service";
 import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
 import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 function today(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
@@ -28,6 +29,7 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
       .from(drugCatalogRows).where(eq(drugCatalogRows.importId, snapshot.id)),
     db.selectDistinct({ hospdrugcode: drugCatalogRows.hospdrugcode }).from(drugCatalogRows).where(eq(drugCatalogRows.facilityId, facilityId)),
   ]);
+  if (!release && drugs.some((drug) => drug.drugtype === "01")) await requireTmtV2Ready();
   const mappingByDrugId = new Map(mapped.map((row) => [row.sourceDrugId, row]));
   const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row]));
   const historyCodes = new Set(catalogHistory.map((row) => row.hospdrugcode));

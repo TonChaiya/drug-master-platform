@@ -19,6 +19,7 @@ import {
 import { isExportCandidate, type ExportCandidateState, type ExportSelection } from "./delta";
 import type { ExportCandidate, ExportRow } from "./rows";
 import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 type ExportQueryDb = Pick<typeof db, "select">;
 
@@ -142,6 +143,7 @@ export async function buildExportCandidatesV2(
       ? [{ source: row.standardSource, code: row.standardCode, level: row.standardLevel, productCat: row.productCat }]
       : [],
   );
+  if (!release && identities.some((identity) => identity.source === "TMT")) await requireTmtV2Ready();
   const standards = await loadMappedStandardsV2(identities, database, release);
 
   return rows.flatMap((row) => {

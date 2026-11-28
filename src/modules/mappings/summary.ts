@@ -12,7 +12,7 @@ import {
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
 import { activeStandardReleaseEnabled, tmtV2CatalogEnabled } from "@/modules/tmt/feature";
-import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readTmtV2Readiness } from "@/modules/tmt/readiness";
 import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
 
 export interface MappingLifecycleSummaryInput {
@@ -100,7 +100,6 @@ export async function mappingLifecycleSummaries(
   database: MappingSummaryDb = db,
 ): Promise<Map<string, MappingLifecycleSummary>> {
   if (tmtV2CatalogEnabled()) {
-    await requireTmtV2Ready();
     const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
     return mappingLifecycleSummariesV2(facilityId, database, release);
   }
@@ -288,7 +287,8 @@ async function mappingLifecycleSummariesV2(
       ? [{ source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }]
       : [],
   );
-  const standards = await loadMappedStandardsV2(identities, database, release);
+  const canUseTmt = Boolean(release) || !identities.some((identity) => identity.source === "TMT") || (await readTmtV2Readiness()).ready;
+  const standards = await loadMappedStandardsV2(canUseTmt ? identities : identities.filter((identity) => identity.source === "TTMT"), database, release);
   const latestCatalogByDrug = new Map(latestCatalogRows.map((row) => [`${row.facilityId}\u0000${row.hospdrugcode}`, row]));
   return summarizeMappingLifecycleInputs(sourceRows.map((row) => {
     const latest = latestCatalogByDrug.get(`${row.facilityId}\u0000${row.drugcode}`);

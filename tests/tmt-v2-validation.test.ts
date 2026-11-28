@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  APPROVED_TTMT_V1,
   VALIDATED_UNVERIFIED_POLICY_VERSION,
   buildValidatedUnverifiedEvidence,
   runValidatedUnverifiedRevalidation,
@@ -41,7 +40,7 @@ function validInput(): ValidatedUnverifiedInput {
     },
     ttmt: {
       id: "46ac7956-4a52-43da-8f0a-c54fa392a70c",
-      ...APPROVED_TTMT_V1,
+      version: "20261001", contentHash: "a".repeat(64), rowCount: 9_654,
       status: "succeeded",
       productCount: 9_654,
       activeCount: 9_654,
@@ -94,7 +93,7 @@ test("run identity and approved TTMT identity are exact", () => {
   assert.throws(() => buildValidatedUnverifiedEvidence(wrongRun, new Date()), /run identity/i);
 
   const wrongTtmt = validInput();
-  wrongTtmt.ttmt.contentHash = "0".repeat(64);
+  wrongTtmt.ttmt.contentHash = "invalid-hash";
   assert.throws(() => buildValidatedUnverifiedEvidence(wrongTtmt, new Date()), /TTMT/i);
 });
 
@@ -126,5 +125,7 @@ test("dry-run computes evidence without persisting", async () => {
     now: () => new Date("2026-11-10T09:00:00.000Z"),
   });
   assert.equal(result.executed, false);
+  assert.equal(result.policyVersion, "validated-unverified-v2");
+  assert.equal(Object.hasOwn(JSON.parse(result.invariantEvidence) as object, "ttmt"), false);
   assert.equal(writes, 0);
 });

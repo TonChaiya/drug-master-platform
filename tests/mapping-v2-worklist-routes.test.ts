@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllEnvs());
 test("worklist defaults to pending and a server-backed page of 30", async () => {
   const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist"));
   assert.equal(response.status, 200);
-  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId });
+  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId, drugType: undefined });
 });
 
 test("worklist passes verified facility scope, lifecycle, type, search, and pagination to the current service", async () => {
@@ -52,9 +52,16 @@ test("worklist remains default-off and fails closed before context or query acce
   assert.equal(mocks.list.mock.calls.length, 0);
 });
 
-test("worklist does not query when TMT readiness is unavailable", async () => {
+test("TMT-only worklist stays fail closed when TMT readiness is unavailable", async () => {
   mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
-  const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist?status=mapped"));
+  const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist?status=mapped&drugType=01"));
   assert.equal(response.status, 503);
   assert.equal(mocks.list.mock.calls.length, 0);
+});
+
+test("all-source worklist restricts itself to TTMT while TMT is unavailable", async () => {
+  mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
+  const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist?drugType=all"));
+  assert.equal(response.status, 200);
+  assert.equal(mocks.list.mock.calls[0]?.[0].drugType, "10");
 });
