@@ -16,6 +16,7 @@ export interface FacilityOverviewRow {
   type01: number;
   type10: number;
   mappedTotal: number;
+  exportReadyTotal: number;
   pendingTotal: number;
   needsReviewTotal: number;
   installationCount: number;
@@ -151,6 +152,7 @@ export function FacilityOverviewTable({ rows }: { rows: FacilityOverviewRow[] })
                         <div className={row.needsReviewTotal + row.pendingTotal > 0 ? "type-help text-warning" : "type-help text-slate-600"}>
                           ตรวจ {row.needsReviewTotal.toLocaleString("th-TH")} · ค้าง {row.pendingTotal.toLocaleString("th-TH")}
                         </div>
+                        <div className="type-help">พร้อมส่งออก {row.exportReadyTotal.toLocaleString("th-TH")}</div>
                       </>
                     )}
                   </td>

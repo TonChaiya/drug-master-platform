@@ -157,7 +157,7 @@ export function TmtOperationsPanel({ initial }: { initial: TmtOperationsSnapshot
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={assurance ? "success" : "danger"}>{assurance ?? readiness.reason}</Badge>
+        <Badge tone={assurance ? "success" : "danger"}>{assurance ?? (readiness.reason === "POINTER_UNAVAILABLE" ? "ชุดข้อมูล TMT ยังไม่พร้อม" : readiness.reason)}</Badge>
         {latestRun ? <Badge>{latestRun.mode}</Badge> : null}
         <Button size="sm" className="ml-auto" loading={refreshing} onClick={() => void refresh()}>รีเฟรชสถานะ</Button>
       </div>

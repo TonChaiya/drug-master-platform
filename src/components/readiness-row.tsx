@@ -29,8 +29,8 @@ export function ReadinessRow({ items }: { items: ReadinessItem[] }) {
             </ButtonLink>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <Badge tone={item.ready ? "success" : "danger"} dot>
-              {item.ready ? "พร้อม" : "ยังไม่พร้อม"}
+            <Badge tone={item.ready ? "success" : item.partial ? "warning" : "danger"} dot>
+              {item.ready ? "พร้อม" : item.partial ? "พร้อมบางส่วน" : "ยังไม่พร้อม"}
             </Badge>
             <span className="type-help min-w-0 truncate" title={item.detail}>
               {item.detail}

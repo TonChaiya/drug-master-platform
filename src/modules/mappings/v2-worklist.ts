@@ -9,7 +9,7 @@ import {
 } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { classifyMappingLifecycle, type MappingLifecycleStatus } from "./lifecycle";
-import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
+import { loadMappedStandardsV2, mappingV2IdentityKey, mappingV2IdentityForDrug } from "./v2-consumer";
 import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export type V2WorklistStatusFilter = "all" | "mapped" | "pending" | "needs_review";
@@ -47,18 +47,6 @@ export interface V2WorklistResult {
   pageCount: number;
 }
 
-function identityFrom(row: {
-  mappingId: string | null;
-  standardSource: string | null;
-  standardCode: string | null;
-  standardLevel: string | null;
-  productCat: string | null;
-}): MappingV2Identity | null {
-  if (!row.mappingId || !row.standardCode || !row.standardLevel) return null;
-  if (row.standardSource !== "TMT" && row.standardSource !== "TTMT") return null;
-  return { source: row.standardSource, code: row.standardCode, level: row.standardLevel, productCat: row.productCat ?? "" };
-}
-
 /**
  * Paginated source-aware worklist. Lifecycle predicates are expressed in SQL
  * for pagination, while the canonical TypeScript classifier supplies the row
@@ -78,6 +66,7 @@ export async function mappingWorklistV2(options: {
   const status = options.status ?? "pending";
   const drugType = options.drugType ?? "all";
   const release = options.dataset === undefined ? await readStandardDatasetSelection(undefined, drugType !== "10") : options.dataset ?? undefined;
+  const tmtAvailable = options.dataset !== null && drugType !== "10";
   const latest = await latestImport(options.facilityId);
   const latestCatalog = alias(drugCatalogRows, "v2_worklist_latest_catalog");
   const history = db
@@ -97,9 +86,9 @@ export async function mappingWorklistV2(options: {
     ${mappingReviewAcknowledgements.mappingId} IS NOT NULL
     AND ${mappingReviewAcknowledgements.mappingUpdatedAt} = ${drugMappings.updatedAt}
     AND ${mappingReviewAcknowledgements.catalogPresent} = (${latestCatalog.id} IS NOT NULL)
-    AND ${mappingReviewAcknowledgements.catalogTmtid} <=> ${latestCatalog.tmtid}
+    AND CAST(${mappingReviewAcknowledgements.catalogTmtid} AS BINARY) <=> CAST(${latestCatalog.tmtid} AS BINARY)
   )`;
-  const tmtValid = release ? sql`EXISTS (
+  const tmtValid = !tmtAvailable ? sql`FALSE` : release ? sql`EXISTS (
     SELECT 1 FROM tmt_dataset_concepts c
     INNER JOIN tmt_dataset_mastertmt m ON m.dataset_id=c.dataset_id AND m.tpucode=c.tmtid
     WHERE c.dataset_id=${release.tmtDatasetId} AND c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED)
@@ -115,15 +104,15 @@ export async function mappingWorklistV2(options: {
     SELECT 1 FROM ttmt_products p INNER JOIN ttmt_imports i ON i.id=p.source_import_id
     WHERE p.ttmtcode=${drugMappings.standardCode} AND p.status='active' AND i.status='succeeded'
   )`;
-  const standardValid = sql<boolean>`(
-    (${drugMappings.standardSource}='TMT' AND ${drugMappings.standardLevel}='tpu' AND ${drugMappings.productCat}='1' AND ${tmtValid})
-    OR (${drugMappings.standardSource}='TTMT' AND ${drugMappings.standardLevel}='product' AND ${drugMappings.productCat}='3' AND ${ttmtValid})
-  )`;
+  const standardValid = sql<boolean>`COALESCE((
+    (${sourceDrugs.drugtype}='01' AND CAST(${drugMappings.standardSource} AS BINARY)='TMT' AND ${drugMappings.standardCode} REGEXP '^[0-9]+$' AND CAST(${drugMappings.standardLevel} AS BINARY)='tpu' AND ${drugMappings.productCat}='1' AND ${tmtValid})
+    OR (${sourceDrugs.drugtype}='10' AND CAST(${drugMappings.standardSource} AS BINARY)='TTMT' AND CAST(${drugMappings.standardLevel} AS BINARY)='product' AND ${drugMappings.productCat}='3' AND ${ttmtValid})
+  ), FALSE)`;
   const needsReview = sql<boolean>`(
     (${drugMappings.id} IS NOT NULL AND NOT (${standardValid}))
     OR (${latestCatalog.id} IS NULL AND ${history.hospdrugcode} IS NOT NULL AND NOT (${acknowledgementMatches}))
     OR (${drugMappings.id} IS NOT NULL AND ${latestCatalog.id} IS NOT NULL AND ${latestCatalog.tmtid} IS NULL AND NOT (${acknowledgementMatches}))
-    OR (${drugMappings.id} IS NOT NULL AND ${latestCatalog.tmtid} IS NOT NULL AND ${latestCatalog.tmtid} <> ${drugMappings.standardCode} AND NOT (${acknowledgementMatches}))
+    OR (${drugMappings.id} IS NOT NULL AND ${latestCatalog.tmtid} IS NOT NULL AND CAST(${latestCatalog.tmtid} AS BINARY) <> CAST(${drugMappings.standardCode} AS BINARY) AND NOT (${acknowledgementMatches}))
   )`;
   const conditions: SQL[] = [
     eq(sourceDrugs.facilityId, options.facilityId),
@@ -185,12 +174,12 @@ export async function mappingWorklistV2(options: {
     .offset((page - 1) * pageSize);
 
   const identities = rows.flatMap((row) => {
-    const identity = identityFrom(row);
+    const identity = row.mappingId ? mappingV2IdentityForDrug(row, tmtAvailable) : null;
     return identity ? [identity] : [];
   });
   const standards = await loadMappedStandardsV2(identities, db, release);
   const classified = rows.map((row) => {
-    const identity = identityFrom(row);
+    const identity = row.mappingId ? mappingV2IdentityForDrug(row, tmtAvailable) : null;
     const standard = identity ? standards.get(mappingV2IdentityKey(identity)) : null;
     const lifecycle = classifyMappingLifecycle({
       active: true,

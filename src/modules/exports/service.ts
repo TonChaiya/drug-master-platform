@@ -11,8 +11,10 @@ import {
 import { buildExportCandidates, type ExportCandidate, type ExportSelection } from "./rows";
 import { buildExportCandidatesV2 } from "./rows-v2";
 import { buildDrugCatWorkbook, exportFilename } from "./writer";
-import { tmtV2ExportEnabled } from "@/modules/tmt/feature";
-import { readStandardDatasetSelection, lockStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
+import { activeStandardReleaseEnabled, independentTmtDatasetsEnabled, tmtV2ExportEnabled } from "@/modules/tmt/feature";
+import { lockStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
+import { isTmtPointerUnavailable } from "@/modules/tmt/candidate-pointer";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 
 export interface ExportBundle {
   filename: string;
@@ -30,12 +32,12 @@ export class ExportPreviewStaleError extends Error {
 }
 
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
-function pinnedReleaseId(release: StandardDatasetSelection | undefined, candidates: ExportCandidate[]) {
+function pinnedReleaseId(release: StandardDatasetSelection | null | undefined, candidates: ExportCandidate[]) {
   if (release?.tmtAssurance && !candidates.some((candidate) => candidate.standardSource === "TMT")) return undefined;
   return release?.releaseId;
 }
 
-async function exportCandidateBuilder(release?: StandardDatasetSelection) {
+async function exportCandidateBuilder(release?: StandardDatasetSelection | null) {
   if (!tmtV2ExportEnabled()) return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidates(facilityId, selection, database, lockRows);
   return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidatesV2(facilityId, selection, database, lockRows, release);
 }
@@ -44,7 +46,8 @@ export async function createExportPreview(
   facilityId: string,
   selection: ExportSelection,
 ): Promise<{ candidates: ExportCandidate[]; previewToken: string }> {
-  const release = tmtV2ExportEnabled() ? await readStandardDatasetSelection() : undefined;
+  const tmt = tmtV2ExportEnabled() ? await readTmtConsumerContext() : undefined;
+  const release = tmt?.readiness.ready === false ? null : tmt?.release;
   const candidates = await (await exportCandidateBuilder(release))(facilityId, selection);
   const previewToken = randomBytes(32).toString("hex");
   const now = new Date();
@@ -72,9 +75,15 @@ export async function createExport(options: {
   previewToken: string;
 }): Promise<ExportBundle> {
   return db.transaction(async (tx) => {
-    const release = tmtV2ExportEnabled()
-      ? await lockStandardDatasetSelection(tx)
-      : undefined;
+    let release: StandardDatasetSelection | null | undefined;
+    if (tmtV2ExportEnabled()) {
+      try {
+        release = await lockStandardDatasetSelection(tx);
+      } catch (error) {
+        if (activeStandardReleaseEnabled() || !independentTmtDatasetsEnabled() || !isTmtPointerUnavailable(error)) throw error;
+      }
+      if (!release && independentTmtDatasetsEnabled()) release = null;
+    }
     await tx.execute(
       sql`SELECT ${facilities.id} FROM ${facilities} WHERE ${facilities.id} = ${options.facilityId} FOR UPDATE`,
     );

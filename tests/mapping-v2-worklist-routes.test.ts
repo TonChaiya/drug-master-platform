@@ -4,7 +4,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ context: vi.fn(), list: vi.fn(), requireReady: vi.fn() }));
 vi.mock("@/lib/authorization/require-context", () => ({ withFacilityContext: mocks.context }));
 vi.mock("@/modules/mappings/v2-worklist", () => ({ mappingWorklistV2: mocks.list }));
-vi.mock("@/modules/tmt/readiness", () => ({ requireTmtV2Ready: mocks.requireReady }));
+vi.mock("@/modules/tmt/readiness", () => ({ readTmtConsumerContext: mocks.requireReady }));
 
 import { GET } from "@/app/api/v1/mappings/v2/worklist/route";
 
@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv("TMT_V2_MAPPING_ENABLED", "1");
   mocks.context.mockResolvedValue({ ok: true, context: { facilityId } });
-  mocks.requireReady.mockResolvedValue(undefined);
+  mocks.requireReady.mockResolvedValue({ readiness: { ready: true, assurance: "verified" } });
   mocks.list.mockResolvedValue({ rows: [], total: 0, page: 1, pageSize: 30, pageCount: 1 });
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllEnvs());
 test("worklist defaults to pending and a server-backed page of 30", async () => {
   const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist"));
   assert.equal(response.status, 200);
-  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId, drugType: undefined });
+  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId });
 });
 
 test("worklist passes verified facility scope, lifecycle, type, search, and pagination to the current service", async () => {
@@ -52,16 +52,16 @@ test("worklist remains default-off and fails closed before context or query acce
   assert.equal(mocks.list.mock.calls.length, 0);
 });
 
-test("TMT-only worklist stays fail closed when TMT readiness is unavailable", async () => {
-  mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
+test("TMT-only worklist retains inventory while failing closed on TMT eligibility", async () => {
+  mocks.requireReady.mockResolvedValueOnce({ readiness: { ready: false, assurance: null } });
   const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist?status=mapped&drugType=01"));
-  assert.equal(response.status, 503);
-  assert.equal(mocks.list.mock.calls.length, 0);
+  assert.equal(response.status, 200);
+  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId, status: "mapped", drugType: "01", dataset: null });
 });
 
-test("all-source worklist restricts itself to TTMT while TMT is unavailable", async () => {
-  mocks.requireReady.mockRejectedValueOnce(new Error("not ready"));
+test("all-source worklist preserves both source counts while TMT is unavailable", async () => {
+  mocks.requireReady.mockResolvedValueOnce({ readiness: { ready: false, assurance: null } });
   const response = await GET(new Request("https://example.test/api/v1/mappings/v2/worklist?drugType=all"));
   assert.equal(response.status, 200);
-  assert.equal(mocks.list.mock.calls[0]?.[0].drugType, "10");
+  assert.deepEqual(mocks.list.mock.calls[0]?.[0], { facilityId, drugType: "all", dataset: null });
 });

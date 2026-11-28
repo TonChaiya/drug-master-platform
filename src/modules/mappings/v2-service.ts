@@ -7,6 +7,7 @@ import { MappingRuleError, normalizeSpecPrep, resolveProductCategory, standardTy
 import { MappingV2RuleError, requireEligibleMappingV2Standard, type MappingStandardSource } from "./v2";
 import { decideUpdateFlagWithSnapshot } from "./update-flag";
 import { lockStandardDatasetSelection } from "@/modules/standards/dataset-selection";
+import { independentTmtDatasetsEnabled } from "@/modules/tmt/feature";
 
 export interface SaveV2MappingInput {
   facilityId: string;
@@ -50,6 +51,9 @@ export async function saveV2Mapping(input: SaveV2MappingInput): Promise<{
   const specPrep = normalizeSpecPrep(productCat, input.specPrep);
   return db.transaction(async (tx) => {
     const release = await lockStandardDatasetSelection(tx, input.standardSource === "TMT");
+    if (input.standardSource === "TMT" && independentTmtDatasetsEnabled() && !release) {
+      throw new MappingV2RuleError("TMT_V2_NOT_READY", "ข้อมูล TMT ยังไม่พร้อมใช้งาน");
+    }
     const standard = await requireEligibleMappingV2Standard({
       source: input.standardSource, code: input.standardCode, level: input.standardLevel, productCat,
     }, release, tx);
@@ -79,7 +83,10 @@ export async function saveV2Mapping(input: SaveV2MappingInput): Promise<{
       .for("update");
     const sameIdentity =
       existing?.standardSource === standard.source && existing.standardCode === standard.code && existing.standardLevel === standard.level;
-    const confirmOnly = Boolean(input.confirmReview && sameIdentity && input.productCat === undefined && input.specPrep === undefined && input.notes === undefined);
+    const confirmOnly = Boolean(input.confirmReview && input.productCat === undefined && input.specPrep === undefined && input.notes === undefined);
+    if (confirmOnly && !sameIdentity) {
+      throw new MappingV2RuleError("MAPPING_REVIEW_CHANGED", "รายการจับคู่เปลี่ยนแล้ว กรุณาตรวจสอบอีกครั้งก่อนยืนยัน");
+    }
     const mappingId = existing?.id ?? randomUUID();
     const updateFlag = decideUpdateFlagWithSnapshot(Boolean(snapshot), Boolean(catalogRow));
 

@@ -6,6 +6,7 @@ import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, TMT_S
 import { activeStandardReleaseEnabled, independentTmtDatasetsEnabled } from "./feature";
 import { readActiveStandardRelease } from "@/modules/standards/active-release";
 import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
+import { isTmtPointerUnavailable } from "./candidate-pointer";
 
 export interface TmtReadinessRun {
   id: string;
@@ -38,7 +39,7 @@ export interface TmtReadinessValidation {
 
 export type TmtV2Readiness =
   | { ready: true; reason: null; assurance: "verified" | "validated_unverified"; run: TmtReadinessRun }
-  | { ready: false; reason: "RUN_MISSING" | "RUN_UNVERIFIED" | "RUN_NOT_SUCCEEDED"; assurance: null; run: TmtReadinessRun | null };
+  | { ready: false; reason: "RUN_MISSING" | "RUN_UNVERIFIED" | "RUN_NOT_SUCCEEDED" | "POINTER_UNAVAILABLE"; assurance: null; run: TmtReadinessRun | null };
 
 export class TmtV2NotReadyError extends Error {
   readonly code = "TMT_V2_NOT_READY";
@@ -165,8 +166,13 @@ export async function readTmtConsumerContext(
     return { release, readiness: { ready: true, assurance: "validated_unverified" } };
   }
   if (independentTmtDatasetsEnabled()) {
-    const release = await readStandardDatasetSelection(pool);
-    if (release?.tmtAssurance) return { release, readiness: { ready: true, assurance: release.tmtAssurance } };
+    try {
+      const release = await readStandardDatasetSelection(pool);
+      if (release?.tmtAssurance) return { release, readiness: { ready: true, assurance: release.tmtAssurance } };
+    } catch (error) {
+      if (!isTmtPointerUnavailable(error)) throw error;
+    }
+    return { readiness: { ready: false, assurance: null } };
   }
   const readiness = await readTmtV2Readiness(pool);
   return {
@@ -177,6 +183,11 @@ export async function readTmtConsumerContext(
 }
 
 export async function requireTmtV2Ready(pool: Pick<Pool, "query"> = dbPool()): Promise<StandardDatasetSelection | undefined> {
+  if (independentTmtDatasetsEnabled() && !activeStandardReleaseEnabled()) {
+    const context = await readTmtConsumerContext(pool);
+    if (!context.readiness.ready) throw new TmtV2NotReadyError({ ready: false, reason: "POINTER_UNAVAILABLE", assurance: null, run: null });
+    return context.release;
+  }
   const release = await readStandardDatasetSelection(pool);
   if (release) return release;
   const readiness = await readTmtV2Readiness(pool);

@@ -37,7 +37,8 @@ test("mapping entry and workflow navigation use one canonical user-facing route"
 
 test("mapping readiness messages use user-facing TMT status language", async () => {
   const page = await source("src/app/(dashboard)/mappings/page.tsx");
-  assert.match(page, /ข้อมูล TMT ล่าสุดต้องมีสถานะ/);
+  assert.match(page, /ข้อมูล TMT ยังไม่พร้อมใช้งาน/);
+  assert.match(page, /ยังค้นหาและจับคู่รายการ TTMT ได้ตามชนิดยา/);
   assert.match(page, /ยังไม่ยืนยันเวอร์ชันจาก upstream/);
   assert.doesNotMatch(page, /latest TMT sync/);
   assert.doesNotMatch(page, /degraded/);
@@ -45,7 +46,8 @@ test("mapping readiness messages use user-facing TMT status language", async () 
 
 test("dashboard standards readiness no longer derives from legacy standard_products", async () => {
   const queries = await source("src/modules/facilities/queries.ts");
-  assert.match(queries, /readTmtV2Readiness/);
+  assert.match(queries, /readTmtConsumerContext/);
+  assert.match(queries, /partial: tmtReadiness.ready !== ttmtReady/);
   assert.match(queries, /ttmtImports/);
   assert.match(queries, /ttmtProducts/);
   assert.doesNotMatch(queries, /standardProducts/);

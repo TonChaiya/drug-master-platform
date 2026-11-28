@@ -3,6 +3,10 @@ import type { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
 
 export type TmtAssurance = "verified" | "validated_unverified";
 export type TmtPointer = { datasetId: string | null; generation: number; assurance: TmtAssurance | null; coverageThrough: string | null };
+
+export function isTmtPointerUnavailable(error: unknown): boolean {
+  return error instanceof Error && (error.message === "TMT_POINTER_MISSING" || error.message === "TMT_POINTER_EVIDENCE_INVALID");
+}
 export const TMT_POINTER_SQL = `SELECT p.dataset_id,p.generation,d.source,d.state,d.content_hash,a.manifest_hash,a.assurance,
   DATE_FORMAT(a.coverage_through,'%Y-%m-%d') AS coverage_through
   FROM tmt_active_dataset p LEFT JOIN standard_datasets d ON d.id=p.dataset_id

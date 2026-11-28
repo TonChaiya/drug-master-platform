@@ -296,19 +296,12 @@ Targeted pure tests ไม่ต้องใช้ฐานข้อมูล:
 pnpm exec vitest run tests/mapping-v2-consumer.test.ts tests/export-v2.test.ts tests/mapping-summary.test.ts tests/tmt-v2-browser.test.ts
 ```
 
-Local E2E ต้องใช้ Laragon MySQL ที่ `127.0.0.1` และฐาน exact `drug_master_export_v2_test` เท่านั้น โดยกำหนด env ต่อ process แบบ explicit, ห้ามโหลด `.env.local`, ห้ามใช้ `jhcisdb` และต้อง opt-in integration guard:
+Local E2E ของ Phase 4 ใช้ MySQL 8.4.3 แยกที่ `127.0.0.1:3308`. เริ่ม instance ด้วย `--no-defaults` และ data directory ใหม่ใต้ temp ที่ขึ้นต้นด้วย `dm-phase4-`; ทดสอบจะตรวจ server identity และปฏิเสธฐาน `drug_master_export_v2_test` ที่มีอยู่แล้ว. ห้ามใช้ `.env.local`, port 3333 หรือ `jhcisdb`.
 
 ```powershell
-$env:NODE_ENV = "test"
-$env:ALLOW_DB_INTEGRATION_TESTS = "1"
-$env:DB_HOST = "127.0.0.1"
-$env:DB_PORT = "3307"
-$env:DB_USERNAME = "root"
-$env:DB_PASSWORD = ""
-$env:DB_DATABASE = "drug_master_export_v2_test"
-$env:TMT_V2_CATALOG_ENABLED = "1"
-$env:TMT_V2_EXPORT_ENABLED = "1"
+$env:DM_PHASE4_DISPOSABLE_MYSQL_DATADIR = "<exact temporary MySQL data directory>"
 pnpm exec vitest run tests/export-v2-mysql.test.ts --reporter=verbose
+Remove-Item Env:DM_PHASE4_DISPOSABLE_MYSQL_DATADIR
 ```
 
 E2E สร้างและลบเฉพาะฐานทดสอบดังกล่าว ตรวจ full/delta/checkpoint/rollback/stale preview/invalidation/tenant isolation และเขียนไฟล์จริงไป temp directory. ทุกครั้งที่แตะ writer หรือ row contract ต้องอ่านไฟล์กลับแบบ programmatic และเปิดไฟล์ผลลัพธ์ด้วย Excel/LibreOffice จริงเพื่อตรวจหัว 22 ช่อง, Thai text, leading zeroes, NDC24, วันที่, ISED และ PRODUCTCAT.

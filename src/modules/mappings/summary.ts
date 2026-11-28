@@ -10,10 +10,10 @@ import {
   standardProducts,
 } from "@/db/schema";
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
-import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
+import { loadMappedStandardsV2, mappingV2IdentityForDrug, mappingV2IdentityKey } from "./v2-consumer";
 import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
-import { readTmtV2Readiness, type TmtConsumerContext } from "@/modules/tmt/readiness";
-import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
+import { readTmtConsumerContext, type TmtConsumerContext } from "@/modules/tmt/readiness";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface MappingLifecycleSummaryInput {
   facilityId: string;
@@ -101,8 +101,8 @@ export async function mappingLifecycleSummaries(
   tmtContext?: TmtConsumerContext,
 ): Promise<Map<string, MappingLifecycleSummary>> {
   if (tmtV2CatalogEnabled()) {
-    const release = tmtContext ? tmtContext.release : await readStandardDatasetSelection();
-    return mappingLifecycleSummariesV2(facilityId, database, release, tmtContext?.readiness.ready);
+    const context = tmtContext ?? await readTmtConsumerContext();
+    return mappingLifecycleSummariesV2(facilityId, database, context.release, context.readiness.ready);
   }
   const importScope = facilityId
     ? eq(drugCatalogImports.facilityId, facilityId)
@@ -284,19 +284,12 @@ async function mappingLifecycleSummariesV2(
       .select({ importId: drugCatalogRows.importId, facilityId: drugCatalogRows.facilityId, hospdrugcode: drugCatalogRows.hospdrugcode, tmtid: drugCatalogRows.tmtid })
       .from(drugCatalogRows).where(inArray(drugCatalogRows.importId, latestImportIds)),
   ]);
-  const identities: MappingV2Identity[] = sourceRows.flatMap((row) =>
-    row.mappingId && (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
-      ? [{ source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }]
-      : [],
-  );
-  const canUseTmt = Boolean(release) || !identities.some((identity) => identity.source === "TMT") || (tmtReady ?? (await readTmtV2Readiness()).ready);
-  const standards = await loadMappedStandardsV2(canUseTmt ? identities : identities.filter((identity) => identity.source === "TTMT"), database, release);
+  const identities = sourceRows.map((row) => row.mappingId ? mappingV2IdentityForDrug(row, tmtReady) : null);
+  const standards = await loadMappedStandardsV2(identities.filter((identity) => identity !== null), database, release);
   const latestCatalogByDrug = new Map(latestCatalogRows.map((row) => [`${row.facilityId}\u0000${row.hospdrugcode}`, row]));
-  return summarizeMappingLifecycleInputs(sourceRows.map((row) => {
+  return summarizeMappingLifecycleInputs(sourceRows.map((row, index) => {
     const latest = latestCatalogByDrug.get(`${row.facilityId}\u0000${row.drugcode}`);
-    const identity: MappingV2Identity | null = row.mappingId && (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
-      ? { source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }
-      : null;
+    const identity = identities[index];
     const standard = identity ? standards.get(mappingV2IdentityKey(identity)) : null;
     return {
       facilityId: row.facilityId,

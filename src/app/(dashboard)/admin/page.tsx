@@ -66,6 +66,7 @@ export default async function AdminPage() {
     type01: row.type01,
     type10: row.type10,
     mappedTotal: row.mappedTotal,
+    exportReadyTotal: row.exportReadyTotal,
     pendingTotal: row.pendingTotal,
     needsReviewTotal: row.needsReviewTotal,
     installationCount: row.installationCount,

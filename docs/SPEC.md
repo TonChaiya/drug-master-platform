@@ -53,7 +53,7 @@ TMT และ TTMT เป็นคนละ namespace/identity; candidate pool �
 - ถ้า TMT/TTMT เปลี่ยน mapping ที่มี source `drug_catalog` ต้องตาม snapshot ล่าสุด แต่ source `manual` ห้ามถูกทับ
 - ยา inactive ที่หายจาก snapshot ล่าสุดเก็บ history ไว้และไม่ขึ้น worklist
 - ห้ามลบ snapshot, mapping หรือ history เดิมอัตโนมัติจากการ reconcile
-- ผู้ใช้ยืนยัน `needs_review` ได้เฉพาะ state ที่ตรวจจริง โดยผูกกับ `drugMappings.updatedAt` และสถานะ present/TMT ของ catalog ล่าสุด; เมื่อ mapping หรือ state ที่เกี่ยวข้องเปลี่ยน acknowledgement เดิมจะ stale และกลับเป็น `needs_review`
+- ผู้ใช้ยืนยัน `needs_review` ได้เฉพาะ state ที่ตรวจจริง โดยผูกกับ `drugMappings.updatedAt` และสถานะ present/TMT ของ catalog ล่าสุด; เมื่อ mapping หรือ state ที่เกี่ยวข้องเปลี่ยน acknowledgement เดิมจะ stale และกลับเป็น `needs_review`. คำขอยืนยันอย่างเดียวที่ส่ง identity เก่าต้องถูกปฏิเสธโดยไม่เขียนทับ mapping.
 - การบันทึก mapping ปกติไม่ยืนยัน review อัตโนมัติ และ confirm-only ห้ามเปลี่ยน version ของ mapping
 
 ## 4. PRODUCTCAT และ SPECPREP
@@ -256,7 +256,8 @@ MasterTTMT Excel เป็น authoritative source สำหรับแถว�
 - mapping v2 export-ready เมื่อ lifecycle เป็น `mapped`, acknowledgement (ถ้าต้องใช้) ยัง current, source-specific standard valid และไม่มี conflict ที่ทำให้คอลัมน์ contract กำกวม
 - delta/checkpoint ใช้ version จาก `drug_mappings.updatedAt`; การ refresh metadata ของ TMT/TTMT เพียงอย่างเดียวห้ามทำให้ mapping กลับเข้า delta
 - preview hash ต้องรวม source/code/level เพื่อให้ token stale เมื่อ identity เปลี่ยน และ failed export ห้ามเลื่อน checkpoint
-- v2 Browser/Mapping/Catalog/Export เปิดใช้เฉพาะ feature flag explicit และ central readiness ต้องเป็น `verified` (`status=succeeded` ของ versioned run) หรือ `validated_unverified` ที่มี persisted policy/evidence ตรงกับ latest run, checkpoints และ TTMT import ปัจจุบัน. missing/unsupported/stale/mismatched evidence รวมถึง failed/stale/running run ต้อง fail closed ด้วย `TMT_V2_NOT_READY`; degraded readiness ต้องแสดง label ชัดเจนและห้ามเรียกว่า verified. เมื่อ flag ปิดต้องใช้ legacy resolver เดิมและไม่ query v2 tables
+- v2 Browser/Mapping/Catalog/Export เปิดใช้ด้วย feature flag explicit. เมื่อเปิด independent TMT ให้อ่าน accepted pointer และยึด generation เดียวในแต่ละงาน. ถ้า pointer ใช้ไม่ได้ ห้ามอ่าน live TMT แทน และห้ามค้นหรือบันทึกมาตรฐาน TMT; worklist ยังแสดง inventory และส่งรายการที่มี mapping TMT ใช้ไม่ได้ไป `needs_review`. การค้นหา จับคู่ กระทบยอด และส่งออก TTMT ยังทำได้ด้วยสถานะและหลักฐาน import ของ TTMT เอง. เมื่อปิด independent TMT ให้ใช้ readiness จากหลักฐาน TMT ตามโหมดเดิม. `validated_unverified` ต้องแสดงต่างจาก `verified`.
+- ภายใน facility เดียวกันและเมื่อไม่กรองรายการ ยอดยา active จาก JHCIS ต้องเท่ากับ `mapped + pending + needs_review`. ยอดพร้อมส่งออกต้องตรงกับจำนวนแถว Full export. Preview ที่มี TMT ใช้ได้เฉพาะ generation ที่ตรวจ; ถ้าชุดที่ส่งออกมีแต่ TTMT ให้ตรวจเฉพาะข้อมูลและหลักฐานที่เกี่ยวข้องกับไฟล์นั้น.
 
 ### ที่มาของแต่ละคอลัมน์
 

@@ -24,6 +24,16 @@ export interface MappingV2Identity {
   productCat: string;
 }
 
+export function mappingV2IdentityForDrug(row: {
+  drugtype: string; standardSource: string | null; standardCode: string | null; standardLevel: string | null; productCat: string | null;
+}, tmtAvailable = true): MappingV2Identity | null {
+  const { drugtype, standardSource: source, standardCode: code, standardLevel: level, productCat } = row;
+  if (!code || !level) return null;
+  if (drugtype === "01" && source === "TMT" && tmtAvailable && /^\d+$/.test(code)) return { source, code, level, productCat: productCat ?? "" };
+  if (drugtype === "10" && source === "TTMT") return { source, code, level, productCat: productCat ?? "" };
+  return null;
+}
+
 export interface TemporalValues {
   changeDate: string;
   values: string[];

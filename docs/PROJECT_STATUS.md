@@ -7,7 +7,7 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production application version: `0.8.21`
+- Production application version: `0.8.22`
 - Phase 2 application deployed before the TTMT cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
 - Hosting: Vercel Production ผ่าน Git integration
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
@@ -32,6 +32,8 @@
 
 ## Phase 4 consolidation checkpoint
 
+- Release `0.8.22` ทำให้ยอดยา active ตรงกันระหว่าง Worklist, Dashboard และ Admin และยอดพร้อมส่งออกตรงกับ Full export ภายใน facility เดียวกัน. เมื่อ TMT ใช้ไม่ได้ Worklist ยังแสดงรายการยา 01 และ TTMT ยังใช้สำหรับค้นหา จับคู่ กระทบยอด และส่งออกได้. Admin ใช้ assurance จาก accepted TMT pointer และแสดงยอดพร้อมส่งออกแยกจากยอดจับคู่. การยืนยัน review จาก identity เก่าถูกปฏิเสธโดยไม่แก้ mapping.
+- ตรวจด้วย MySQL 8.4.3 แยกและข้อมูลจำลอง รวม Full/Delta, checkpoint, stale-generation token, facility isolation และเบราว์เซอร์ที่ลงชื่อเข้าใช้ด้วยบัญชีจำลอง. Release นี้ใช้ migration เดิมถึง `0021` และ Combined Dataset Release ยังปิด.
 - Release `0.8.3` ทำให้ `/mappings` เป็น user-facing route หลักเพียงเส้นทางเดียว; `/mappings/v2` คงไว้เป็น compatibility redirect และ API/schema identifiers ภายในไม่เปลี่ยน.
 - Dashboard, navigation และ Drug Catalog ใช้ `/mappings` ทั้งหมด โดย feature flags เดิมยังเลือก current/compatibility implementation ภายในและค่า default ไม่เปลี่ยน.
 - Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน; เมื่อ flag ปิดยังใช้ live-table behavior เดิม.
@@ -106,7 +108,7 @@ Migration สำคัญล่าสุด:
 
 ## Verified production state
 
-- Production migration journal ตรวจตรงตามไฟล์ตั้งแต่ `0001` ถึง `0020`
+- Production migration journal ตรวจตรงตามไฟล์ตั้งแต่ `0001` ถึง `0021`
 - login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
 - expired rate-limit bucket cleanup เปิดใช้บน production ผ่าน Vercel Cron เวลา `30 19 * * *` UTC และ controlled invocation ผ่านโดยไม่แตะ business tables
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
@@ -136,7 +138,7 @@ Migration สำคัญล่าสุด:
 - navigation หลักชี้ไปการจับคู่รายการยา; `/mappings` เป็น route หลักและ `/mappings/v2` เป็น compatibility redirect
 - `/standards` ไม่แสดง legacy standards sync ใน normal workflow เพื่อไม่ให้ผู้ใช้เข้าใจว่าเป็นข้อมูล TMT ปัจจุบัน
 - `/admin` แสดง current TMT v2 readiness, latest run, bounded run/checkpoint history และ current TTMT v2 import history เฉพาะผู้ดูแลระบบ
-- การเริ่มหรือ resume TMT sync ยังเป็น CLI-only เพราะต้องยืนยัน environment/database, mode และ production guard สำหรับงานที่อาจใช้เวลานาน; Admin ไม่เริ่มงานนี้จาก web request
+- Admin เริ่ม Full/Incremental candidate และ resume งานที่รองรับผ่าน Queue ได้ตาม guard ของ Phase 3. งานเบื้องหลังรักษา accepted dataset เดิมและยังต้องตรวจรับก่อน promote. Full-unverified เดิมไม่สามารถ resume จากหน้าเว็บ.
 - Admin สามารถนำเข้าไฟล์ MasterTTMT `.xls`/`.xlsx` ด้วย current TTMT v2 importer เท่านั้น; route ใช้ `requireAdmin()` และไม่เรียก legacy `standard_products` pipeline
 - worklist การจับคู่รายการยาบน `/mappings` กลับมาแล้ว: เริ่มที่ `pending`, ค้นหารหัส/ชื่อยา, กรอง lifecycle (`pending`/`needs_review`/`mapped`/`all`) และชนิดยา (`01` TMT/`10` TTMT), ใช้ pagination ฝั่ง server 30 รายการต่อหน้า และแสดง identity TMT/TTMT ปัจจุบัน, UPDATEFLAG กับเหตุผล lifecycle
 - การจับคู่/แก้ไขจาก worklist ใช้ source-aware `/api/v1/mappings/v2` เท่านั้น; needs_review ยืนยันด้วย acknowledgement เดิมแบบ idempotent และไม่กลับไปใช้ `standard_products` หรือ legacy save route

@@ -16,6 +16,7 @@ export interface ReadinessItem {
   key: "jhcis" | "catalog" | "standards";
   label: string;
   ready: boolean;
+  partial?: boolean;
   detail: string;
   href: Route;
   actionLabel: string;
@@ -89,6 +90,7 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
   const agentCount = agentSummary?.agentCount ?? 0;
   const installationCount = agentSummary?.installationCount ?? 0;
   const ttmtTotal = Number(ttmtCountRows[0]?.total ?? 0);
+  const ttmtReady = latestTtmtImport.length > 0 && ttmtTotal > 0;
   const lastSyncAt = lastSync[0]?.finishedAt ?? null;
 
   return {
@@ -147,10 +149,11 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
       {
         key: "standards",
         label: "TMT / TTMT",
-        ready: tmtReadiness.ready && latestTtmtImport.length > 0 && ttmtTotal > 0,
+        ready: tmtReadiness.ready && ttmtReady,
+        partial: tmtReadiness.ready !== ttmtReady,
         detail:
           `TMT ${tmtReadiness.ready ? tmtReadiness.assurance === "validated_unverified" ? "ผ่านการตรวจสอบ" : "ยืนยันเวอร์ชันแล้ว" : "ยังไม่พร้อม"} · TTMT ${
-            latestTtmtImport.length > 0 && ttmtTotal > 0 ? `${ttmtTotal.toLocaleString("th-TH")} รายการ (เวอร์ชัน ${latestTtmtImport[0]?.version})` : "ยังไม่มีข้อมูลที่นำเข้าสำเร็จ"
+            ttmtReady ? `${ttmtTotal.toLocaleString("th-TH")} รายการ (เวอร์ชัน ${latestTtmtImport[0]?.version})` : "ยังไม่มีข้อมูลที่นำเข้าสำเร็จ"
           }`,
         href: "/standards",
         actionLabel: "เปิด Standards Hub",

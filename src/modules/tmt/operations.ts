@@ -4,6 +4,7 @@ import { tmtSyncCheckpoints, tmtSyncRuns, ttmtImports } from "@/db/schema";
 import { readTmtV2Readiness, type TmtV2Readiness } from "./readiness";
 import { independentTmtDatasetsEnabled, tmtCandidateControlsEnabled } from "./feature";
 import { readCandidateOperations } from "./candidate-jobs";
+import { isTmtPointerUnavailable } from "./candidate-pointer";
 
 const HISTORY_LIMIT = 10;
 const CHECKPOINT_LIMIT = 100;
@@ -50,7 +51,7 @@ export interface TtmtOperationImport {
 }
 
 export interface TmtOperationsSnapshot {
-  readiness: TmtV2Readiness;
+  readiness: TmtV2Readiness | { ready: true; assurance: "verified" | "validated_unverified"; reason: null; run: null };
   latestRun: TmtOperationRun | null;
   runs: TmtOperationRun[];
   checkpoints: TmtOperationCheckpoint[];
@@ -76,8 +77,13 @@ function toRun(row: typeof tmtSyncRuns.$inferSelect): TmtOperationRun {
 }
 
 export async function readTmtOperations(): Promise<TmtOperationsSnapshot> {
-  const [readiness, rows] = await Promise.all([
-    readTmtV2Readiness(),
+  const independent = independentTmtDatasetsEnabled();
+  const [legacy, candidate, rows] = await Promise.all([
+    independent ? undefined : readTmtV2Readiness(),
+    independent ? readCandidateOperations(dbPool()).catch((error: unknown) => {
+      if (isTmtPointerUnavailable(error)) return undefined;
+      throw error;
+    }) : undefined,
     db.select().from(tmtSyncRuns).orderBy(desc(tmtSyncRuns.startedAt), desc(tmtSyncRuns.createdAt)).limit(HISTORY_LIMIT),
   ]);
   const runs = rows.map(toRun);
@@ -85,9 +91,11 @@ export async function readTmtOperations(): Promise<TmtOperationsSnapshot> {
   const { checkpoints, progress } = latestRun
     ? await readTmtCheckpointProgress(latestRun.id)
     : { checkpoints: [], progress: null };
-  const candidateOperations = independentTmtDatasetsEnabled()
-    ? { ...await readCandidateOperations(dbPool()), controlsEnabled: tmtCandidateControlsEnabled() }
-    : undefined;
+  const assurance = candidate?.pointer.assurance;
+  const readiness: TmtOperationsSnapshot["readiness"] = legacy ?? (assurance
+    ? { ready: true, assurance, reason: null, run: null }
+    : { ready: false, assurance: null, reason: "POINTER_UNAVAILABLE", run: null });
+  const candidateOperations = candidate ? { ...candidate, controlsEnabled: tmtCandidateControlsEnabled() } : undefined;
   return { readiness, latestRun, runs, checkpoints, progress, candidateOperations };
 }
 

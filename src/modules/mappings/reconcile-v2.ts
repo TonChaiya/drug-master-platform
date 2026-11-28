@@ -8,7 +8,7 @@ import { MappingRuleError, standardTypeForDrugType } from "./product-category";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
 import type { ReconcileResult } from "./service";
 import { lockStandardDatasetSelection, readStandardDatasetSelection } from "@/modules/standards/dataset-selection";
-import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 
 function today(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
@@ -28,14 +28,14 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
     db.selectDistinct({ hospdrugcode: drugCatalogRows.hospdrugcode }).from(drugCatalogRows).where(eq(drugCatalogRows.facilityId, facilityId)),
   ]);
   const includesTmt = drugs.some((drug) => drug.drugtype === "01");
-  const selection = await readStandardDatasetSelection(undefined, includesTmt);
-  const release = !selection && includesTmt ? await requireTmtV2Ready() : selection;
+  const tmt = includesTmt ? await readTmtConsumerContext() : undefined;
+  const release = tmt ? tmt.release : await readStandardDatasetSelection(undefined, false);
   const mappingByDrugId = new Map(mapped.map((row) => [row.sourceDrugId, row]));
   const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row]));
   const historyCodes = new Set(catalogHistory.map((row) => row.hospdrugcode));
   const wantedTmt = [...new Set(drugs.flatMap((drug) => {
     const code = catalogByCode.get(drug.drugcode)?.tmtid;
-    if (drug.drugtype !== "01" || !code) return [];
+    if (!tmt?.readiness.ready || drug.drugtype !== "01" || !code) return [];
     try { return [BigInt(code)]; } catch { return []; }
   }))];
   const tmtLevels = wantedTmt.length
@@ -104,8 +104,10 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
 
   if (inserts.length || updates.length) {
     await db.transaction(async (tx) => {
-      const current = await lockStandardDatasetSelection(tx, includesTmt);
-      if (current?.releaseId !== release?.releaseId) throw new MappingRuleError("STANDARD_DATASET_CHANGED", "ชุดข้อมูลมาตรฐานเปลี่ยนแล้ว กรุณากระทบยอดอีกครั้ง");
+      const writesTmt = inserts.some((row) => row.standardSource === "TMT") || updates.some((row) => row.identity.source === "TMT");
+      const current = await lockStandardDatasetSelection(tx, writesTmt);
+      const expected = writesTmt || release?.ttmtDatasetId ? release?.releaseId : undefined;
+      if (current?.releaseId !== expected) throw new MappingRuleError("STANDARD_DATASET_CHANGED", "ชุดข้อมูลมาตรฐานเปลี่ยนแล้ว กรุณากระทบยอดอีกครั้ง");
       for (let start = 0; start < inserts.length; start += 500) await tx.insert(drugMappings).values(inserts.slice(start, start + 500));
       for (const update of updates) {
         const [changed] = await tx.update(drugMappings).set({

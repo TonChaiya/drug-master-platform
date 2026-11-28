@@ -3,7 +3,7 @@ import type { Pool } from "mysql2/promise";
 import { afterEach, test, vi } from "vitest";
 import { lockStandardDatasetSelection, readStandardDatasetSelection } from "@/modules/standards/dataset-selection";
 import { readStandardDatasetCounts } from "@/modules/standards/versioned-read";
-import { readTmtConsumerContext } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext, requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -41,6 +41,11 @@ test("a rejected pointer and a conflicting combined-release configuration fail c
   vi.stubEnv("ACTIVE_STANDARD_RELEASE_ENABLED", "0");
   const pool = { query: vi.fn(async () => [[{ ...accepted, state: "writing" }]]) } as unknown as Pool;
   await assert.rejects(readStandardDatasetSelection(pool), /POINTER_EVIDENCE_INVALID/);
+  assert.deepEqual(await readTmtConsumerContext(pool), { readiness: { ready: false, assurance: null } });
+  await assert.rejects(requireTmtV2Ready(pool), { code: "TMT_V2_NOT_READY" });
+  const empty = { query: vi.fn(async () => [[{ dataset_id: null, generation: 0 }]]) } as unknown as Pool;
+  assert.deepEqual(await readTmtConsumerContext(empty), { readiness: { ready: false, assurance: null } });
+  assert.equal(vi.mocked(empty.query).mock.calls.length, 1, "missing independent pointer must not read live TMT");
   vi.stubEnv("ACTIVE_STANDARD_RELEASE_ENABLED", "1");
   await assert.rejects(readStandardDatasetSelection(pool), /MODES_CONFLICT/);
 });

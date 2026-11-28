@@ -12,14 +12,14 @@ import {
 import { classifyMappingLifecycle } from "@/modules/mappings/lifecycle";
 import {
   loadMappedStandardsV2,
+  mappingV2IdentityForDrug,
   mappingV2IdentityKey,
-  type MappingV2Identity,
   type ResolvedMappedStandardV2,
 } from "@/modules/mappings/v2-consumer";
 import { isExportCandidate, type ExportCandidateState, type ExportSelection } from "./delta";
 import type { ExportCandidate, ExportRow } from "./rows";
 import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
-import { requireTmtV2Ready } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 
 type ExportQueryDb = Pick<typeof db, "select">;
 
@@ -80,7 +80,7 @@ export async function buildExportCandidatesV2(
   selection: ExportSelection,
   database: ExportQueryDb = db,
   lockRows = false,
-  release?: StandardDatasetSelection,
+  release?: StandardDatasetSelection | null,
 ): Promise<ExportCandidate[]> {
   const latestCatalog = alias(drugCatalogRows, "latest_export_catalog_v2");
   const catalogHistory = database
@@ -115,6 +115,7 @@ export async function buildExportCandidatesV2(
       latestCatalogTmtid: latestCatalog.tmtid,
       everInCatalog: sql<boolean>`${catalogHistory.hospdrugcode} IS NOT NULL`,
       drugcode: sourceDrugs.drugcode,
+      drugtype: sourceDrugs.drugtype,
       sell: sourceDrugs.sell,
       productCat: drugMappings.productCat,
       specPrep: drugMappings.specPrep,
@@ -138,18 +139,15 @@ export async function buildExportCandidatesV2(
     .where(and(eq(drugMappings.facilityId, facilityId), eq(sourceDrugs.active, 1)))
     .orderBy(asc(sourceDrugs.drugcode));
   const rows = await (lockRows ? query.for("update") : query);
-  const identities: MappingV2Identity[] = rows.flatMap((row) =>
-    (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
-      ? [{ source: row.standardSource, code: row.standardCode, level: row.standardLevel, productCat: row.productCat }]
-      : [],
-  );
-  if (!release && identities.some((identity) => identity.source === "TMT")) await requireTmtV2Ready();
-  const standards = await loadMappedStandardsV2(identities, database, release);
+  if (release === undefined && rows.some((row) => row.drugtype === "01" && row.standardSource === "TMT")) {
+    const tmt = await readTmtConsumerContext();
+    release = tmt.readiness.ready ? tmt.release : null;
+  }
+  const identities = rows.map((row) => mappingV2IdentityForDrug(row, release !== null));
+  const standards = await loadMappedStandardsV2(identities.filter((identity) => identity !== null), database, release ?? undefined);
 
-  return rows.flatMap((row) => {
-    const identity: MappingV2Identity | null = (row.standardSource === "TMT" || row.standardSource === "TTMT") && row.standardLevel
-      ? { source: row.standardSource, code: row.standardCode, level: row.standardLevel, productCat: row.productCat }
-      : null;
+  return rows.flatMap((row, index) => {
+    const identity = identities[index];
     const standard = identity ? standards.get(mappingV2IdentityKey(identity)) : null;
     const lifecycle = classifyMappingLifecycle({
       active: true,
