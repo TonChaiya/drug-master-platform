@@ -167,6 +167,8 @@ test("chooser keeps structured results and explicit search and related-TPU state
   for (const state of ["detailStatus === \"loading\"", "detailStatus === \"empty\"", "detailStatus === \"error\"", "detailStatus === \"ready\""]) assert.match(workbench, new RegExp(state));
   assert.match(workbench, /TPU ที่เกี่ยวข้องกับ GPU/);
   assert.match(workbench, /w-full border-y border-primary-200 bg-surface px-3 py-3/);
+  assert.match(workbench, /\[container-type:inline-size\]/);
+  assert.match(workbench, /sticky left-0 max-w-\[100cqw\]/);
   assert.doesNotMatch(workbench, /m-2\.5 rounded-xl border border-primary-200 bg-surface/);
   assert.match(workbench, /mx-auto w-full max-w-7xl/);
   assert.match(workbench, /border-y border-primary-100 bg-primary-50\/60 p-2/);

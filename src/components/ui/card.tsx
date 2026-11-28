@@ -7,6 +7,7 @@ export interface CardProps {
   /** Lifts on hover. Only for a card that is itself a link or a button. */
   interactive?: boolean;
   as?: "section" | "div" | "article" | "li";
+  id?: string;
 }
 
 /**
@@ -16,8 +17,8 @@ export interface CardProps {
  * heading. `CardHeader` / `CardBody` / `CardFooter` keep the padding identical
  * everywhere, which is the whole reason this exists.
  */
-export function Card({ children, className, interactive = false, as: Tag = "section" }: CardProps) {
-  return <Tag className={cx(interactive ? "card-interactive" : "card", className)}>{children}</Tag>;
+export function Card({ children, className, interactive = false, as: Tag = "section", id }: CardProps) {
+  return <Tag id={id} className={cx(interactive ? "card-interactive" : "card", "min-w-0", id && "scroll-mt-20", className)}>{children}</Tag>;
 }
 
 export interface CardHeaderProps {
@@ -40,7 +41,7 @@ export function CardHeader({ title, description, actions, icon, className }: Car
         </h2>
         {description ? <p className="type-help mt-1">{description}</p> : null}
       </div>
-      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
@@ -84,7 +85,7 @@ export function StatTile({
   const style = tones[tone];
 
   return (
-    <article className={cx("tile", style.tile)}>
+    <article className={cx("tile min-h-[90px] min-w-0 p-3", style.tile)}>
       <div className="flex items-center justify-between gap-2">
         <p className="type-caption font-medium text-slate-600">{label}</p>
         {icon ? <span className={style.icon}>{icon}</span> : null}

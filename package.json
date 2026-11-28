@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.8.22",
+  "version": "0.8.23",
   "private": true,
   "type": "module",
   "scripts": {

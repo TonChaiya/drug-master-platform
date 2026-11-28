@@ -34,10 +34,10 @@ export function TtmtSearch() {
 
   return (
     <Card>
-      <CardHeader title="ค้นหามาตรฐาน TTMT" description="TTMT เป็นผลิตภัณฑ์คนละ namespace กับ TMT และไม่มีลำดับชั้น GP/GPU/TP/TPU" />
-      <CardBody className="space-y-3">
+      <CardHeader title="ค้นหามาตรฐาน TTMT" description="ค้นผลิตภัณฑ์ TTMT แยกจากลำดับชั้นของ TMT" />
+      <CardBody className="space-y-2.5 pt-3">
         <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => void search(event)}>
-          <Field label="รหัสหรือชื่อ TTMT" htmlFor="ttmt-hub-query" className="min-w-60 flex-1">
+          <Field label="รหัสหรือชื่อ TTMT" htmlFor="ttmt-hub-query" className="w-full min-w-0 sm:flex-1">
             <SearchInput id="ttmt-hub-query" value={query} maxLength={120} onChange={(event) => setQuery(event.target.value)} />
           </Field>
           <Button type="submit" variant="primary" loading={loading}>ค้นหา TTMT</Button>

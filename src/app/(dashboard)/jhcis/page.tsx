@@ -42,17 +42,19 @@ export default async function JhcisPage() {
   const activeTargets = installations.filter((row) => row.status === "active");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       <PageHeader
         eyebrow={`${facility.code} · ${facility.name}`}
         title="เชื่อมต่อ JHCIS"
-        description="ขั้นตอนแรกของ workflow: Agent ดึง source drug จาก JHCIS ผ่านขาออก HTTPS โดยไม่เปิด MySQL สู่อินเทอร์เน็ต"
+        description="ขั้นตอนแรก · ลงทะเบียน Agent แล้วดึงรายการยาจาก JHCIS ผ่าน HTTPS"
         actions={<><ButtonLink href="/standards" icon={<IconStandards size={14} />}>ดูมาตรฐาน</ButtonLink><ButtonLink href="/drug-catalog" icon={<IconCatalog size={14} />}>Drug Catalog</ButtonLink></>}
       />
 
-      <Alert tone="info" title="ลำดับงานหลังดึงข้อมูล">
-        ตรวจคลัง TMT/TTMT และนำเข้า Drug Catalog ล่าสุด จากนั้นจึงจับคู่รายการยาและส่งออก DrugCat
-      </Alert>
+      <nav aria-label="ส่วนต่าง ๆ ของหน้า JHCIS" className="flex flex-wrap gap-x-4 gap-y-2 border-b border-border py-2 text-xs font-medium text-primary-700 [&_a]:rounded-sm [&_a]:underline-offset-4 [&_a:hover]:underline">
+        <a href="#jhcis-enrollment">ลงทะเบียนและดึงข้อมูล</a>
+        <a href="#jhcis-agents">เครื่องที่ลงทะเบียน</a>
+        <a href="#jhcis-history">ประวัติ</a>
+      </nav>
 
       {mismatched.length > 0 ? (
         <Alert tone="danger" title="รหัสสถานบริการไม่ตรงกัน">
@@ -73,7 +75,7 @@ export default async function JhcisPage() {
         installer={{ url: installer.url, version: installer.version }}
       />
 
-      <Card>
+      <Card id="jhcis-agents">
         <CardHeader
           icon={<IconMonitor size={16} />}
           title={isAdmin ? "เครื่องที่ลงทะเบียนแล้ว" : "เครื่องที่ไอดีนี้ลงทะเบียน"}
@@ -161,7 +163,7 @@ export default async function JhcisPage() {
         </CardBody>
       </Card>
 
-      <div className="grid gap-3.5 lg:grid-cols-2">
+      <div id="jhcis-history" className="grid min-w-0 scroll-mt-20 gap-3 xl:grid-cols-2">
         <Card>
           <CardHeader icon={<IconRefresh size={16} />} title="รอบดึงข้อมูลล่าสุด" description="จำนวนที่ Agent แจ้งไว้ เทียบกับที่ระบบรับจริง" />
           <CardBody flush className="pt-3">

@@ -100,7 +100,7 @@ export default async function AdminPage() {
         title="จัดการระบบ"
         description="ตั้งค่าที่มีผลกับทุกสถานบริการ และจัดการบัญชีผู้ใช้"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge tone={pending > 0 ? "warning" : "neutral"} dot={pending > 0}>
               รออนุมัติ {pending.toLocaleString("th-TH")} บัญชี
             </Badge>
@@ -108,6 +108,16 @@ export default async function AdminPage() {
           </div>
         }
       />
+
+      <nav aria-label="ส่วนต่าง ๆ ของหน้าจัดการระบบ" className="flex flex-wrap gap-1.5 border-b border-border pb-3 text-xs font-medium text-primary-700 [&_a]:rounded-md [&_a]:border [&_a]:border-border [&_a]:bg-surface [&_a]:px-2.5 [&_a]:py-1.5 [&_a:hover]:border-primary-300">
+        <a href="#admin-facility-overview">ภาพรวมสถานบริการ</a>
+        <a href="#admin-facilities">จัดการสถานบริการ</a>
+        <a href="#admin-users">บัญชีผู้ใช้</a>
+        <a href="#admin-agent">ตัวติดตั้ง Agent</a>
+        <a href="#admin-tmt-api">ตั้งค่า TMT API</a>
+        <a href="#admin-tmt-operations">ดำเนินงาน TMT</a>
+        <a href="#admin-ttmt">นำเข้า TTMT</a>
+      </nav>
 
       {integrityProblems.length > 0 ? (
         <Alert tone="danger" title="พบข้อมูลที่ขัดกับกฎสิทธิ์">
@@ -119,7 +129,7 @@ export default async function AdminPage() {
         </Alert>
       ) : null}
 
-      <Card>
+      <Card id="admin-facility-overview">
         <CardHeader
           title="ภาพรวมรายสถานบริการ"
           description={`ต้องแก้ ${blocked.toLocaleString("th-TH")} · รอดำเนินการ ${waiting.toLocaleString("th-TH")} · พร้อม ${ready.toLocaleString("th-TH")}`}
@@ -129,10 +139,10 @@ export default async function AdminPage() {
         </CardBody>
       </Card>
 
-      <Card>
+      <Card id="admin-facilities">
         <CardHeader
           title="จัดการสถานบริการ"
-          description="เลือกสถานบริการเมื่อจำเป็นต้องแก้ configuration หรือล้างข้อมูล"
+          description="เลือกสถานบริการเพื่อแก้การตั้งค่าหรือจัดการข้อมูล"
         />
         <CardBody className="pt-3">
           <FacilityAdminPanel
@@ -149,8 +159,8 @@ export default async function AdminPage() {
         </CardBody>
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card>
+      <div className="grid min-w-0 gap-3 xl:grid-cols-2">
+        <Card id="admin-agent">
           <CardHeader
             icon={<IconDownload size={16} />}
             title="ตัวติดตั้ง Agent"
@@ -161,12 +171,12 @@ export default async function AdminPage() {
           </CardBody>
         </Card>
 
-        <Card>
+        <Card id="admin-tmt-api">
           <CardHeader
             icon={<IconLink size={16} />}
             title="TMT API และ readiness"
-            description="credential ใช้ติดต่อ upstream ส่วน readiness ของชุดข้อมูล production ประเมินแยกจากผลทดสอบ /version"
-            actions={<Badge tone={tmtReadiness.assurance === "validated_unverified" ? "warning" : tmtReadiness.ready ? "success" : "danger"}>{tmtReadiness.ready ? tmtReadiness.assurance : "not ready"}</Badge>}
+            description="ทดสอบการเชื่อมต่อแยกจากสถานะชุดข้อมูลที่ใช้งาน"
+            actions={<Badge tone={tmtReadiness.assurance === "validated_unverified" ? "warning" : tmtReadiness.ready ? "success" : "danger"}>{tmtReadiness.ready ? tmtReadiness.assurance : "ยังไม่พร้อม"}</Badge>}
           />
           <CardBody>
             {tmtReadiness.assurance === "validated_unverified" ? <Alert tone="warning" className="mb-3" title="พร้อมใช้แบบ validated_unverified">ข้อมูลผ่านหลักฐาน validation ที่บันทึกไว้ แต่ยังไม่ใช่ verified จาก upstream</Alert> : null}
@@ -175,29 +185,27 @@ export default async function AdminPage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="การดำเนินงาน TMT"
-            description="สถานะและประวัติของ TMT v2 production pipeline ปัจจุบัน"
-          />
-          <CardBody>
-            <TmtOperationsPanel initial={tmtOperations} />
-          </CardBody>
-        </Card>
+      <Card id="admin-tmt-operations">
+        <CardHeader
+          title="การดำเนินงาน TMT"
+          description="ติดตามงานซิงก์ ตรวจรับ และย้อนกลับชุดข้อมูล"
+        />
+        <CardBody>
+          <TmtOperationsPanel initial={tmtOperations} />
+        </CardBody>
+      </Card>
 
-        <Card>
-          <CardHeader
-            title="นำเข้าและประวัติ TTMT"
-            description="นำเข้า MasterTTMT เข้าสู่ namespace TTMT v2 เท่านั้น"
-          />
-          <CardBody>
-            <TtmtImportPanel imports={ttmtImports} />
-          </CardBody>
-        </Card>
-      </div>
+      <Card id="admin-ttmt">
+        <CardHeader
+          title="นำเข้าและประวัติ TTMT"
+          description="นำเข้าไฟล์ MasterTTMT และตรวจเวอร์ชันย้อนหลัง"
+        />
+        <CardBody>
+          <TtmtImportPanel imports={ttmtImports} />
+        </CardBody>
+      </Card>
 
-      <Card>
+      <Card id="admin-users">
         <CardHeader
           title="บัญชีผู้ใช้"
           description="ค้นหา กรอง และจัดการบัญชีตามสถานะ"

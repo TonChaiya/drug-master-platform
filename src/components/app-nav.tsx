@@ -58,9 +58,11 @@ export function AppShell({
   }, [open]);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const contentWidth = isActive("/mappings") ? "max-w-[1480px]" : "max-w-[1320px]";
 
   return (
     <div className="min-h-dvh md:pl-56">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2 focus:text-primary-700">ข้ามไปเนื้อหาหลัก</a>
       {open ? (
         <button
           type="button"
@@ -75,7 +77,7 @@ export function AppShell({
         aria-label="เมนูหลัก"
         className={cx(
           "fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-border bg-surface transition-transform duration-200 md:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full",
+          open ? "visible translate-x-0" : "invisible -translate-x-full md:visible",
         )}
       >
         <div className="flex items-center justify-between gap-2 px-3 py-3.5">
@@ -127,7 +129,7 @@ export function AppShell({
         </nav>
       </aside>
 
-      <header className="sticky top-0 z-20 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-canvas/85 px-3 py-2 backdrop-blur-md sm:px-5">
+      <header className="sticky top-0 z-20 flex min-h-14 min-w-0 items-center gap-2 border-b border-border bg-canvas/85 px-3 py-2 backdrop-blur-md sm:gap-3 sm:px-5">
         <IconButton
           size="sm"
           label="เปิดเมนู"
@@ -141,8 +143,8 @@ export function AppShell({
         {topbar}
       </header>
 
-      <main className="mx-auto w-full max-w-[1480px] px-3 py-4 sm:px-5 sm:py-5">{children}</main>
-      <footer className="mx-auto w-full max-w-[1480px] px-3 pb-4 text-center text-xxs text-slate-400 sm:px-5 sm:pb-5">
+      <main id="main-content" tabIndex={-1} className={cx("mx-auto w-full min-w-0 scroll-mt-16 px-3 py-3.5 sm:px-5 sm:py-4", contentWidth)}>{children}</main>
+      <footer className={cx("mx-auto w-full px-3 pb-4 text-center text-xxs text-slate-400 sm:px-5", contentWidth)}>
         Drug Master Platform · v{APP_VERSION}
       </footer>
     </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
-import { Alert, Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Choice } from "@/components/ui/form";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -139,16 +139,14 @@ export function ExportPanel() {
 
   return (
     <div className="space-y-3.5">
-      <Alert tone="info" title="ส่งออกเฉพาะรายการที่พร้อม">
-        รายการคงค้าง ต้องตรวจสอบ มาตรฐาน inactive หรือ identity ผิดระดับจะไม่ถูกใส่ในไฟล์ Full และ Delta; การดูตัวอย่างยังไม่เลื่อน checkpoint
-      </Alert>
       <Card>
         <CardHeader
           title="เลือก Full หรือ Delta ที่จะส่งออก"
-          description="ไฟล์ใช้แม่แบบหัวตาราง 22 คอลัมน์เดิม รหัสทุกช่องเขียนเป็นข้อความเพื่อไม่ให้เลขศูนย์นำหน้าหาย และวันที่เป็นชนิดวันที่จริงรูปแบบ dd/mm/yyyy"
+          description="ไฟล์ .xls 22 คอลัมน์ เก็บเลขศูนย์นำหน้าในรหัสและใช้วันที่รูปแบบ dd/mm/yyyy"
           actions={
             <Button
               variant="primary"
+              size="sm"
               icon={<IconDownload size={15} />}
               loading={downloading}
               disabled={loading || total === 0 || !previewToken}
@@ -159,8 +157,8 @@ export function ExportPanel() {
             </Button>
           }
         />
-        <CardBody>
-          <fieldset className="grid gap-1 sm:grid-cols-2">
+        <CardBody className="space-y-2.5 pt-3">
+          <fieldset className="grid min-w-0 gap-1.5 sm:grid-cols-2">
             <legend className="sr-only">ชุดข้อมูลที่จะส่งออก</legend>
             {SELECTIONS.map((option) => (
               <Choice
@@ -179,13 +177,14 @@ export function ExportPanel() {
               />
             ))}
           </fieldset>
+          <p className="type-help border-t border-border pt-2"><strong>ส่งออกเฉพาะรายการที่พร้อม</strong> · ตัดรายการคงค้าง ต้องตรวจสอบ มาตรฐานที่ยกเลิก และรหัสผิดระดับออกจากไฟล์ การดูตัวอย่างยังไม่เลื่อน checkpoint</p>
         </CardBody>
       </Card>
 
       <Card>
         <CardHeader
-          title="แถวจริงที่จะถูกเขียนลงไฟล์"
-          description="ตรวจค่าที่นี่ได้ก่อนดาวน์โหลด ไม่มีการเติมข้อมูลที่ต้นทางไม่มี"
+          title="ตัวอย่างแถวที่จะส่งออก"
+          description="ตรวจค่าก่อนดาวน์โหลด ระบบเว้นว่างเมื่อไม่มีข้อมูลต้นทาง"
           actions={
             <span className="type-caption tabular-nums" role="status" aria-live="polite">
               {loading

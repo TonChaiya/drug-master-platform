@@ -7,7 +7,7 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production application version: `0.8.22`
+- Production application version: `0.8.23`
 - Phase 2 application deployed before the TTMT cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
 - Hosting: Vercel Production ผ่าน Git integration
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
@@ -48,6 +48,8 @@
 
 ## Phase 3–5 usability checkpoint
 
+- Phase 5 release `0.8.23` ปรับจาก baseline `0.8.22`. ใช้ KPI กระชับและ readiness ที่ตัดบรรทัดได้, แบ่งส่วน Agent และ Admin ด้วยลิงก์ในหน้า, จัดตัวกรอง Standards, ให้ Catalog เริ่มที่ฟอร์มนำเข้า และจัด Full/Delta และ Preview ให้อ่านต่อเนื่อง. Mapping คง workbench และแก้เฉพาะ chooser ที่ถูกตัดขณะเลื่อนตารางบนมือถือ.
+- ตรวจ responsive ทั้งเจ็ดหน้าที่ 390, 768, 1024, 1440, 1920 และ 2560px ด้วย Admin จำลอง และตรวจ workflow/สิทธิ์ของผู้ใช้สถานบริการจำลอง. บัญชี Admin, การยืนยันเดิม, Queue, schemas, permissions และเส้นทางเดิมคงอยู่. รายการค้างของ release นี้คือ Export History, Audit History, Catalog Snapshot Comparison และ invalid Catalog file HTTP 500. ดู [Development guide](DEVELOPMENT.md#phase-5-outstanding-items).
 - Release `0.8.13` ลด surface ซ้อนใน Mapping chooser: workspace ใช้เพียงขอบบน/ล่าง, filters คง unboxed และ results ใช้ tinted section กับ shared list/dividers โดยเก็บ bordered cards เฉพาะข้อมูลเปรียบเทียบสองฝั่ง; behavior เดิมไม่เปลี่ยน.
 - Release `0.8.12` ปรับ Mapping chooser ให้ใกล้ visual target: workspace กว้างขึ้นและผูกกับ selected row, context cards กระชับ, filters เรียงเป็นแถวเดียว และ results เป็น cool-tinted panel ที่มี candidate rows ต่อเนื่องแบบตาราง; interaction และ mapping semantics เดิมไม่เปลี่ยน.
 - Release `0.8.11` จัด Mapping chooser เป็น context cards, filter group และ results panel ที่แยกชั้นชัดเจน; แสดง action “ดู TPU ที่เกี่ยวข้อง” เฉพาะ GPU พร้อม loading/empty/error state และไม่แสดงปุ่มรายละเอียดที่ไม่มีพฤติกรรมบน TPU โดยไม่เปลี่ยน search หรือ mapping semantics.

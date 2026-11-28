@@ -38,11 +38,11 @@ export default async function StandardsPage() {
     : "ยังไม่พร้อมใช้งาน";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       <PageHeader
         eyebrow="ขั้นตอนที่ 2 · คลังมาตรฐานส่วนกลาง"
         title="Standards Hub · TMT / TTMT"
-        description="ค้นหามาตรฐานปัจจุบันก่อนใช้ Drug Catalog และการจับคู่รายการยา — TMT กับ TTMT แยก namespace ชัดเจน"
+        description="ค้นมาตรฐาน TMT และ TTMT แยกกันก่อนจับคู่รายการยาหรือตรวจ Drug Catalog"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={readiness.ready ? "success" : "danger"}>TMT {datasetCounts.tmtTotal.toLocaleString("th-TH")}</Badge>
@@ -58,7 +58,7 @@ export default async function StandardsPage() {
         </Alert>
       ) : null}
 
-      <section className="space-y-3" aria-labelledby="tmt-v2-heading">
+      <section className="space-y-2.5" aria-labelledby="tmt-v2-heading">
         <div><h2 id="tmt-v2-heading" className="type-section-title">ค้นหา TMT</h2><p className="type-help mt-1">แสดงระดับ สี FSN ชื่อการค้า ผู้ผลิต เลขทะเบียน สถานะ และความพร้อมจับคู่จากข้อมูล TMT</p></div>
         {browserReady ? <TmtBrowser mode="advanced" /> : <Alert tone="danger" title="ข้อมูล TMT ยังไม่พร้อมค้นหา">ตรวจ readiness และการตั้งค่าระบบก่อนใช้งาน ระบบจะไม่สลับไปใช้ชุดข้อมูลอื่นโดยอัตโนมัติ</Alert>}
       </section>

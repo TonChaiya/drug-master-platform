@@ -187,54 +187,52 @@ export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced"
       <Card>
         <CardBody>
           <form onSubmit={(event) => void search(event)}>
-            <FilterBar actions={<><Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT</Button>{advanced ? <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>ล้างตัวกรอง</Button> : null}</>}>
+            <FilterBar className={advanced ? "grid min-w-0 grid-cols-2 md:grid-cols-3 xl:grid-cols-5" : undefined} actions={<><Button type="submit" size="sm" variant="primary" loading={loading}>ค้นหา TMT</Button>{advanced ? <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>ล้างตัวกรอง</Button> : null}</>}>
               {advanced ? (
                 <>
-                  <Field label="TMT ID" htmlFor="tmt-v2-id" className="w-full sm:w-44">
+                  <Field label="TMT ID" htmlFor="tmt-v2-id" className="min-w-0">
                     <TextInput id="tmt-v2-id" value={tmtId} maxLength={20} inputMode="numeric" mono autoComplete="off" onChange={(event) => setTmtId(event.target.value)} />
                   </Field>
-                  <Field label="ชื่อยา / FSN" htmlFor="tmt-v2-fsn" className="w-full sm:min-w-64 sm:flex-1">
+                  <Field label="ชื่อยา / FSN" htmlFor="tmt-v2-fsn" className="min-w-0">
                     <SearchInput id="tmt-v2-fsn" value={fsn} maxLength={120} autoComplete="off" onChange={(event) => setFsn(event.target.value)} />
                   </Field>
-                  <Field label="ชื่อสามัญ" htmlFor="tmt-v2-generic" className="w-full sm:w-56">
+                  <Field label="ชื่อสามัญ" htmlFor="tmt-v2-generic" className="min-w-0">
                     <SearchInput id="tmt-v2-generic" value={genericName} maxLength={120} autoComplete="off" onChange={(event) => setGenericName(event.target.value)} />
                   </Field>
-                  <Field label="ชื่อการค้า" htmlFor="tmt-v2-trade" className="w-full sm:w-56">
+                  <Field label="ชื่อการค้า" htmlFor="tmt-v2-trade" className="min-w-0">
                     <SearchInput id="tmt-v2-trade" value={tradeName} maxLength={120} autoComplete="off" onChange={(event) => setTradeName(event.target.value)} />
                   </Field>
-                  <Field label="ผู้ผลิต" htmlFor="tmt-v2-manufacturer" className="w-full sm:w-56">
+                  <Field label="ผู้ผลิต" htmlFor="tmt-v2-manufacturer" className="min-w-0">
                     <SearchInput id="tmt-v2-manufacturer" value={manufacturer} maxLength={120} autoComplete="off" onChange={(event) => setManufacturer(event.target.value)} />
                   </Field>
-                  <Field label="เลขทะเบียนยา" htmlFor="tmt-v2-registration" className="w-full sm:w-52">
+                  <Field label="เลขทะเบียนยา" htmlFor="tmt-v2-registration" className="min-w-0">
                     <SearchInput id="tmt-v2-registration" value={registration} maxLength={120} autoComplete="off" onChange={(event) => setRegistration(event.target.value)} />
                   </Field>
                 </>
               ) : (
-                <Field label="ค้นหารหัส TMT หรือชื่อยา" htmlFor="tmt-v2-query" className="min-w-60 flex-1">
+                <Field label="ค้นหารหัส TMT หรือชื่อยา" htmlFor="tmt-v2-query" className="w-full min-w-0 sm:flex-1">
                   <SearchInput id="tmt-v2-query" value={query} maxLength={120} autoComplete="off" onChange={(event) => setQuery(event.target.value)} />
                 </Field>
               )}
-              <Field label={advanced ? "ระดับ TMT" : "ระดับ"} htmlFor="tmt-v2-level" className={advanced ? "w-full sm:w-auto" : undefined}>
+              <Field label={advanced ? "ระดับ TMT" : "ระดับ"} htmlFor="tmt-v2-level" className={advanced ? "min-w-0" : undefined}>
                 <SelectInput id="tmt-v2-level" value={level} onChange={(event) => setLevel(event.target.value)}>
                   <option value="">ทุกระดับ</option>
                   {LEVELS.map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}
                 </SelectInput>
               </Field>
-              <Field label={advanced ? "สถานะ" : "สถานะ MasterTMT"} htmlFor="tmt-v2-status" className={advanced ? "w-full sm:w-auto" : undefined}>
+              <Field label={advanced ? "สถานะ" : "สถานะ MasterTMT"} htmlFor="tmt-v2-status" className={advanced ? "min-w-0" : undefined}>
                 <SelectInput id="tmt-v2-status" value={status} onChange={(event) => setStatus(event.target.value)}>
                   <option value="">ทั้งหมด</option><option value="active">ใช้งานอยู่</option><option value="cancelled">ยกเลิกแล้ว</option><option value="unknown">ยังไม่ทราบ</option>
                 </SelectInput>
               </Field>
-              <Field label="ความพร้อมจับคู่" htmlFor="tmt-v2-eligibility" className={advanced ? "w-full sm:w-auto" : undefined}>
+              <Field label="ความพร้อมจับคู่" htmlFor="tmt-v2-eligibility" className={advanced ? "min-w-0" : undefined}>
                 <SelectInput id="tmt-v2-eligibility" value={eligibility} onChange={(event) => setEligibility(event.target.value)}>
                   <option value="">ทั้งหมด</option><option value="true">พร้อม commercial TPU</option><option value="false">ยังไม่พร้อม</option>
                 </SelectInput>
               </Field>
             </FilterBar>
           </form>
-          <Alert tone="info" className="mt-3" title="ดูข้อมูลเท่านั้น">
-            หน้านี้แสดงตัวอย่างความพร้อมสำหรับ commercial TPU mapping และไม่บันทึกการจับคู่
-          </Alert>
+          <p className="type-help mt-2.5 border-t border-border pt-2"><strong>ดูข้อมูลเท่านั้น</strong> · ใช้ตรวจความพร้อมของ commercial TPU ก่อนจับคู่</p>
           {error ? <Alert tone="danger" className="mt-3">{error}</Alert> : null}
         </CardBody>
       </Card>
@@ -242,7 +240,7 @@ export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced"
       <div className="grid min-w-0 gap-3.5 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.5fr)]">
         <Card className="min-w-0">
           <CardHeader title="ผลการค้นหา" description={loading ? "กำลังค้นหา…" : `${rows.length.toLocaleString("th-TH")} รายการ`} />
-          <CardBody className="space-y-2 pt-3">
+          <CardBody className="space-y-1.5 pt-3">
             {!loading && rows.length === 0 ? <EmptyState compact title="ยังไม่มีผลการค้นหา" description="ค้นหาด้วยรหัส TMT หรือ FSN เพื่อดูรายละเอียด" /> : rows.map((row) => (
               <TmtResultCard key={row.tmtId} result={{
                 level: row.level, tmtId: row.tmtId, name: row.endpointFsn ?? row.conceptFsn,
@@ -258,7 +256,7 @@ export function TmtBrowser({ mode = "compact" }: { mode?: "compact" | "advanced"
         </Card>
 
         <Card className="min-w-0">
-          <CardHeader title="รายละเอียด concept" description="ความสัมพันธ์คงทิศทาง API concept1 → concept2" />
+          <CardHeader title="รายละเอียด concept" description="ดูข้อมูลผลิตภัณฑ์และความสัมพันธ์กับรายการอื่น" />
           <CardBody className="pt-3">
             {detailLoading ? <p role="status" className="type-help">กำลังโหลดรายละเอียด…</p> : !detail ? (
               <EmptyState compact title="เลือกรายการเพื่อดูรายละเอียด" description="ข้อมูลจะเปิดในหน้านี้โดยไม่เปลี่ยนเส้นทางหรือบันทึกข้อมูล" />

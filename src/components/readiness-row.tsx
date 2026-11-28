@@ -15,9 +15,9 @@ export function ReadinessRow({ items }: { items: ReadinessItem[] }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-3">
       {items.map((item) => (
-        <li key={item.key} className="card-interactive p-3.5">
+        <li key={item.key} className="card min-w-0 p-3">
           <div className="flex items-center justify-between gap-2">
-            <strong className="type-card-title truncate">{item.label}</strong>
+            <strong className="type-card-title min-w-0">{item.label}</strong>
             <ButtonLink
               href={item.href}
               size="sm"
@@ -28,11 +28,11 @@ export function ReadinessRow({ items }: { items: ReadinessItem[] }) {
               {item.actionLabel}
             </ButtonLink>
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <Badge tone={item.ready ? "success" : item.partial ? "warning" : "danger"} dot>
               {item.ready ? "พร้อม" : item.partial ? "พร้อมบางส่วน" : "ยังไม่พร้อม"}
             </Badge>
-            <span className="type-help min-w-0 truncate" title={item.detail}>
+            <span className="type-help min-w-0 flex-1 basis-24 break-words">
               {item.detail}
             </span>
           </div>

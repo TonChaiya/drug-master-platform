@@ -38,14 +38,14 @@ export function FacilitySwitcher({ options, selectedId }: { options: FacilityOpt
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-none">
       <label className="sr-only" htmlFor="facility-switcher">
         สถานบริการที่กำลังปฏิบัติงาน
       </label>
-      <div className="relative min-w-0">
+      <div className="relative min-w-0 max-w-full flex-1 sm:flex-none">
         <select
           id="facility-switcher"
-          className="field-select h-8 max-w-64 text-xxs font-medium"
+          className="field-select h-8 w-full min-w-0 max-w-full text-xxs font-medium sm:max-w-64"
           value={selectedId ?? ""}
           disabled={pending}
           onChange={(event) => void select(event.target.value)}

@@ -122,7 +122,7 @@ export function EnrollmentPanel({
   }
 
   return (
-    <Card>
+    <Card id="jhcis-enrollment">
       <CardHeader
         icon={<IconPlug size={16} />}
         title="ลงทะเบียน Agent ที่เครื่องในสถานบริการ"
@@ -136,16 +136,16 @@ export function EnrollmentPanel({
         }
       />
 
-      <CardBody className="space-y-3.5">
+      <CardBody className="space-y-3">
         {installer.url ? null : (
           <Alert tone="warning" title="ยังไม่มีลิงก์ตัวติดตั้ง">
             ผู้ดูแลระบบส่วนกลางตั้งค่าได้ที่หน้า “จัดการระบบ” หัวข้อ “ตัวติดตั้ง Agent”
           </Alert>
         )}
 
-        <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="grid gap-x-3 gap-y-2 border-b border-border pb-3 sm:grid-cols-2 xl:grid-cols-4">
           {STEPS.map((step, index) => (
-            <li key={step} className="flex gap-2 rounded-lg bg-surface-subtle p-2.5">
+            <li key={step} className="flex min-w-0 items-start gap-2">
               <span
                 aria-hidden
                 className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-100 text-xxs font-bold text-primary-700"
@@ -159,6 +159,7 @@ export function EnrollmentPanel({
 
         <div className="flex flex-wrap gap-2">
           <Button
+            size="sm"
             variant="primary"
             icon={<IconLink size={15} />}
             loading={busy === "enroll" || waiting}
@@ -167,10 +168,11 @@ export function EnrollmentPanel({
           >
             {waiting ? "รอ Agent ตอบกลับ…" : "เชื่อมต่อ Agent บนเครื่องนี้"}
           </Button>
-          <Button loading={busy === "test_connection"} disabled={busy !== null} onClick={() => void sendCommand("test_connection")}>
+          <Button size="sm" loading={busy === "test_connection"} disabled={busy !== null} onClick={() => void sendCommand("test_connection")}>
             ทดสอบการเชื่อมต่อ
           </Button>
           <Button
+            size="sm"
             icon={<IconRefresh size={15} />}
             loading={busy === "sync_now"}
             disabled={busy !== null}

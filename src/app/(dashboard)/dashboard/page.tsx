@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   const exportBlockedTotal = overview.mappedTotal - overview.exportReadyTotal;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       <PageHeader
         eyebrow="สถานบริการที่กำลังปฏิบัติงาน"
         title={`${facility.code} · ${facility.name}`}
@@ -55,95 +55,94 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* What is missing comes before what is counted: a number computed from an
-          incomplete source misleads more than an empty screen would. */}
+      {hasData ? (
+        <section aria-label="ตัวเลขสรุป" className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
+          <StatTile
+            label="รายการยาจาก JHCIS"
+            value={overview.sourceTotal.toLocaleString("th-TH")}
+            hint={`ชนิด 01: ${overview.type01.toLocaleString("th-TH")} · ชนิด 10: ${overview.type10.toLocaleString("th-TH")}`}
+            icon={<IconDatabase size={16} />}
+          />
+          <StatTile
+            tone="success"
+            label="จับคู่มาตรฐานแล้ว"
+            value={overview.mappedTotal.toLocaleString("th-TH")}
+            hint={`${mappedPercent}% ของรายการทั้งหมด · ผ่านเงื่อนไขส่งออก ${overview.exportReadyTotal.toLocaleString("th-TH")}`}
+            icon={<IconCheckCircle size={16} />}
+          />
+          <StatTile
+            tone={overview.needsReviewTotal > 0 ? "warning" : "neutral"}
+            label="ต้องตรวจสอบ"
+            value={overview.needsReviewTotal.toLocaleString("th-TH")}
+            hint={overview.needsReviewTotal > 0 ? "ตรวจ mapping/catalog ก่อนส่งออก" : "ไม่มีรายการรอตรวจสอบ"}
+            icon={<IconWarning size={16} />}
+          />
+          <StatTile
+            tone={overview.pendingTotal > 0 ? "warning" : "neutral"}
+            label="คงค้าง"
+            value={overview.pendingTotal.toLocaleString("th-TH")}
+            hint={overview.pendingTotal > 0 ? "รอจับคู่กับ TMT/TTMT" : "ไม่มีรายการรอจับคู่"}
+            icon={<IconMappings size={16} />}
+          />
+        </section>
+      ) : null}
+
       <ReadinessRow items={overview.readiness} />
 
       {hasData ? (
-        <>
-          <section aria-label="ตัวเลขสรุป" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile
-              label="รายการยาจาก JHCIS"
-              value={overview.sourceTotal.toLocaleString("th-TH")}
-              hint={`ชนิด 01: ${overview.type01.toLocaleString("th-TH")} · ชนิด 10: ${overview.type10.toLocaleString("th-TH")}`}
-              icon={<IconDatabase size={16} />}
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <Card>
+            <CardHeader
+              title="ความคืบหน้าการจับคู่"
+              description="สัดส่วนรายการยาที่ใช้งานอยู่ใน JHCIS ซึ่งจับคู่กับรหัสมาตรฐานแล้ว"
+              actions={
+                <ButtonLink href="/mappings" size="sm" iconAfter={<IconChevronRight size={13} />}>
+                  เปิดหน้าจับคู่
+                </ButtonLink>
+              }
             />
-            <StatTile
-              tone="success"
-              label="จับคู่มาตรฐานแล้ว"
-              value={overview.mappedTotal.toLocaleString("th-TH")}
-              hint={`${mappedPercent}% ของรายการทั้งหมด · ผ่านเงื่อนไขส่งออก ${overview.exportReadyTotal.toLocaleString("th-TH")}`}
-              icon={<IconCheckCircle size={16} />}
-            />
-            <StatTile
-              tone={overview.needsReviewTotal > 0 ? "warning" : "neutral"}
-              label="ต้องตรวจสอบ"
-              value={overview.needsReviewTotal.toLocaleString("th-TH")}
-              hint={overview.needsReviewTotal > 0 ? "ตรวจ mapping/catalog ก่อนส่งออก" : "ไม่มีรายการรอตรวจสอบ"}
-              icon={<IconWarning size={16} />}
-            />
-            <StatTile
-              tone={overview.pendingTotal > 0 ? "warning" : "neutral"}
-              label="คงค้าง"
-              value={overview.pendingTotal.toLocaleString("th-TH")}
-              hint={overview.pendingTotal > 0 ? "รอจับคู่กับ TMT/TTMT" : "ไม่มีรายการรอจับคู่"}
-              icon={<IconMappings size={16} />}
-            />
-          </section>
-
-          <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
-            <Card>
-              <CardHeader
-                title="ความคืบหน้าการจับคู่"
-                description="สัดส่วนรายการยาที่ใช้งานอยู่ใน JHCIS ซึ่งจับคู่กับรหัสมาตรฐานแล้ว"
-                actions={
-                  <ButtonLink href="/mappings" size="sm" iconAfter={<IconChevronRight size={13} />}>
-                    เปิดหน้าจับคู่
-                  </ButtonLink>
-                }
+            <CardBody>
+              <ProgressBar
+                value={overview.mappedTotal}
+                max={overview.sourceTotal}
+                tone={mappedPercent === 100 ? "success" : mappedPercent >= 50 ? "info" : "warning"}
+                label={`${overview.mappedTotal.toLocaleString("th-TH")} จาก ${overview.sourceTotal.toLocaleString("th-TH")} รายการ`}
               />
-              <CardBody>
-                <ProgressBar
-                  value={overview.mappedTotal}
-                  max={overview.sourceTotal}
-                  tone={mappedPercent === 100 ? "success" : mappedPercent >= 50 ? "info" : "warning"}
-                  label={`${overview.mappedTotal.toLocaleString("th-TH")} จาก ${overview.sourceTotal.toLocaleString("th-TH")} รายการ`}
-                />
-                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-3.5 sm:grid-cols-5">
-                  {[
-                    { label: "ชนิด 01 (TMT)", value: overview.type01 },
-                    { label: "ชนิด 10 (TTMT)", value: overview.type10 },
-                    { label: "จับคู่แล้ว", value: overview.mappedTotal },
-                    { label: "ต้องตรวจสอบ", value: overview.needsReviewTotal },
-                    { label: "คงค้าง", value: overview.pendingTotal },
-                  ].map((item) => (
-                    <div key={item.label}>
-                      <dt className="type-caption">{item.label}</dt>
-                      <dd className="mt-0.5 font-display text-base font-bold tabular-nums text-slate-900">
-                        {item.value.toLocaleString("th-TH")}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </CardBody>
-            </Card>
+              <dl className="mt-3 grid grid-cols-2 gap-2.5 border-t border-border pt-3 sm:grid-cols-5 lg:grid-cols-3 xl:grid-cols-5">
+                {[
+                  { label: "ชนิด 01 (TMT)", value: overview.type01 },
+                  { label: "ชนิด 10 (TTMT)", value: overview.type10 },
+                  { label: "จับคู่แล้ว", value: overview.mappedTotal },
+                  { label: "ต้องตรวจสอบ", value: overview.needsReviewTotal },
+                  { label: "คงค้าง", value: overview.pendingTotal },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <dt className="type-caption">{item.label}</dt>
+                    <dd className="mt-0.5 font-display text-base font-bold tabular-nums text-slate-900">
+                      {item.value.toLocaleString("th-TH")}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </CardBody>
+          </Card>
 
-            <Card>
-              <CardHeader title="สิ่งที่ต้องทำต่อ" description="ประเมินจากข้อมูลจริงของสถานบริการนี้" />
-              <CardBody>
-                {blocked.length === 0 && overview.pendingTotal === 0 && overview.needsReviewTotal === 0 && exportBlockedTotal === 0 ? (
-                  <EmptyState
-                    compact
-                    icon={<IconCheckCircle size={18} />}
-                    title="ไม่มีงานค้าง"
-                    description="แหล่งข้อมูลครบและจับคู่ครบทุกรายการแล้ว ส่งออกไฟล์ DrugCat ได้ทันที"
-                    action={
-                      <ButtonLink href="/exports" size="sm" variant="primary" icon={<IconExport size={13} />}>
-                        ส่งออก DrugCat
-                      </ButtonLink>
-                    }
-                  />
-                ) : (
+          <Card>
+            <CardHeader title="สิ่งที่ต้องทำต่อ" description="ประเมินจากข้อมูลจริงของสถานบริการนี้" />
+            <CardBody>
+              {blocked.length === 0 && overview.pendingTotal === 0 && overview.needsReviewTotal === 0 && exportBlockedTotal === 0 ? (
+                <EmptyState
+                  compact
+                  icon={<IconCheckCircle size={18} />}
+                  title="ไม่มีงานค้าง"
+                  description="แหล่งข้อมูลครบและจับคู่ครบทุกรายการแล้ว ส่งออกไฟล์ DrugCat ได้ทันที"
+                  action={
+                    <ButtonLink href="/exports" size="sm" variant="primary" icon={<IconExport size={13} />}>
+                      ส่งออก DrugCat
+                    </ButtonLink>
+                  }
+                />
+              ) : (
                   <ol className="space-y-2.5">
                     {blocked.map((item, index) => (
                       <li key={item.key} className="flex items-start gap-2.5">
@@ -210,7 +209,6 @@ export default async function DashboardPage() {
               </CardBody>
             </Card>
           </div>
-        </>
       ) : (
         <Card>
           <CardBody>

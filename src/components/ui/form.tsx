@@ -157,9 +157,9 @@ export function Choice({
  * width, and actions are pushed to the end — so the eye finds the same three
  * zones on the mapping, catalog and standards screens.
  */
-export function FilterBar({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+export function FilterBar({ children, actions, className }: { children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
-    <div className="flex flex-wrap items-end gap-2.5">
+    <div className={cx("items-end gap-2.5", className ?? "flex flex-wrap")}>
       {children}
       {actions ? <div className="ml-auto flex flex-wrap items-end gap-2">{actions}</div> : null}
     </div>

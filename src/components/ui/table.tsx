@@ -12,7 +12,7 @@ import { IconChevronLeft, IconChevronRight } from "./icons";
  */
 export function TableScroll({ children, className, maxHeight }: { children: ReactNode; className?: string; maxHeight?: string }) {
   return (
-    <div className={cx("overflow-x-auto", maxHeight && "overflow-y-auto", className)} style={maxHeight ? { maxHeight } : undefined}>
+    <div tabIndex={0} className={cx("min-w-0 max-w-full overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-500", maxHeight && "overflow-y-auto", className)} style={maxHeight ? { maxHeight } : undefined}>
       {children}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { cx } from "./cx";
 import { Button, IconButton } from "./button";
 import { IconClose, IconWarning } from "./icons";
@@ -31,6 +31,8 @@ const SIZE = { sm: "w-[min(26rem,calc(100vw-1.5rem))]", md: "w-[min(34rem,calc(1
  */
 export function Dialog({ open, onClose, title, description, children, footer, size = "md", busy = false }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     const element = ref.current;
@@ -44,6 +46,8 @@ export function Dialog({ open, onClose, title, description, children, footer, si
       ref={ref}
       className={cx("modal-panel m-auto", SIZE[size])}
       aria-busy={busy || undefined}
+      aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
       onCancel={(event) => {
         // Esc must not abandon a request that is already running.
         if (busy) {
@@ -62,8 +66,8 @@ export function Dialog({ open, onClose, title, description, children, footer, si
       <div className="flex max-h-[inherit] flex-col">
         <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3.5">
           <div className="min-w-0">
-            <h2 className="type-section-title">{title}</h2>
-            {description ? <p className="type-help mt-1">{description}</p> : null}
+            <h2 id={titleId} className="type-section-title break-words">{title}</h2>
+            {description ? <p id={descriptionId} className="type-help mt-1 break-words">{description}</p> : null}
           </div>
           <IconButton size="sm" label="ปิด" icon={<IconClose size={15} />} onClick={onClose} disabled={busy} />
         </header>

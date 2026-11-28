@@ -306,6 +306,29 @@ Remove-Item Env:DM_PHASE4_DISPOSABLE_MYSQL_DATADIR
 
 E2E สร้างและลบเฉพาะฐานทดสอบดังกล่าว ตรวจ full/delta/checkpoint/rollback/stale preview/invalidation/tenant isolation และเขียนไฟล์จริงไป temp directory. ทุกครั้งที่แตะ writer หรือ row contract ต้องอ่านไฟล์กลับแบบ programmatic และเปิดไฟล์ผลลัพธ์ด้วย Excel/LibreOffice จริงเพื่อตรวจหัว 22 ช่อง, Thai text, leading zeroes, NDC24, วันที่, ISED และ PRODUCTCAT.
 
+## Phase 5 presentation inventory
+
+ใช้ `v0.8.22` เป็น baseline สำหรับการตรวจหน้าจอ. UI ต้องรักษา callback, state, API, สิทธิ์ และ route ของรายการด้านล่าง.
+
+| หน้า | สิ่งที่ต้องคงไว้ | ขอบเขตสิทธิ์ |
+| --- | --- | --- |
+| Dashboard | จำนวนยา active แยก 01/10, mapped/pending/review/export-ready, readiness, สถานะ Agent, งานค้างและลิงก์ไปหน้าที่เกี่ยวข้อง | ตามสถานบริการ |
+| JHCIS | ดาวน์โหลดตัวติดตั้ง, ลงทะเบียน/เปิด Agent ซ้ำ, ค่าเชื่อมต่อและ token, test connection, sync now, manage/re-enroll/disable/delete, ประวัติ run และคำสั่ง, คำเตือน offid | ตามสถานบริการ และสิทธิ์เจ้าของเครื่องหรือ Admin ตามเดิม |
+| Standards | ตัวกรอง TMT ID, FSN, ชื่อสามัญ, ชื่อการค้า, ผู้ผลิต, RegNo, ระดับ, สถานะ, eligibility; clear, รายละเอียด, hierarchy/related TPU; ค้น TTMT และประวัตินำเข้าแยกกัน | ผู้ใช้ที่ลงชื่อเข้าใช้ |
+| Drug Catalog | ไฟล์ xls/xlsx, เวอร์ชัน/วันที่, import, validation/errors, snapshot ล่าสุดและตัวอย่าง, ประวัติและ hash, ลิงก์ไปกระทบยอดใน Mapping | ตามสถานบริการ |
+| Mapping | ค้นหา worklist, lifecycle/type filter, clear/pagination, chooser ห้าช่อง, เปรียบเทียบยาและ mapping, GPU→TPU, hand-pick/edit, confirm review, reconcile, loading/empty/error | ตามสถานบริการและแหล่งมาตรฐานตาม drugtype |
+| Export | Full/Delta, ข้อกำหนดการคัดออก, preview/count, retry/error/empty, ดาวน์โหลด xls, preview token และ checkpoints | ตามสถานบริการ |
+| Admin | ตัวกรองสถานบริการ/บัญชี, แก้ค่าหรือสถานะ, ยืนยันการล้างข้อมูล, Agent installer, TMT credentials/test, run/progress/resume/promotion/rollback, TTMT import/history | Admin และการยืนยันแบบเดิม |
+
+### Phase 5 outstanding items
+
+- **Export History** ระบบเก็บเหตุการณ์ส่งออก แต่ยังไม่มีหน้ารายการให้ผู้ใช้เปิดดู.
+- **Audit History** ระบบเก็บ audit logs แต่ยังไม่มีหน้าประวัติใน Admin.
+- **Catalog Snapshot Comparison** หน้า Drug Catalog มี snapshot preview และประวัติ แต่ยังไม่มีตัวเปรียบเทียบข้ามเวอร์ชัน.
+- **Invalid Catalog file HTTP 500** ไฟล์ `.xls` ที่ลายเซ็นไม่ใช่ workbook ได้ HTTP 500. ตัวอ่านโยน `WorkbookError` ส่วน route จัดข้อความ validation เฉพาะ `CatalogParseError`.
+
+รายการเหล่านี้อยู่นอกขอบเขต release `0.8.23` และต้องตรวจ query, API หรือการจัดการข้อผิดพลาดของ backend แยก.
+
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review

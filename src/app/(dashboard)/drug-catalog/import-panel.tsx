@@ -54,17 +54,17 @@ export function CatalogImportPanel() {
         description="ระบบตรวจชนิดไฟล์จากลายเซ็นจริงไม่ใช่นามสกุล และตรวจหัวตาราง 22 คอลัมน์ตามลำดับก่อนรับข้อมูล"
       />
       <CardBody>
-        <form className="flex flex-wrap items-end gap-2.5" onSubmit={submit}>
-          <Field label="ไฟล์ (.xls / .xlsx)" htmlFor="catalogFile" className="min-w-56 flex-1">
+        <form className="grid min-w-0 items-end gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={submit}>
+          <Field label="ไฟล์ (.xls / .xlsx)" htmlFor="catalogFile" className="min-w-0 sm:col-span-2 lg:col-span-1">
             <FileInput id="catalogFile" name="file" accept=".xls,.xlsx" required />
           </Field>
           <Field label="เวอร์ชัน (ถ้ามี)" htmlFor="sourceVersion">
-            <TextInput id="sourceVersion" name="sourceVersion" maxLength={120} className="w-36" />
+            <TextInput id="sourceVersion" name="sourceVersion" maxLength={120} />
           </Field>
           <Field label="วันที่ของไฟล์" htmlFor="sourceDate">
-            <TextInput id="sourceDate" name="sourceDate" type="date" className="w-40" />
+            <TextInput id="sourceDate" name="sourceDate" type="date" />
           </Field>
-          <Button type="submit" variant="primary" icon={<IconUpload size={15} />} loading={busy}>
+          <Button type="submit" variant="primary" className="justify-self-start" icon={<IconUpload size={15} />} loading={busy}>
             นำเข้า
           </Button>
         </form>

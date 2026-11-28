@@ -66,7 +66,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </span>
             )}
 
-            <div className="ml-auto flex items-center gap-2.5">
+            <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
               <div className="hidden text-right leading-tight sm:block">
                 <div className="text-xxs font-semibold text-slate-900">{user.fullName}</div>
                 <div className="text-xxs text-slate-500">{isAdmin ? "ผู้ดูแลระบบ" : "ผู้ใช้สถานบริการ"}</div>
@@ -75,7 +75,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   and a disc still tells you whose session this is. */}
               <span
                 aria-hidden
-                className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-100 font-display text-xxs font-bold text-primary-700"
+                className="hidden size-8 shrink-0 place-items-center rounded-full bg-primary-100 font-display text-xxs font-bold text-primary-700 min-[420px]:grid"
               >
                 {user.fullName.trim().slice(0, 2)}
               </span>

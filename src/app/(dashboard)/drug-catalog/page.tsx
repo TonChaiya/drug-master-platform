@@ -29,7 +29,7 @@ export default async function DrugCatalogPage() {
   const preview = snapshot ? await previewImportRows(facility.id, snapshot.id, 25) : [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       <PageHeader
         eyebrow={`${facility.code} · ${facility.name}`}
         title="Drug Catalog"
@@ -47,20 +47,53 @@ export default async function DrugCatalogPage() {
         }
       />
 
-      <Card>
-        <CardHeader
-          title="Drug Catalog อยู่ตรงไหนใน workflow"
-          description="JHCIS เป็นแหล่งรายการยา ส่วน snapshot ล่าสุดใช้ตรวจว่าการจับคู่ปัจจุบันยังสอดคล้องหรือควรให้ผู้ใช้ทบทวน"
-          actions={<ButtonLink href="/mappings" size="sm">เปิดการจับคู่รายการยา</ButtonLink>}
-        />
-        <CardBody className="grid gap-3 sm:grid-cols-3">
-          <div><Badge tone="warning">คงค้าง</Badge><p className="type-help mt-1">source drug ที่ใช้งานอยู่ยังไม่มี TMT/TTMT identity</p></div>
-          <div><Badge tone="warning">ต้องตรวจสอบ</Badge><p className="type-help mt-1">catalog เปลี่ยนหรือหายไป หรือมาตรฐานที่เลือกต้องให้ผู้ใช้ยืนยันอีกครั้ง</p></div>
-          <div><Badge tone="success">จับคู่แล้ว</Badge><p className="type-help mt-1">identity ปัจจุบันผ่าน lifecycle และพร้อมประเมินเงื่อนไขส่งออก</p></div>
-        </CardBody>
-      </Card>
-
       <CatalogImportPanel />
+
+      <section aria-label="ผลต่อการจับคู่รายการยา" className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+        <p className="type-help min-w-0 max-w-prose">ไฟล์ล่าสุดใช้ตรวจรายการจาก JHCIS และอ้างอิง NDC24 รายการที่เปลี่ยนจะปรากฏในหน้าจับคู่ตามสถานะเดิม</p>
+        <ButtonLink href="/mappings" size="sm">เปิดการจับคู่รายการยา</ButtonLink>
+      </section>
+
+      {preview.length > 0 ? (
+        <Card>
+          <CardHeader
+            title="ตัวอย่างแถวจริงจาก snapshot ล่าสุด"
+            description="25 แถวแรก แสดงค่าตามที่อ่านได้จากไฟล์ ไม่มีการเติมหรือแปลงค่า"
+          />
+          <CardBody flush className="pt-3">
+            <TableScroll>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>แถว</th>
+                    <th>HOSPDRUGCODE</th>
+                    <th>PRODUCTCAT</th>
+                    <th>TMTID</th>
+                    <th>GENERICNAME</th>
+                    <th>TRADENAME</th>
+                    <th>ISED</th>
+                    <th>UPDATEFLAG</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((row) => (
+                    <tr key={row.id}>
+                      <td className="cell-num text-slate-500">{row.sourceRowNumber}</td>
+                      <td className="cell-code">{row.hospdrugcode}</td>
+                      <td>{row.productcat ?? "—"}</td>
+                      <td className="cell-code">{row.tmtid ?? "—"}</td>
+                      <td className="max-w-64 font-medium text-ink">{row.genericname ?? "—"}</td>
+                      <td className="max-w-48 text-slate-600">{row.tradename ?? "—"}</td>
+                      <td>{row.ised ?? "—"}</td>
+                      <td>{row.updateflag ? <Badge>{row.updateflag}</Badge> : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableScroll>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title="ประวัติการนำเข้า" description="ไฟล์ที่เนื้อหาซ้ำกับที่เคยนำเข้าจะถูกปฏิเสธ" />
@@ -113,47 +146,6 @@ export default async function DrugCatalogPage() {
           </TableScroll>
         </CardBody>
       </Card>
-
-      {preview.length > 0 ? (
-        <Card>
-          <CardHeader
-            title="ตัวอย่างแถวจริงจาก snapshot ล่าสุด"
-            description="25 แถวแรก แสดงค่าตามที่อ่านได้จากไฟล์ ไม่มีการเติมหรือแปลงค่า"
-          />
-          <CardBody flush className="pt-3">
-            <TableScroll>
-              <Table>
-                <thead>
-                  <tr>
-                    <th>แถว</th>
-                    <th>HOSPDRUGCODE</th>
-                    <th>PRODUCTCAT</th>
-                    <th>TMTID</th>
-                    <th>GENERICNAME</th>
-                    <th>TRADENAME</th>
-                    <th>ISED</th>
-                    <th>UPDATEFLAG</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.map((row) => (
-                    <tr key={row.id}>
-                      <td className="cell-num text-slate-500">{row.sourceRowNumber}</td>
-                      <td className="cell-code">{row.hospdrugcode}</td>
-                      <td>{row.productcat ?? "—"}</td>
-                      <td className="cell-code">{row.tmtid ?? "—"}</td>
-                      <td className="max-w-64 font-medium text-ink">{row.genericname ?? "—"}</td>
-                      <td className="max-w-48 text-slate-600">{row.tradename ?? "—"}</td>
-                      <td>{row.ised ?? "—"}</td>
-                      <td>{row.updateflag ? <Badge>{row.updateflag}</Badge> : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableScroll>
-          </CardBody>
-        </Card>
-      ) : null}
     </div>
   );
 }
