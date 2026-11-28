@@ -3,9 +3,9 @@ import { dbPool } from "@/db/client";
 import { apiJson, unauthorized } from "@/lib/api-response";
 import { currentUser } from "@/modules/auth/session";
 import { getTmtConceptDetail } from "@/modules/tmt/detail";
-import { activeStandardReleaseEnabled, tmtV2BrowserEnabled } from "@/modules/tmt/feature";
+import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
-import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,8 +21,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!tmtV2BrowserEnabled()) {
     return apiJson({ ok: false, errorCode: "TMT_V2_BROWSER_DISABLED", message: "TMT Browser ยังไม่เปิดใช้งาน" }, 503);
   }
+  const pool = dbPool();
+  let release: StandardDatasetSelection | undefined;
   try {
-    await requireTmtV2Ready(dbPool());
+    release = await requireTmtV2Ready(pool);
   } catch {
     return apiJson({ ok: false, errorCode: "TMT_V2_NOT_READY", message: "ข้อมูล TMT ยังไม่พร้อมใช้งาน" }, 503);
   }
@@ -34,8 +36,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   try {
-    const pool = dbPool();
-    const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(pool) : undefined;
     const detailOptions = {
       graphDepth: query.data.depth,
       maxNodes: query.data.maxNodes,

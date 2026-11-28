@@ -3,8 +3,9 @@ import type { Pool, RowDataPacket } from "mysql2/promise";
 import { dbPool } from "@/db/client";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "./sync";
 import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence, TMT_SOURCE_VALIDATION_POLICY, VALIDATED_UNVERIFIED_POLICY_VERSION } from "./validation";
-import { activeStandardReleaseEnabled } from "./feature";
-import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
+import { activeStandardReleaseEnabled, independentTmtDatasetsEnabled } from "./feature";
+import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface TmtReadinessRun {
   id: string;
@@ -53,7 +54,7 @@ export type TmtConsumerReadiness =
 
 export interface TmtConsumerContext {
   readiness: TmtConsumerReadiness;
-  release?: ActiveStandardRelease;
+  release?: StandardDatasetSelection;
 }
 
 function validationMatches(run: TmtReadinessRun, validation: TmtReadinessValidation | null | undefined): boolean {
@@ -158,9 +159,14 @@ export async function readTmtConsumerContext(
   releaseEnabled = activeStandardReleaseEnabled(),
 ): Promise<TmtConsumerContext> {
   if (releaseEnabled) {
+    if (independentTmtDatasetsEnabled()) throw new Error("STANDARD_DATASET_MODES_CONFLICT");
     const release = await readActiveStandardRelease(pool);
     // The current release approval contract accepts validated-unverified evidence only.
     return { release, readiness: { ready: true, assurance: "validated_unverified" } };
+  }
+  if (independentTmtDatasetsEnabled()) {
+    const release = await readStandardDatasetSelection(pool);
+    if (release?.tmtAssurance) return { release, readiness: { ready: true, assurance: release.tmtAssurance } };
   }
   const readiness = await readTmtV2Readiness(pool);
   return {
@@ -170,11 +176,9 @@ export async function readTmtConsumerContext(
   };
 }
 
-export async function requireTmtV2Ready(pool: Pick<Pool, "query"> = dbPool()): Promise<void> {
-  if (activeStandardReleaseEnabled()) {
-    await readActiveStandardRelease(pool);
-    return;
-  }
+export async function requireTmtV2Ready(pool: Pick<Pool, "query"> = dbPool()): Promise<StandardDatasetSelection | undefined> {
+  const release = await readStandardDatasetSelection(pool);
+  if (release) return release;
   const readiness = await readTmtV2Readiness(pool);
   if (!readiness.ready) throw new TmtV2NotReadyError(readiness);
 }

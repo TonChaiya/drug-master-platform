@@ -7,18 +7,18 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production application version: `0.8.20`
-- Compatible application deployed before the cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
+- Production application version: `0.8.21`
+- Phase 2 application deployed before the TTMT cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
 - Hosting: Vercel Production ผ่าน Git integration
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
-- Latest applied migration: `0020_tmt_independent_validation.sql`
+- Latest applied migration: `0021_tmt_candidate_operations.sql`
 - Windows Agent baseline: `1.3.0`
 
 ## Unified system improvement handoff
 
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
-- Status: Phase 2 Production cutover เสร็จแล้ววันที่ 2026-11-28. Production ใช้ live TMT/TTMT tables โดย Dataset Release ยังปิดอยู่ และยังไม่ได้ copy/publish Dataset Release.
+- Status: Phase 2 Production cutover เสร็จแล้ววันที่ 2026-11-28. Phase 3 ใช้ independent TMT snapshot ที่รับรองจากข้อมูลเดิม ส่วน TTMT ยังใช้ live tables. Combined Dataset Release ยังปิดและยังไม่ publish.
 - Release `0.8.14` เพิ่ม migration 0019 และ source-fidelity preservation สำหรับ `TTMTType`, `Changedate`, `Drug_Group_Nhso` ใน live/versioned TTMT rows. Import ยังคง upsert เฉพาะรหัสที่มีใน workbook, cell ว่างล้างค่าเดิมเป็น `NULL`, ไม่ลบ/deactivate รหัสที่หาย และยังใช้ `Status` เป็น eligibility input โดยไม่ตีความ `TTMTType=CANCEL`.
 - Release `0.8.15` เตรียม guarded Migration 0019 executor สำหรับลำดับ `0018 → 0019` และ CLI one-time TTMT baseline replacement แบบ dry-run/fail-closed ซึ่งรักษา import/audit/mapping/history เดิมและไม่ลด duplicate version/hash protection. ยังไม่มี Production migration, reset หรือ baseline import ใน checkpoint นี้.
 - Release `0.8.16` ประสาน canonical TTMT validation/replacement evidence ไปยัง MasterTTMT `20261001` hash `88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057` หลัง re-audit โครงสร้างและสถิติสำคัญผ่านครบ. Artifact นี้ได้รับอนุมัติใหม่หลัง binary identity เปลี่ยน โดยไม่ได้อ้างว่า binary-equivalent กับ workbook เดิม; migration, baseline replacement และ Dataset Release ยังไม่ได้ execute.
@@ -36,7 +36,13 @@
 - Dashboard, navigation และ Drug Catalog ใช้ `/mappings` ทั้งหมด โดย feature flags เดิมยังเลือก current/compatibility implementation ภายในและค่า default ไม่เปลี่ยน.
 - Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน; เมื่อ flag ปิดยังใช้ live-table behavior เดิม.
 - ตัดคำเรียกระบบแบบ `legacy` ออกจากข้อความผู้ใช้ใน Standards Hub โดยยังเก็บ internal compatibility APIs/data และไม่ลบ route, table หรือ history ใด ๆ.
-- Phase 3 การเริ่ม TMT sync จาก Admin ยังไม่ implement: runtime ปัจจุบันมี CLI-only runner และไม่มี durable background execution ที่ผ่านการอนุมัติ จึงคง read-only monitoring เดิมไว้เพื่อไม่ผูกงานยาวกับ HTTP request.
+
+## Phase 3 Admin operations checkpoint
+
+- Independent TMT pointer, Full/Incremental candidate, manifest, invariants, guarded promotion/rollback, Queue worker แบบ lease/fence และ Admin controls พร้อม monitoring จากทุก checkpoint ผ่านการทดสอบเฉพาะส่วน. Disposable MySQL 8.4.3 ผ่าน Full/Incremental, interrupted continuation, promotion/rollback และการอ่าน TMT/TTMT แยกจากกัน.
+- Production TiDB ผ่าน ownership-scoped probe ของ migration `0021`, foreign keys, row locking, lease fencing และ transaction rollback. ล้างตาราง probe ครบและ journal ผ่านการตรวจ hash จนถึง `0021`. Logical backup ก่อน migration มี 63 ตารางและ SHA-256 `601b444285faa1b40d3de183b57a747908ffb833906d6ec5661d653509850f3b`; ใช้ผล restore rehearsal ของ TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` เป็นหลักฐานการกู้คืน.
+- Vercel Hobby/Fluid Preview ของโปรเจกต์จริงผ่าน Queue trigger, OIDC, retry, idempotency และ continuation โดยใช้ diagnostic payload แยก ล้าง diagnostic deployments แล้ว.
+- คัดลอก TMT เดิมครบ 517,862 แถวใน 14 ตาราง และตรวจ manifest ตรงกับ live source ก่อนรับรอง pointer generation 1. ผลอ่าน Production พบ MasterTMT 34,487 และ TTMT 9,654; ค้นหาได้แยกกันและ TMT คง `validated_unverified`. Digest ของ mappings, ผู้ใช้, import, validation และประวัติที่ป้องกันยังตรงกัน. ไม่มีการซิงก์ upstream หรือ promote ชุดข้อมูลใหม่ระหว่าง release.
 
 ## Phase 3–5 usability checkpoint
 

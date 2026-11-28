@@ -23,3 +23,15 @@ export function tmtV2ExportEnabled(env: EnvLike = process.env): boolean {
 export function activeStandardReleaseEnabled(env: EnvLike = process.env): boolean {
   return env.ACTIVE_STANDARD_RELEASE_ENABLED === "1";
 }
+
+export function independentTmtDatasetsEnabled(env: EnvLike = process.env): boolean {
+  return env.TMT_INDEPENDENT_DATASET_ENABLED === "1";
+}
+
+export function tmtCandidateControlsEnabled(env: EnvLike = process.env): boolean {
+  return env.TMT_CANDIDATE_OPERATIONS_ENABLED === "1"
+    && env.VERCEL_ENV === "production"
+    && independentTmtDatasetsEnabled(env)
+    && !activeStandardReleaseEnabled(env)
+    && tmtV2BrowserEnabled(env) && tmtV2MappingEnabled(env) && tmtV2CatalogEnabled(env) && tmtV2ExportEnabled(env);
+}

@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, dbPool } from "@/db/client";
+import { db } from "@/db/client";
 import { auditLogs, drugCatalogImports, drugCatalogRows, drugMappings, mappingReviewAcknowledgements, sourceDrugs } from "@/db/schema";
 import { classifyMappingLifecycle } from "./lifecycle";
 import { MappingRuleError, normalizeSpecPrep, resolveProductCategory, standardTypeForDrugType } from "./product-category";
 import { MappingV2RuleError, requireEligibleMappingV2Standard, type MappingStandardSource } from "./v2";
 import { decideUpdateFlagWithSnapshot } from "./update-flag";
-import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
-import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { lockStandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface SaveV2MappingInput {
   facilityId: string;
@@ -49,15 +48,11 @@ export async function saveV2Mapping(input: SaveV2MappingInput): Promise<{
   }
   const productCat = resolveProductCategory(drug.drugtype, input.productCat);
   const specPrep = normalizeSpecPrep(productCat, input.specPrep);
-  const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
-  const standard = await requireEligibleMappingV2Standard({
-    source: input.standardSource,
-    code: input.standardCode,
-    level: input.standardLevel,
-    productCat,
-  }, release);
-
   return db.transaction(async (tx) => {
+    const release = await lockStandardDatasetSelection(tx, input.standardSource === "TMT");
+    const standard = await requireEligibleMappingV2Standard({
+      source: input.standardSource, code: input.standardCode, level: input.standardLevel, productCat,
+    }, release, tx);
     const [snapshot] = await tx
       .select({ id: drugCatalogImports.id })
       .from(drugCatalogImports)

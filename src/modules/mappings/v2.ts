@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { tmtConcept, tmtDatasetConcepts, tmtDatasetMastertmt, tmtMastertmt, ttmtDatasetProducts, ttmtImports, ttmtProducts } from "@/db/schema";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export const MAPPING_STANDARD_SOURCES = ["TMT", "TTMT"] as const;
 export type MappingStandardSource = (typeof MAPPING_STANDARD_SOURCES)[number];
@@ -79,7 +79,7 @@ export async function resolveMappingV2Standard(input: {
   code: string;
   level: string;
   productCat: string;
-}, release?: ActiveStandardRelease): Promise<ResolvedMappingV2Standard> {
+}, release?: StandardDatasetSelection, database: Pick<typeof db, "select"> = db): Promise<ResolvedMappingV2Standard> {
   if (input.source === "TMT") {
     let tmtid: bigint;
     try {
@@ -89,13 +89,13 @@ export async function resolveMappingV2Standard(input: {
     }
     if (tmtid < 0n) throw new MappingV2RuleError("STANDARD_CODE_INVALID", "รหัส TMT ต้องเป็นตัวเลขเท่านั้น");
     const [row] = release
-      ? await db
+      ? await database
           .select({ level: tmtDatasetConcepts.levelName, fsn: tmtDatasetConcepts.fsn, sourceVersion: tmtDatasetConcepts.sourceVersion, masterStatus: tmtDatasetMastertmt.status })
           .from(tmtDatasetConcepts)
           .leftJoin(tmtDatasetMastertmt, and(eq(tmtDatasetMastertmt.datasetId, tmtDatasetConcepts.datasetId), eq(tmtDatasetMastertmt.tpucode, tmtDatasetConcepts.tmtid)))
           .where(and(eq(tmtDatasetConcepts.datasetId, release.tmtDatasetId), eq(tmtDatasetConcepts.tmtid, tmtid)))
           .limit(1)
-      : await db
+      : await database
           .select({ level: tmtConcept.levelName, fsn: tmtConcept.fsn, sourceVersion: tmtConcept.sourceVersion, masterStatus: tmtMastertmt.status })
           .from(tmtConcept)
           .leftJoin(tmtMastertmt, eq(tmtMastertmt.tpucode, tmtConcept.tmtid))
@@ -113,13 +113,13 @@ export async function resolveMappingV2Standard(input: {
     return { source: "TMT", code: input.code, level: input.level, fsn: row?.fsn ?? null, sourceVersion: row?.sourceVersion ?? null, ...evaluation };
   }
 
-  const [row] = release
-    ? await db
+  const [row] = release?.ttmtDatasetId
+    ? await database
         .select({ fsn: ttmtDatasetProducts.fsn, sourceVersion: ttmtDatasetProducts.sourceVersion, status: ttmtDatasetProducts.status })
         .from(ttmtDatasetProducts)
         .where(and(eq(ttmtDatasetProducts.datasetId, release.ttmtDatasetId), eq(ttmtDatasetProducts.ttmtcode, input.code)))
         .limit(1)
-    : await db
+    : await database
         .select({ fsn: ttmtProducts.fsn, sourceVersion: ttmtProducts.sourceVersion, status: ttmtProducts.status, importStatus: ttmtImports.status })
         .from(ttmtProducts)
         .innerJoin(ttmtImports, eq(ttmtImports.id, ttmtProducts.sourceImportId))
@@ -132,7 +132,7 @@ export async function resolveMappingV2Standard(input: {
     productCat: input.productCat,
     exists: Boolean(row),
     ttmtStatus: row?.status,
-    importSucceeded: release ? Boolean(row) : row && "importStatus" in row ? row.importStatus === "succeeded" : false,
+    importSucceeded: release?.ttmtDatasetId ? Boolean(row) : row && "importStatus" in row ? row.importStatus === "succeeded" : false,
   });
   return { source: "TTMT", code: input.code, level: input.level, fsn: row?.fsn ?? null, sourceVersion: row?.sourceVersion ?? null, ...evaluation };
 }
@@ -142,8 +142,8 @@ export async function requireEligibleMappingV2Standard(input: {
   code: string;
   level: string;
   productCat: string;
-}, release?: ActiveStandardRelease): Promise<ResolvedMappingV2Standard> {
-  const resolved = await resolveMappingV2Standard(input, release);
+}, release?: StandardDatasetSelection, database: Pick<typeof db, "select"> = db): Promise<ResolvedMappingV2Standard> {
+  const resolved = await resolveMappingV2Standard(input, release, database);
   if (!resolved.eligible) throw new MappingV2RuleError("STANDARD_NOT_ELIGIBLE", resolved.reason ?? "รายการมาตรฐานไม่พร้อมใช้งาน");
   return resolved;
 }

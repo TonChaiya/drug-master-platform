@@ -1,6 +1,6 @@
 import { and, asc, count, eq, like, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
-import { db, dbPool } from "@/db/client";
+import { db } from "@/db/client";
 import {
   drugCatalogRows,
   drugMappings,
@@ -10,8 +10,7 @@ import {
 import { latestImport } from "@/modules/catalog/service";
 import { classifyMappingLifecycle, type MappingLifecycleStatus } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
-import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
-import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export type V2WorklistStatusFilter = "all" | "mapped" | "pending" | "needs_review";
 export type V2WorklistDrugTypeFilter = "all" | "01" | "10";
@@ -72,12 +71,13 @@ export async function mappingWorklistV2(options: {
   drugType?: V2WorklistDrugTypeFilter;
   page?: number;
   pageSize?: number;
+  dataset?: StandardDatasetSelection | null;
 }): Promise<V2WorklistResult> {
   const pageSize = Math.min(Math.max(options.pageSize ?? 30, 1), 200);
   const page = Math.max(options.page ?? 1, 1);
   const status = options.status ?? "pending";
   const drugType = options.drugType ?? "all";
-  const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
+  const release = options.dataset === undefined ? await readStandardDatasetSelection(undefined, drugType !== "10") : options.dataset ?? undefined;
   const latest = await latestImport(options.facilityId);
   const latestCatalog = alias(drugCatalogRows, "v2_worklist_latest_catalog");
   const history = db
@@ -99,41 +99,26 @@ export async function mappingWorklistV2(options: {
     AND ${mappingReviewAcknowledgements.catalogPresent} = (${latestCatalog.id} IS NOT NULL)
     AND ${mappingReviewAcknowledgements.catalogTmtid} <=> ${latestCatalog.tmtid}
   )`;
-  const standardValid = release
-    ? sql<boolean>`(
-        (${drugMappings.standardSource} = 'TMT'
-          AND ${drugMappings.standardLevel} = 'tpu'
-          AND ${drugMappings.productCat} = '1'
-          AND EXISTS (
-            SELECT 1 FROM tmt_dataset_concepts c
-            INNER JOIN tmt_dataset_mastertmt m ON m.dataset_id=c.dataset_id AND m.tpucode=c.tmtid
-            WHERE c.dataset_id=${release.tmtDatasetId} AND c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED)
-              AND c.level_name='tpu' AND m.status=0
-          ))
-        OR (${drugMappings.standardSource} = 'TTMT'
-          AND ${drugMappings.standardLevel} = 'product'
-          AND ${drugMappings.productCat} = '3'
-          AND EXISTS (
-            SELECT 1 FROM ttmt_dataset_products p
-            WHERE p.dataset_id=${release.ttmtDatasetId} AND p.ttmtcode=${drugMappings.standardCode} AND p.status='active'
-          ))
-      )`
-    : sql<boolean>`(
-        (${drugMappings.standardSource} = 'TMT'
-          AND ${drugMappings.standardLevel} = 'tpu'
-          AND ${drugMappings.productCat} = '1'
-          AND EXISTS (
-            SELECT 1 FROM tmt_concept c INNER JOIN tmt_mastertmt m ON m.tpucode=c.tmtid
-            WHERE c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED) AND c.level_name='tpu' AND m.status=0
-          ))
-        OR (${drugMappings.standardSource} = 'TTMT'
-          AND ${drugMappings.standardLevel} = 'product'
-          AND ${drugMappings.productCat} = '3'
-          AND EXISTS (
-            SELECT 1 FROM ttmt_products p INNER JOIN ttmt_imports i ON i.id=p.source_import_id
-            WHERE p.ttmtcode=${drugMappings.standardCode} AND p.status='active' AND i.status='succeeded'
-          ))
-      )`;
+  const tmtValid = release ? sql`EXISTS (
+    SELECT 1 FROM tmt_dataset_concepts c
+    INNER JOIN tmt_dataset_mastertmt m ON m.dataset_id=c.dataset_id AND m.tpucode=c.tmtid
+    WHERE c.dataset_id=${release.tmtDatasetId} AND c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED)
+      AND c.level_name='tpu' AND m.status=0
+  )` : sql`EXISTS (
+    SELECT 1 FROM tmt_concept c INNER JOIN tmt_mastertmt m ON m.tpucode=c.tmtid
+    WHERE c.tmtid=CAST(${drugMappings.standardCode} AS UNSIGNED) AND c.level_name='tpu' AND m.status=0
+  )`;
+  const ttmtValid = release?.ttmtDatasetId ? sql`EXISTS (
+    SELECT 1 FROM ttmt_dataset_products p
+    WHERE p.dataset_id=${release.ttmtDatasetId} AND p.ttmtcode=${drugMappings.standardCode} AND p.status='active'
+  )` : sql`EXISTS (
+    SELECT 1 FROM ttmt_products p INNER JOIN ttmt_imports i ON i.id=p.source_import_id
+    WHERE p.ttmtcode=${drugMappings.standardCode} AND p.status='active' AND i.status='succeeded'
+  )`;
+  const standardValid = sql<boolean>`(
+    (${drugMappings.standardSource}='TMT' AND ${drugMappings.standardLevel}='tpu' AND ${drugMappings.productCat}='1' AND ${tmtValid})
+    OR (${drugMappings.standardSource}='TTMT' AND ${drugMappings.standardLevel}='product' AND ${drugMappings.productCat}='3' AND ${ttmtValid})
+  )`;
   const needsReview = sql<boolean>`(
     (${drugMappings.id} IS NOT NULL AND NOT (${standardValid}))
     OR (${latestCatalog.id} IS NULL AND ${history.hospdrugcode} IS NOT NULL AND NOT (${acknowledgementMatches}))

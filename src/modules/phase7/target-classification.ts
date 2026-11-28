@@ -7,6 +7,8 @@ export const GUARDED_PRODUCTION_OPERATIONS = [
   "migrate-0018",
   "migrate-0019",
   "migrate-0020",
+  "migrate-0021",
+  "tmt-candidate",
   "ttmt-replacement",
 ] as const;
 

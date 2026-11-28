@@ -2,7 +2,7 @@ import type { Pool, RowDataPacket } from "mysql2/promise";
 import { normalizeRegistrationNumber, normalizeSearchText } from "@/modules/standards/normalize";
 import { mappingEligibility, masterTmtStatus, type TmtRelationshipCounts, type TmtSearchResult } from "./browser";
 import { TMT_LEVEL_PRESENTATION } from "./presentation";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface TmtSearchFilters {
   query?: string;
@@ -80,7 +80,7 @@ export function collapseLatestRegnoRows(rows: LatestRegnoRow[], ids: string[]): 
   return result;
 }
 
-export async function latestRegnoByTmtIds(pool: Pool, ids: string[], release?: ActiveStandardRelease): Promise<Map<string, LatestRegnoProjection>> {
+export async function latestRegnoByTmtIds(pool: Pool, ids: string[], release?: StandardDatasetSelection): Promise<Map<string, LatestRegnoProjection>> {
   if (ids.length === 0) return new Map();
   const placeholders = ids.map(() => "?").join(",");
   const table = release ? "tmt_dataset_regno" : "tmt_regno";
@@ -104,7 +104,7 @@ export async function latestRegnoByTmtIds(pool: Pool, ids: string[], release?: A
   })), ids);
 }
 
-async function relationshipCounts(pool: Pool, ids: string[], release?: ActiveStandardRelease): Promise<Map<string, TmtRelationshipCounts>> {
+async function relationshipCounts(pool: Pool, ids: string[], release?: StandardDatasetSelection): Promise<Map<string, TmtRelationshipCounts>> {
   const result = new Map(ids.map((id) => [id, emptyRelationships()]));
   if (ids.length === 0) return result;
   const placeholders = ids.map(() => "?").join(",");
@@ -136,7 +136,7 @@ async function relationshipCounts(pool: Pool, ids: string[], release?: ActiveSta
   return result;
 }
 
-export async function searchTmt(pool: Pool, filters: TmtSearchFilters, release?: ActiveStandardRelease): Promise<TmtSearchResult[]> {
+export async function searchTmt(pool: Pool, filters: TmtSearchFilters, release?: StandardDatasetSelection): Promise<TmtSearchResult[]> {
   const prefix = release ? "tmt_dataset_" : "tmt_";
   const tables = {
     concept: release ? "tmt_dataset_concepts" : "tmt_concept",

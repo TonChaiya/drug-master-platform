@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["sin1"],
+  "functions": {
+    "src/app/api/internal/tmt-candidate/route.ts": {
+      "experimentalTriggers": [{ "type": "queue/v2beta", "topic": "tmt-candidate" }]
+    }
+  },
   "crons": [
     {
       "path": "/api/internal/maintenance/rate-limits/cleanup",

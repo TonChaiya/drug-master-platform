@@ -6,17 +6,26 @@ const mocks = vi.hoisted(() => ({
   maintenance: vi.fn(),
   readTmtOperations: vi.fn(),
   importTtmt: vi.fn(),
+  runtime: vi.fn(),
+  accept: vi.fn(),
+  resume: vi.fn(),
+  controlsEnabled: vi.fn(),
 }));
 
 vi.mock("@/lib/authorization/require-context", () => ({ requireAdmin: mocks.admin }));
 vi.mock("@/modules/maintenance/route-guard", () => ({ maintenanceMutationResponse: mocks.maintenance }));
 vi.mock("@/modules/tmt/operations", () => ({ readTmtOperations: mocks.readTmtOperations }));
+vi.mock("@/modules/tmt/candidate-runtime", () => ({ candidateRuntime: mocks.runtime, dispatchTmtCandidate: vi.fn() }));
+vi.mock("@/modules/tmt/candidate-jobs", () => ({ acceptTmtCandidate: mocks.accept, resumeTmtCandidate: mocks.resume }));
+vi.mock("@/modules/tmt/feature", async (original) => ({
+  ...await original<typeof import("@/modules/tmt/feature")>(), tmtCandidateControlsEnabled: mocks.controlsEnabled,
+}));
 vi.mock("@/modules/standards/ttmt-v2-import", async () => {
   const actual = await vi.importActual<typeof import("@/modules/standards/ttmt-v2-import")>("@/modules/standards/ttmt-v2-import");
   return { ...actual, importMasterTtmtV2: mocks.importTtmt };
 });
 
-import { GET as getTmtOperations } from "@/app/api/v1/admin/tmt-operations/route";
+import { GET as getTmtOperations, POST as postTmtOperations } from "@/app/api/v1/admin/tmt-operations/route";
 import { POST as importTtmt } from "@/app/api/v1/admin/ttmt-import/route";
 
 const snapshot = {
@@ -24,6 +33,7 @@ const snapshot = {
   latestRun: null,
   runs: [],
   checkpoints: [],
+  progress: null,
 };
 
 beforeEach(() => {
@@ -31,9 +41,51 @@ beforeEach(() => {
   mocks.admin.mockResolvedValue({ ok: true, user: { id: "admin-1" } });
   mocks.maintenance.mockResolvedValue(null);
   mocks.readTmtOperations.mockResolvedValue(snapshot);
+  mocks.controlsEnabled.mockReturnValue(false);
+  mocks.runtime.mockResolvedValue({ pool: {}, source: {} });
   mocks.importTtmt.mockResolvedValue({ importId: "import-1", version: "20261001", contentHash: "a".repeat(64), rowCount: 2, warnings: [], dryRun: false });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+const candidateId = "5a3d06ba-bc74-46ea-8e48-c929d100d71d";
+const command = (data: object) => new Request("https://example.test/api/v1/admin/tmt-operations", {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+});
+
+test("candidate Start and Resume require admin, enabled runtime and maintenance clearance before contacting the worker", async () => {
+  const start = { id: candidateId, action: "start", mode: "incremental" };
+  mocks.admin.mockResolvedValueOnce({ ok: false, response: new Response(null, { status: 403 }) });
+  assert.equal((await postTmtOperations(command(start))).status, 403);
+  assert.equal((await postTmtOperations(command(start))).status, 503);
+  mocks.controlsEnabled.mockReturnValue(true);
+  mocks.maintenance.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  assert.equal((await postTmtOperations(command(start))).status, 503);
+  assert.equal((await postTmtOperations(command({ ...start, mode: "full_unverified" }))).status, 400);
+  assert.equal((await postTmtOperations(command({ ...start, begin: "wrong" }))).status, 400);
+  assert.equal(mocks.runtime.mock.calls.length, 0);
+  assert.equal((await postTmtOperations(command(start))).status, 202);
+  assert.equal(mocks.accept.mock.calls[0]?.[1].actor, "admin-1");
+  assert.equal((await postTmtOperations(command({ id: candidateId, action: "resume" }))).status, 202);
+  assert.equal(mocks.resume.mock.calls[0]?.[2], "admin-1");
+});
+
+test("promotion and rollback refuse a confirmation for the wrong dataset or action", async () => {
+  mocks.controlsEnabled.mockReturnValue(true);
+  for (const action of ["promote", "rollback"]) {
+    const response = await postTmtOperations(command({ id: candidateId, action, generation: 1, confirm: "WRONG" }));
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).errorCode, "TMT_CONFIRMATION_REQUIRED");
+  }
+  assert.equal(mocks.runtime.mock.calls.length, 0);
+});
+
+test("candidate mutation rejects a cross-origin submission before resolving credentials", async () => {
+  mocks.controlsEnabled.mockReturnValue(true);
+  const request = command({ id: candidateId, action: "start", mode: "full" });
+  request.headers.set("Origin", "https://other.example.test");
+  assert.equal((await postTmtOperations(request)).status, 403);
+  assert.equal(mocks.runtime.mock.calls.length, 0);
+});
 
 test("non-admin is denied before current TMT status or TTMT import work", async () => {
   mocks.admin.mockResolvedValue({ ok: false, response: new Response(JSON.stringify({ ok: false }), { status: 403 }) });

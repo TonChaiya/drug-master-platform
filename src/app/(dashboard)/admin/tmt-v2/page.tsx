@@ -3,7 +3,7 @@ import { Alert } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireUser } from "@/modules/auth/session";
 import { tmtV2BrowserEnabled } from "@/modules/tmt/feature";
-import { readTmtV2Readiness } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 import { TmtBrowser } from "./tmt-browser";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +18,14 @@ export default async function TmtV2BrowserPage() {
   if (user.role !== "admin") redirect("/dashboard");
 
   const enabled = tmtV2BrowserEnabled();
-  const readiness = enabled ? await readTmtV2Readiness() : null;
+  const readiness = enabled ? (await readTmtConsumerContext()).readiness : null;
   const ready = readiness?.ready === true;
   return (
     <div className="space-y-3.5">
       <PageHeader eyebrow="ผู้ดูแลระบบ · ข้อมูล TMT" title="TMT Browser" description="ค้นหา concept ทุกระดับ ดู MasterTMT enrichment และสำรวจความสัมพันธ์โดยไม่แก้ข้อมูล" />
       {ready && readiness.assurance === "validated_unverified" ? (
         <Alert tone="warning" title="ข้อมูล TMT ผ่านการตรวจสอบแล้ว">
-          ชุดข้อมูลผ่านการตรวจครบตามเกณฑ์ รวมถึงความสัมพันธ์และข้อมูล TTMT ที่เกี่ยวข้องแล้ว แต่ยังไม่ยืนยันเวอร์ชันจาก upstream
+          ชุดข้อมูล TMT ผ่านการตรวจครบตามเกณฑ์ แต่ยังไม่ยืนยันเวอร์ชันจาก upstream
         </Alert>
       ) : null}
       {ready ? <TmtBrowser /> : (

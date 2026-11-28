@@ -14,31 +14,9 @@ import {
 import { canonicalizeTmtValidationCheckpoints, parseTmtValidationEvidence } from "@/modules/tmt/validation";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS } from "@/modules/tmt/sync";
 import { canonicalDatasetRow } from "./dataset-staging";
+import { TMT_TABLES, type DatasetTableDefinition } from "./tmt-dataset-tables";
 
 type Executor = Pick<PoolConnection, "execute" | "query">;
-
-interface DatasetTableDefinition {
-  sourceTable: string;
-  targetTable: string;
-  primaryKey: string[];
-}
-
-const TMT_TABLES: DatasetTableDefinition[] = [
-  { sourceTable: "tmt_concept", targetTable: "tmt_dataset_concepts", primaryKey: ["tmtid"] },
-  { sourceTable: "tmt_relationship", targetTable: "tmt_dataset_relationships", primaryKey: ["concept1", "concept2"] },
-  { sourceTable: "tmt_mastertmt", targetTable: "tmt_dataset_mastertmt", primaryKey: ["tpucode"] },
-  { sourceTable: "tmt_subs", targetTable: "tmt_dataset_subs", primaryKey: ["subsid"] },
-  { sourceTable: "tmt_vtm", targetTable: "tmt_dataset_vtm", primaryKey: ["vtmid"] },
-  { sourceTable: "tmt_gp", targetTable: "tmt_dataset_gp", primaryKey: ["gpid"] },
-  { sourceTable: "tmt_gpu", targetTable: "tmt_dataset_gpu", primaryKey: ["gpuid"] },
-  { sourceTable: "tmt_gpp", targetTable: "tmt_dataset_gpp", primaryKey: ["gppid"] },
-  { sourceTable: "tmt_tp", targetTable: "tmt_dataset_tp", primaryKey: ["tpid"] },
-  { sourceTable: "tmt_tpu", targetTable: "tmt_dataset_tpu", primaryKey: ["tpuid"] },
-  { sourceTable: "tmt_tpp", targetTable: "tmt_dataset_tpp", primaryKey: ["tppid"] },
-  { sourceTable: "tmt_nlem", targetTable: "tmt_dataset_nlem", primaryKey: ["tpuid", "change_date", "nlem"] },
-  { sourceTable: "tmt_atc", targetTable: "tmt_dataset_atc", primaryKey: ["tpuid", "change_date", "atc"] },
-  { sourceTable: "tmt_regno", targetTable: "tmt_dataset_regno", primaryKey: ["tpuid", "change_date", "regno"] },
-];
 
 const TTMT_TABLES: DatasetTableDefinition[] = [
   { sourceTable: "ttmt_products", targetTable: "ttmt_dataset_products", primaryKey: ["ttmtcode"] },
@@ -51,7 +29,7 @@ const VERSIONED_LEVELS = [
   ["tpu", "tmt_dataset_tpu", "tpuid"], ["tpp", "tmt_dataset_tpp", "tppid"],
 ] as const;
 
-function tablesFor(source: StandardDatasetSource): DatasetTableDefinition[] {
+function tablesFor(source: StandardDatasetSource): readonly DatasetTableDefinition[] {
   return source === "TMT" ? TMT_TABLES : TTMT_TABLES;
 }
 
@@ -60,7 +38,7 @@ function quote(name: string): string {
   return `\`${name}\``;
 }
 
-function aggregateManifest(manifests: DatasetManifest[]): string {
+export function aggregateManifest(manifests: DatasetManifest[]): string {
   const payload = [...manifests]
     .sort((left, right) => left.tableName.localeCompare(right.tableName))
     .map((entry) => `${entry.tableName}:${entry.rowCount}:${entry.contentHash}`)
@@ -97,7 +75,7 @@ async function countRows(executor: Executor, tableName: string, datasetId?: stri
 
 async function inspectTables(
   executor: Executor,
-  definitions: DatasetTableDefinition[],
+  definitions: readonly DatasetTableDefinition[],
   batchSize: number,
   datasetId?: string,
 ): Promise<DatasetInspection> {
@@ -109,7 +87,8 @@ async function inspectTables(
     for (let offset = 0; ; offset += batchSize) {
       const where = datasetId ? " WHERE dataset_id=?" : "";
       const params: Array<string | number> = datasetId ? [datasetId, batchSize, offset] : [batchSize, offset];
-      const [rows] = await executor.execute<RowDataPacket[]>(
+      // TiDB Serverless rejects prepared LIMIT/OFFSET parameters. mysql2 formats these bounded values on the text protocol.
+      const [rows] = await executor.query<RowDataPacket[]>(
         `SELECT ${columns.map(quote).join(",")} FROM ${quote(datasetId ? definition.targetTable : definition.sourceTable)}${where} ORDER BY ${definition.primaryKey.map(quote).join(",")} LIMIT ? OFFSET ?`,
         params,
       );
@@ -125,6 +104,50 @@ async function inspectTables(
   manifests.sort((left, right) => left.tableName.localeCompare(right.tableName));
   return { manifests, contentHash: aggregateManifest(manifests) };
 }
+
+/** Shared deterministic manifest format, scoped to one TMT snapshot. */
+export function inspectTmtDataset(executor: Executor, datasetId: string): Promise<DatasetInspection> {
+  return inspectTables(executor, TMT_TABLES, 1000, datasetId);
+}
+
+export function inspectLiveTmtDataset(executor: Executor): Promise<DatasetInspection> {
+  return inspectTables(executor, TMT_TABLES, 1000);
+}
+
+export async function inspectTmtDatasetTable(executor: Executor, datasetId: string, index: number): Promise<DatasetManifest> {
+  const table = TMT_TABLES[index];
+  if (!table) throw new DatasetReleaseError("Invalid TMT manifest step", "INVALID_IDENTIFIER");
+  return (await inspectTables(executor, [table], 1000, datasetId)).manifests[0]!;
+}
+
+/** Copy a bounded batch from an immutable accepted snapshot. Caller holds the destination job fence. */
+export async function seedTmtDatasetBatch(executor: Executor, baseId: string, candidateId: string): Promise<boolean> {
+  if (baseId === candidateId) throw new DatasetReleaseError("Cannot seed a dataset from itself", "BASELINE_TARGET_INVALID");
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    "SELECT id FROM standard_datasets WHERE id=? AND source='TMT' AND state='writing' FOR UPDATE",
+    [candidateId],
+  );
+  if (rows.length !== 1) throw new DatasetReleaseError("Candidate cannot receive seed rows", "BASELINE_IMMUTABLE");
+  for (const definition of TMT_TABLES) {
+    const baseCount = await countRows(executor, definition.targetTable, baseId);
+    const targetCount = await countRows(executor, definition.targetTable, candidateId);
+    if (targetCount > baseCount) throw new DatasetReleaseError("Seed candidate exceeds the accepted baseline", "BASELINE_TARGET_INVALID");
+    if (targetCount === baseCount) continue;
+    const columns = await tableColumns(executor, definition.targetTable);
+    const table = quote(definition.targetTable);
+    const batch = Math.min(1000, baseCount - targetCount);
+    const [result] = await executor.query<ResultSetHeader>(
+      `INSERT INTO ${table} (${["dataset_id", ...columns].map(quote).join(",")})
+       SELECT ?,${columns.map(quote).join(",")} FROM ${table}
+       WHERE dataset_id=? ORDER BY ${definition.primaryKey.map(quote).join(",")} LIMIT ? OFFSET ?`,
+      [candidateId, baseId, batch, targetCount],
+    );
+    if (result.affectedRows !== batch) throw new DatasetReleaseError("Seed batch incomplete", "BASELINE_BATCH_INCOMPLETE");
+    return false;
+  }
+  return true;
+}
+
 
 function datasetRecord(row: RowDataPacket): StandardDatasetRecord {
   return {
@@ -155,7 +178,7 @@ async function invariantCount(executor: Executor, body: string, parameters: stri
   return Number(rows[0]?.total ?? 0);
 }
 
-async function versionedTmtInvariantCount(executor: Executor, datasetId: string): Promise<number> {
+export async function versionedTmtInvariantCount(executor: Executor, datasetId: string): Promise<number> {
   const checks: Array<Promise<number>> = [];
   for (const [level, table, id] of VERSIONED_LEVELS) {
     checks.push(invariantCount(executor,
@@ -183,7 +206,7 @@ async function versionedTmtInvariantCount(executor: Executor, datasetId: string)
   return (await Promise.all(checks)).reduce((total, count) => total + count, 0);
 }
 
-async function versionedGpu764169Passed(executor: Executor, datasetId: string): Promise<boolean> {
+export async function versionedGpu764169Passed(executor: Executor, datasetId: string): Promise<boolean> {
   const code = "764169";
   const [gpuRows, conceptRows, edgeRows] = await Promise.all([
     executor.execute<RowDataPacket[]>("SELECT gpuid FROM tmt_dataset_gpu WHERE dataset_id=? AND gpuid=? LIMIT 1", [datasetId, code]).then(([rows]) => rows),
@@ -292,7 +315,7 @@ function baselineStore(executor: Executor, transactionOwner?: Pool): BaselineSto
           const remaining = sourceCount - targetCount;
           const copiedRows = Math.min(input.batchSize, remaining);
           // ponytail: OFFSET keeps resumability schema-free; move to persisted per-table key cursors if tables grow beyond controlled TMT volumes.
-          const [result] = await tx.execute<ResultSetHeader>(
+          const [result] = await tx.query<ResultSetHeader>(
             `INSERT IGNORE INTO ${quote(definition.targetTable)} (${["dataset_id", ...columns].map(quote).join(",")})
              SELECT ?,${columns.map(quote).join(",")} FROM ${quote(definition.sourceTable)}
              ORDER BY ${definition.primaryKey.map(quote).join(",")} LIMIT ? OFFSET ?`,

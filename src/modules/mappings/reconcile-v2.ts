@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, dbPool } from "@/db/client";
+import { db } from "@/db/client";
 import { auditLogs, drugCatalogRows, drugMappings, sourceDrugs, tmtConcept, tmtDatasetConcepts } from "@/db/schema";
 import { latestImport } from "@/modules/catalog/service";
 import { decideCatalogReconcile } from "./lifecycle";
 import { MappingRuleError, standardTypeForDrugType } from "./product-category";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
 import type { ReconcileResult } from "./service";
-import { activeStandardReleaseEnabled } from "@/modules/tmt/feature";
-import { readActiveStandardRelease } from "@/modules/standards/active-release";
+import { lockStandardDatasetSelection, readStandardDatasetSelection } from "@/modules/standards/dataset-selection";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 function today(): string {
@@ -17,7 +16,6 @@ function today(): string {
 
 /** Catalog v2 uses the catalog code as an exact source identity; it never traverses GPU→TPU automatically. */
 export async function reconcileFromLatestCatalogV2(facilityId: string, userId: string): Promise<ReconcileResult> {
-  const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
   const snapshot = await latestImport(facilityId);
   if (!snapshot) throw new MappingRuleError("CATALOG_SNAPSHOT_MISSING", "ยังไม่มีไฟล์ Drug Catalog สำหรับสถานบริการนี้");
   const [drugs, mapped, catalogRows, catalogHistory] = await Promise.all([
@@ -29,7 +27,9 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
       .from(drugCatalogRows).where(eq(drugCatalogRows.importId, snapshot.id)),
     db.selectDistinct({ hospdrugcode: drugCatalogRows.hospdrugcode }).from(drugCatalogRows).where(eq(drugCatalogRows.facilityId, facilityId)),
   ]);
-  if (!release && drugs.some((drug) => drug.drugtype === "01")) await requireTmtV2Ready();
+  const includesTmt = drugs.some((drug) => drug.drugtype === "01");
+  const selection = await readStandardDatasetSelection(undefined, includesTmt);
+  const release = !selection && includesTmt ? await requireTmtV2Ready() : selection;
   const mappingByDrugId = new Map(mapped.map((row) => [row.sourceDrugId, row]));
   const catalogByCode = new Map(catalogRows.map((row) => [row.hospdrugcode, row]));
   const historyCodes = new Set(catalogHistory.map((row) => row.hospdrugcode));
@@ -104,6 +104,8 @@ export async function reconcileFromLatestCatalogV2(facilityId: string, userId: s
 
   if (inserts.length || updates.length) {
     await db.transaction(async (tx) => {
+      const current = await lockStandardDatasetSelection(tx, includesTmt);
+      if (current?.releaseId !== release?.releaseId) throw new MappingRuleError("STANDARD_DATASET_CHANGED", "ชุดข้อมูลมาตรฐานเปลี่ยนแล้ว กรุณากระทบยอดอีกครั้ง");
       for (let start = 0; start < inserts.length; start += 500) await tx.insert(drugMappings).values(inserts.slice(start, start + 500));
       for (const update of updates) {
         const [changed] = await tx.update(drugMappings).set({

@@ -1,5 +1,5 @@
 import type { Pool, RowDataPacket } from "mysql2/promise";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface TmtRelationshipEdge {
   concept1: string;
@@ -58,7 +58,7 @@ function edge(row: RowDataPacket, direction: "inbound" | "outbound"): TmtRelatio
   };
 }
 
-async function loadEdgesForIds(pool: Pool, ids: string[], limit: number, release?: ActiveStandardRelease): Promise<TmtDirectRelationships> {
+async function loadEdgesForIds(pool: Pool, ids: string[], limit: number, release?: StandardDatasetSelection): Promise<TmtDirectRelationships> {
   if (ids.length === 0) return { inbound: [], outbound: [] };
   const placeholders = ids.map(() => "?").join(",");
   const relationships = release ? "tmt_dataset_relationships" : "tmt_relationship";
@@ -82,7 +82,7 @@ async function loadEdgesForIds(pool: Pool, ids: string[], limit: number, release
   };
 }
 
-export async function loadDirectTmtRelationships(pool: Pool, tmtId: string, limit = 100, release?: ActiveStandardRelease): Promise<TmtDirectRelationships> {
+export async function loadDirectTmtRelationships(pool: Pool, tmtId: string, limit = 100, release?: StandardDatasetSelection): Promise<TmtDirectRelationships> {
   return loadEdgesForIds(pool, [tmtId], Math.min(Math.max(limit, 1), 200), release);
 }
 
@@ -90,7 +90,7 @@ export async function traverseTmtGraph(
   pool: Pool,
   startId: string,
   options: { maxDepth?: number; maxNodes?: number } = {},
-  release?: ActiveStandardRelease,
+  release?: StandardDatasetSelection,
 ): Promise<TmtGraphResult> {
   const maxDepth = Math.min(Math.max(options.maxDepth ?? 2, 0), 4);
   const maxNodes = Math.min(Math.max(options.maxNodes ?? 200, 1), 200);

@@ -15,7 +15,7 @@ import {
 } from "@/db/schema";
 import { normalizeNlem } from "./ised";
 import { evaluateMappingV2Standard, type MappingStandardSource } from "./v2";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface MappingV2Identity {
   source: MappingStandardSource;
@@ -189,14 +189,21 @@ function temporalMap<T extends { tpuid: bigint | null; changeDate: string; value
 export async function loadMappedStandardsV2(
   identities: MappingV2Identity[],
   database: V2ConsumerDb = db,
-  release?: ActiveStandardRelease,
+  release?: StandardDatasetSelection,
 ): Promise<Map<string, ResolvedMappedStandardV2>> {
   const tmtCodes = [...new Set(identities.filter((item) => item.source === "TMT").map((item) => item.code))]
     .map((code) => { try { return BigInt(code); } catch { return null; } })
     .filter((code): code is bigint => code !== null && code >= 0n);
   const ttmtCodes = [...new Set(identities.filter((item) => item.source === "TTMT").map((item) => item.code))];
 
-  if (release) return loadVersionedMappedStandardsV2(identities, tmtCodes, ttmtCodes, database, release);
+  if (release) {
+    if (release.ttmtDatasetId || ttmtCodes.length === 0) return loadVersionedMappedStandardsV2(identities, tmtCodes, ttmtCodes, database, release);
+    const [tmt, ttmt] = await Promise.all([
+      loadVersionedMappedStandardsV2(identities.filter((item) => item.source === "TMT"), tmtCodes, [], database, release),
+      loadMappedStandardsV2(identities.filter((item) => item.source === "TTMT"), database),
+    ]);
+    return new Map([...tmt, ...ttmt]);
+  }
 
   const latestNlemDates = database
     .select({ tpuid: tmtNlem.tpuid, changeDate: max(tmtNlem.changeDate).as("latest_change_date") })
@@ -314,7 +321,7 @@ async function loadVersionedMappedStandardsV2(
   tmtCodes: bigint[],
   ttmtCodes: string[],
   database: V2ConsumerDb,
-  release: ActiveStandardRelease,
+  release: StandardDatasetSelection,
 ): Promise<Map<string, ResolvedMappedStandardV2>> {
   const latestNlemDates = database
     .select({ datasetId: tmtDatasetNlem.datasetId, tpuid: tmtDatasetNlem.tpuid, changeDate: max(tmtDatasetNlem.changeDate).as("latest_change_date") })
@@ -367,7 +374,7 @@ async function loadVersionedMappedStandardsV2(
           .innerJoin(latestRegnoDates, and(eq(latestRegnoDates.datasetId, tmtDatasetRegno.datasetId), eq(latestRegnoDates.tpuid, tmtDatasetRegno.tpuid), eq(latestRegnoDates.changeDate, tmtDatasetRegno.changeDate)))
           .where(eq(tmtDatasetRegno.datasetId, release.tmtDatasetId))
       : Promise.resolve([]),
-    ttmtCodes.length
+    ttmtCodes.length && release.ttmtDatasetId
       ? database
           .select({
             code: ttmtDatasetProducts.ttmtcode,

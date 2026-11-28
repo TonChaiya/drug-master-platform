@@ -3,7 +3,7 @@ import { mappingEligibility, masterTmtStatus, type LatestTmtValues, type TmtSear
 import { loadDirectTmtRelationships, traverseTmtGraph, type TmtDirectRelationships, type TmtGraphResult } from "./graph";
 import { TmtSyncRepository } from "./persistence";
 import { latestRegnoByTmtIds, searchTmt } from "./search";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface TmtRelatedTpu {
   tmtId: string;
@@ -40,7 +40,7 @@ export interface TmtConceptDetail {
   warnings: string[];
 }
 
-async function relatedTpu(pool: Pool, ids: string[], release?: ActiveStandardRelease): Promise<TmtRelatedTpu[]> {
+async function relatedTpu(pool: Pool, ids: string[], release?: StandardDatasetSelection): Promise<TmtRelatedTpu[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(",");
   const concepts = release ? "tmt_dataset_concepts" : "tmt_concept";
@@ -77,7 +77,7 @@ export async function getTmtConceptDetail(
   pool: Pool,
   tmtId: string,
   options: { graphDepth?: number; maxNodes?: number } = {},
-  release?: ActiveStandardRelease,
+  release?: StandardDatasetSelection,
 ): Promise<TmtConceptDetail | null> {
   const matches = await searchTmt(pool, { query: tmtId, limit: 100 }, release);
   const concept = matches.find((row) => row.tmtId === tmtId);
@@ -123,7 +123,7 @@ export async function getTmtConceptDetail(
   };
 }
 
-async function latestVersionedTemporal(pool: Pool, release: ActiveStandardRelease, column: "nlem" | "atc" | "regno", tmtId: string): Promise<LatestTmtValues | null> {
+async function latestVersionedTemporal(pool: Pool, release: StandardDatasetSelection, column: "nlem" | "atc" | "regno", tmtId: string): Promise<LatestTmtValues | null> {
   const table = `tmt_dataset_${column}`;
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT change_date,${column} AS value FROM ${table}

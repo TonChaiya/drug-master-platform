@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { db, dbPool } from "@/db/client";
+import { db } from "@/db/client";
 import { auditLogs, exportPreviewTokens, facilities, mappingExportCheckpoints } from "@/db/schema";
 import {
   checkpointRowsAfterExport,
@@ -11,8 +11,8 @@ import {
 import { buildExportCandidates, type ExportCandidate, type ExportSelection } from "./rows";
 import { buildExportCandidatesV2 } from "./rows-v2";
 import { buildDrugCatWorkbook, exportFilename } from "./writer";
-import { activeStandardReleaseEnabled, tmtV2ExportEnabled } from "@/modules/tmt/feature";
-import { readActiveStandardRelease, readLockedActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
+import { tmtV2ExportEnabled } from "@/modules/tmt/feature";
+import { readStandardDatasetSelection, lockStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface ExportBundle {
   filename: string;
@@ -30,8 +30,12 @@ export class ExportPreviewStaleError extends Error {
 }
 
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
+function pinnedReleaseId(release: StandardDatasetSelection | undefined, candidates: ExportCandidate[]) {
+  if (release?.tmtAssurance && !candidates.some((candidate) => candidate.standardSource === "TMT")) return undefined;
+  return release?.releaseId;
+}
 
-async function exportCandidateBuilder(release?: ActiveStandardRelease) {
+async function exportCandidateBuilder(release?: StandardDatasetSelection) {
   if (!tmtV2ExportEnabled()) return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidates(facilityId, selection, database, lockRows);
   return (facilityId: string, selection: ExportSelection, database = db, lockRows = false) => buildExportCandidatesV2(facilityId, selection, database, lockRows, release);
 }
@@ -40,7 +44,7 @@ export async function createExportPreview(
   facilityId: string,
   selection: ExportSelection,
 ): Promise<{ candidates: ExportCandidate[]; previewToken: string }> {
-  const release = tmtV2ExportEnabled() && activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
+  const release = tmtV2ExportEnabled() ? await readStandardDatasetSelection() : undefined;
   const candidates = await (await exportCandidateBuilder(release))(facilityId, selection);
   const previewToken = randomBytes(32).toString("hex");
   const now = new Date();
@@ -48,7 +52,7 @@ export async function createExportPreview(
     tokenHash: hashExportPreviewToken(previewToken),
     facilityId,
     selection,
-    snapshotHash: exportSnapshotHash(facilityId, selection, candidates, release?.releaseId),
+    snapshotHash: exportSnapshotHash(facilityId, selection, candidates, pinnedReleaseId(release, candidates)),
     expiresAt: new Date(now.getTime() + PREVIEW_TTL_MS),
     consumedAt: null,
     createdAt: now,
@@ -68,12 +72,12 @@ export async function createExport(options: {
   previewToken: string;
 }): Promise<ExportBundle> {
   return db.transaction(async (tx) => {
+    const release = tmtV2ExportEnabled()
+      ? await lockStandardDatasetSelection(tx)
+      : undefined;
     await tx.execute(
       sql`SELECT ${facilities.id} FROM ${facilities} WHERE ${facilities.id} = ${options.facilityId} FOR UPDATE`,
     );
-    const release = tmtV2ExportEnabled() && activeStandardReleaseEnabled()
-      ? await readLockedActiveStandardRelease(tx)
-      : undefined;
     const tokenHash = hashExportPreviewToken(options.previewToken);
     const tokenRows = await tx
       .select()
@@ -91,7 +95,7 @@ export async function createExport(options: {
         rawToken: options.previewToken,
         facilityId: options.facilityId,
         selection: options.selection,
-        snapshotHash: exportSnapshotHash(options.facilityId, options.selection, candidates, release?.releaseId),
+        snapshotHash: exportSnapshotHash(options.facilityId, options.selection, candidates, pinnedReleaseId(release, candidates)),
         now,
       })
     ) {

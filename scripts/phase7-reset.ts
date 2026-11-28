@@ -18,6 +18,7 @@ const backupReference = z.string().min(1).parse(args.values["backup-reference"])
 const pool = createOperationalPool(environment);
 try {
   const target = await inspectOperationalTarget(pool, { environment, executeRequested: execute, confirmDatabase: args.values["confirm-db"] });
+  if (execute && target.appliedMigrations.includes("0021_tmt_candidate_operations.sql")) throw new Error("TMT_LIVE_RESET_DISABLED_AFTER_CANDIDATE_MIGRATION");
   assertOperationalTarget(target, { forExecution: execute, requiredMigrations: ["0014_tmt_data_model_v2.sql", "0015_ttmt_data_model_v2.sql", "0016_mapping_v2_identity.sql"] });
   const preservedTables = preservedTablesForMode(mode);
   const preservedBefore = await tableCounts(pool, preservedTables);

@@ -54,7 +54,7 @@ export default async function StandardsPage() {
 
       {readiness.ready && readiness.assurance === "validated_unverified" ? (
         <Alert tone="warning" title="ข้อมูล TMT พร้อมใช้แบบ validated-unverified">
-          ชุดข้อมูลผ่าน checkpoint, invariants และการตรวจรับที่บันทึกไว้แล้ว แต่ upstream ยังไม่ส่งเวอร์ชัน จึงไม่เรียกว่า verified
+          ชุดข้อมูลผ่าน checkpoint, invariants และการตรวจรับที่บันทึกไว้แล้ว และยังไม่มีหลักฐานยืนยันเวอร์ชันสำหรับชุดข้อมูลทั้งหมด
         </Alert>
       ) : null}
 

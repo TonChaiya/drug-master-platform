@@ -1,5 +1,6 @@
 import type { Pool, PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { normalizeRegistrationNumber, normalizeSearchText } from "@/modules/standards/normalize";
+import { versionedTmtTable } from "@/modules/standards/tmt-dataset-tables";
 import type {
   AtcRecord,
   ConceptRecord,
@@ -152,8 +153,14 @@ async function executeInsert(
   columns: string[],
   values: unknown[][],
   suffix: string,
+  datasetId?: string,
 ): Promise<number> {
   if (values.length === 0) return 0;
+  if (datasetId !== undefined) {
+    table = versionedTmtTable(table);
+    columns = ["dataset_id", ...columns];
+    values = values.map((row) => [datasetId, ...row]);
+  }
   const placeholders = values.map(() => `(${columns.map(() => "?").join(",")})`).join(",");
   const [result] = await connection.query<ResultSetHeader>(
     `INSERT INTO ${table} (${columns.join(",")}) VALUES ${placeholders} ${suffix}`,
@@ -162,11 +169,11 @@ async function executeInsert(
   return result.affectedRows;
 }
 
-async function existingByIds(connection: PoolConnection, table: string, idColumn: string, ids: string[], columns: string): Promise<Map<string, RowDataPacket>> {
+async function existingByIds(connection: PoolConnection, table: string, idColumn: string, ids: string[], columns: string, datasetId?: string): Promise<Map<string, RowDataPacket>> {
   if (ids.length === 0) return new Map();
   const [rows] = await connection.query<RowDataPacket[]>(
-    `SELECT ${idColumn}, ${columns} FROM ${table} WHERE ${idColumn} IN (${ids.map(() => "?").join(",")})`,
-    ids,
+    `SELECT ${idColumn}, ${columns} FROM ${datasetId === undefined ? table : versionedTmtTable(table)} WHERE ${datasetId === undefined ? "" : "dataset_id=? AND "}${idColumn} IN (${ids.map(() => "?").join(",")})`,
+    datasetId === undefined ? ids : [datasetId, ...ids],
   );
   return new Map(rows.map((row) => [String(row[idColumn]), row]));
 }
@@ -191,6 +198,7 @@ export class TmtSyncRepository {
         "SELECT filename FROM schema_migrations WHERE filename='0014_tmt_data_model_v2.sql' FOR UPDATE",
       );
       if (!lock[0]) throw new Error("TMT v2 migration lock row is missing");
+      await this.assertLiveWriterAllowed(connection);
       if (input.mode !== "full_unverified") {
         const [unverified] = await connection.query<RowDataPacket[]>(
           "SELECT id FROM tmt_sync_runs WHERE mode='full_unverified' LIMIT 1",
@@ -242,6 +250,8 @@ export class TmtSyncRepository {
     const connection = await this.pool.getConnection();
     try {
       await connection.beginTransaction();
+      await connection.query("SELECT filename FROM schema_migrations WHERE filename='0014_tmt_data_model_v2.sql' FOR UPDATE");
+      await this.assertLiveWriterAllowed(connection);
       const result = await this.persistRows(connection, input);
       await connection.execute(
         `UPDATE tmt_sync_checkpoints SET status='succeeded',received_rows=?,written_rows=?,attempt_count=attempt_count+?,
@@ -262,6 +272,11 @@ export class TmtSyncRepository {
     } finally {
       connection.release();
     }
+  }
+
+  async assertLiveWriterAllowed(executor: Pick<Pool, "query"> = this.pool) {
+    const [rows] = await executor.query<RowDataPacket[]>("SELECT filename FROM schema_migrations WHERE filename='0021_tmt_candidate_operations.sql' FOR UPDATE");
+    if (rows.length !== 0) throw new Error("TMT_LIVE_WRITER_DISABLED_USE_CANDIDATE");
   }
 
   async failCheckpoint(input: { runId: string; endpoint: TmtDataEndpoint; window: TmtDateWindow; attempts: number; errorCode: string; finishedAt: Date }): Promise<void> {
@@ -336,17 +351,27 @@ export class TmtSyncRepository {
     return { changeDate: databaseDate(rows[0]?.change_date), values, conflict: values.length > 1 };
   }
 
-  private async persistRows<E extends TmtDataEndpoint>(connection: PoolConnection, input: PersistWindowInput<E>): Promise<PersistWindowResult> {
+  /** Caller holds the candidate job fence in this transaction. This method also locks the dataset row against sealing. */
+  async persistCandidateRows<E extends TmtDataEndpoint>(connection: PoolConnection, datasetId: string, input: PersistWindowInput<E>): Promise<PersistWindowResult> {
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      "SELECT id FROM standard_datasets WHERE id=? AND source='TMT' AND state='writing' AND source_version=? FOR UPDATE",
+      [datasetId, input.version],
+    );
+    if (rows.length !== 1) throw new Error("TMT_CANDIDATE_NOT_WRITABLE");
+    return this.persistRows(connection, input, datasetId);
+  }
+
+  private async persistRows<E extends TmtDataEndpoint>(connection: PoolConnection, input: PersistWindowInput<E>, datasetId?: string): Promise<PersistWindowResult> {
     if (input.endpoint in levelDefinitions) {
-      return this.persistLevel(connection, input.endpoint as keyof typeof levelDefinitions, input.rows as TmtEndpointRows[keyof typeof levelDefinitions], input.version, input.syncedAt);
+      return this.persistLevel(connection, input.endpoint as keyof typeof levelDefinitions, input.rows as TmtEndpointRows[keyof typeof levelDefinitions], input.version, input.syncedAt, datasetId);
     }
     switch (input.endpoint) {
-      case "concept": return this.persistConcept(connection, input.rows as ConceptRecord[], input.version, input.syncedAt);
-      case "relationship": return this.persistRelationship(connection, input.rows as RelationshipRecord[], input.version, input.syncedAt);
-      case "mastertmt": return this.persistMaster(connection, input.rows as MasterTmtRecord[], input.version, input.syncedAt);
-      case "nlem": return this.persistTemporal(connection, "nlem", input.rows as NlemRecord[], input.version, input.syncedAt);
-      case "atc": return this.persistTemporal(connection, "atc", input.rows as AtcRecord[], input.version, input.syncedAt);
-      case "regno": return this.persistTemporal(connection, "regno", input.rows as RegnoRecord[], input.version, input.syncedAt);
+      case "concept": return this.persistConcept(connection, input.rows as ConceptRecord[], input.version, input.syncedAt, datasetId);
+      case "relationship": return this.persistRelationship(connection, input.rows as RelationshipRecord[], input.version, input.syncedAt, datasetId);
+      case "mastertmt": return this.persistMaster(connection, input.rows as MasterTmtRecord[], input.version, input.syncedAt, datasetId);
+      case "nlem": return this.persistTemporal(connection, "nlem", input.rows as NlemRecord[], input.version, input.syncedAt, datasetId);
+      case "atc": return this.persistTemporal(connection, "atc", input.rows as AtcRecord[], input.version, input.syncedAt, datasetId);
+      case "regno": return this.persistTemporal(connection, "regno", input.rows as RegnoRecord[], input.version, input.syncedAt, datasetId);
       case "imagelist": {
         const rows = input.rows as ImageListRecord[];
         const unique = deduplicate(rows, (row) => row.tpuid, "imagelist", (left, right) => left.changeDate.localeCompare(right.changeDate));
@@ -362,6 +387,7 @@ export class TmtSyncRepository {
     sourceRows: TmtEndpointRows[keyof typeof levelDefinitions],
     version: string,
     syncedAt: Date,
+    datasetId?: string,
   ): Promise<PersistWindowResult> {
     const definition = levelDefinitions[endpoint];
     const rows = sourceRows as unknown as LevelRow[];
@@ -377,7 +403,7 @@ export class TmtSyncRepository {
     let writtenRows = 0;
     for (const chunk of chunks(unique.rows)) {
       const ids = chunk.map(idOf);
-      const existing = await existingByIds(connection, definition.table, definition.idColumn, ids, `fsn,change_date${definition.manufacturer ? ",manufacturer" : ""}`);
+      const existing = await existingByIds(connection, definition.table, definition.idColumn, ids, `fsn,change_date${definition.manufacturer ? ",manufacturer" : ""}`, datasetId);
       for (const row of chunk) {
         const previous = existing.get(idOf(row));
         if (!previous) writtenRows += 1;
@@ -394,36 +420,36 @@ export class TmtSyncRepository {
       const sourceUpdates = ["fsn", ...(definition.manufacturer ? ["manufacturer"] : []), "normalized_fsn", ...(definition.manufacturer ? ["normalized_manufacturer"] : []), "source_version"]
         .map((column) => `${column}=IF(VALUES(change_date)>change_date,VALUES(${column}),${column})`);
       await executeInsert(connection, definition.table, columns, values,
-        `ON DUPLICATE KEY UPDATE ${sourceUpdates.join(",")},updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)`);
+        `ON DUPLICATE KEY UPDATE ${sourceUpdates.join(",")},updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)`, datasetId);
     }
     return { receivedRows: rows.length, uniqueRows: unique.rows.length, writtenRows, duplicateRows: unique.duplicates, warnings: unique.warnings };
   }
 
-  private async persistConcept(connection: PoolConnection, rows: ConceptRecord[], version: string, syncedAt: Date): Promise<PersistWindowResult> {
+  private async persistConcept(connection: PoolConnection, rows: ConceptRecord[], version: string, syncedAt: Date, datasetId?: string): Promise<PersistWindowResult> {
     const unique = deduplicate(rows, (row) => row.tmtid, "concept", (left, right) => left.changeDate.localeCompare(right.changeDate));
     let writtenRows = 0;
     for (const chunk of chunks(unique.rows)) {
-      const existing = await existingByIds(connection, "tmt_concept", "tmtid", chunk.map((row) => row.tmtid), "fsn,change_date,level_name");
+      const existing = await existingByIds(connection, "tmt_concept", "tmtid", chunk.map((row) => row.tmtid), "fsn,change_date,level_name", datasetId);
       for (const row of chunk) {
         const previous = existing.get(row.tmtid);
         if (!previous || row.changeDate > databaseDate(previous.change_date)) writtenRows += 1;
         else if (row.changeDate === databaseDate(previous.change_date) && (row.fsn !== previous.fsn || row.levelName !== previous.level_name)) unique.warnings.push({ code: "SAME_DATE_CONFLICT", endpoint: "concept", key: row.tmtid });
       }
       await executeInsert(connection, "tmt_concept", ["tmtid","fsn","change_date","level_name","normalized_fsn","source_version","last_seen_version","synced_at"], chunk.map((row) => [row.tmtid,row.fsn,row.changeDate,row.levelName,normalizeSearchText(row.fsn),version,version,syncedAt]),
-        "ON DUPLICATE KEY UPDATE fsn=IF(VALUES(change_date)>change_date,VALUES(fsn),fsn),level_name=IF(VALUES(change_date)>change_date,VALUES(level_name),level_name),normalized_fsn=IF(VALUES(change_date)>change_date,VALUES(normalized_fsn),normalized_fsn),source_version=IF(VALUES(change_date)>change_date,VALUES(source_version),source_version),updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)");
+        "ON DUPLICATE KEY UPDATE fsn=IF(VALUES(change_date)>change_date,VALUES(fsn),fsn),level_name=IF(VALUES(change_date)>change_date,VALUES(level_name),level_name),normalized_fsn=IF(VALUES(change_date)>change_date,VALUES(normalized_fsn),normalized_fsn),source_version=IF(VALUES(change_date)>change_date,VALUES(source_version),source_version),updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)", datasetId);
     }
     return { receivedRows: rows.length, uniqueRows: unique.rows.length, writtenRows, duplicateRows: unique.duplicates, warnings: unique.warnings };
   }
 
-  private async persistRelationship(connection: PoolConnection, rows: RelationshipRecord[], version: string, syncedAt: Date): Promise<PersistWindowResult> {
+  private async persistRelationship(connection: PoolConnection, rows: RelationshipRecord[], version: string, syncedAt: Date, datasetId?: string): Promise<PersistWindowResult> {
     const unique = deduplicate(rows, (row) => `${row.concept1}:${row.concept2}`, "relationship", (left, right) => left.changeDate.localeCompare(right.changeDate));
     let writtenRows = 0;
     for (const chunk of chunks(unique.rows)) {
       const tuplePlaceholders = chunk.map(() => "(?,?)").join(",");
       const [existingRows] = await connection.query<RowDataPacket[]>(
-        `SELECT concept1,concept2,change_date,level_name1,level_name2 FROM tmt_relationship
-         WHERE (concept1,concept2) IN (${tuplePlaceholders})`,
-        chunk.flatMap((row) => [row.concept1, row.concept2]),
+        `SELECT concept1,concept2,change_date,level_name1,level_name2 FROM ${datasetId === undefined ? "tmt_relationship" : "tmt_dataset_relationships"}
+         WHERE ${datasetId === undefined ? "" : "dataset_id=? AND "}(concept1,concept2) IN (${tuplePlaceholders})`,
+        [...(datasetId === undefined ? [] : [datasetId]), ...chunk.flatMap((row) => [row.concept1, row.concept2])],
       );
       const existingByKey = new Map(existingRows.map((row) => [`${row.concept1}:${row.concept2}`, row]));
       for (const row of chunk) {
@@ -432,17 +458,17 @@ export class TmtSyncRepository {
         else if (row.changeDate === databaseDate(previous.change_date) && (row.levelName1 !== previous.level_name1 || row.levelName2 !== previous.level_name2)) unique.warnings.push({ code: "SAME_DATE_CONFLICT", endpoint: "relationship", key: `${row.concept1}:${row.concept2}` });
       }
       await executeInsert(connection, "tmt_relationship", ["concept1","concept2","change_date","level_name1","level_name2","source_version","last_seen_version","synced_at"], chunk.map((row) => [row.concept1,row.concept2,row.changeDate,row.levelName1,row.levelName2,version,version,syncedAt]),
-        "ON DUPLICATE KEY UPDATE level_name1=IF(VALUES(change_date)>change_date,VALUES(level_name1),level_name1),level_name2=IF(VALUES(change_date)>change_date,VALUES(level_name2),level_name2),source_version=IF(VALUES(change_date)>change_date,VALUES(source_version),source_version),updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)");
+        "ON DUPLICATE KEY UPDATE level_name1=IF(VALUES(change_date)>change_date,VALUES(level_name1),level_name1),level_name2=IF(VALUES(change_date)>change_date,VALUES(level_name2),level_name2),source_version=IF(VALUES(change_date)>change_date,VALUES(source_version),source_version),updated_at=IF(VALUES(change_date)>change_date,CURRENT_TIMESTAMP(3),updated_at),change_date=GREATEST(change_date,VALUES(change_date)),last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at)", datasetId);
     }
     return { receivedRows: rows.length, uniqueRows: unique.rows.length, writtenRows, duplicateRows: unique.duplicates, warnings: unique.warnings };
   }
 
-  private async persistMaster(connection: PoolConnection, rows: MasterTmtRecord[], version: string, syncedAt: Date): Promise<PersistWindowResult> {
+  private async persistMaster(connection: PoolConnection, rows: MasterTmtRecord[], version: string, syncedAt: Date, datasetId?: string): Promise<PersistWindowResult> {
     const unique = deduplicate(rows, (row) => row.tpucode, "mastertmt");
     let writtenRows = 0;
     const fields = ["activeingredient","strength","dosageform","contvalue","contunit","dispunit","tradename","manufacturer","fsn","status"] as const;
     for (const chunk of chunks(unique.rows)) {
-      const existing = await existingByIds(connection, "tmt_mastertmt", "tpucode", chunk.map((row) => row.tpucode), fields.join(","));
+      const existing = await existingByIds(connection, "tmt_mastertmt", "tpucode", chunk.map((row) => row.tpucode), fields.join(","), datasetId);
       const changed = chunk.filter((row) => {
         const previous = existing.get(row.tpucode);
         if (!previous) return true;
@@ -453,10 +479,10 @@ export class TmtSyncRepository {
         const columns = ["tpucode",...fields,"normalized_generic","normalized_trade","normalized_manufacturer","normalized_fsn","source_version","last_seen_version","synced_at"];
         const values = changed.map((row) => [row.tpucode,...fields.map((field) => row[field]),normalizeSearchText(row.activeingredient),normalizeSearchText(row.tradename),normalizeSearchText(row.manufacturer),normalizeSearchText(row.fsn),version,version,syncedAt]);
         await executeInsert(connection, "tmt_mastertmt", columns, values,
-          `ON DUPLICATE KEY UPDATE ${[...fields,"normalized_generic","normalized_trade","normalized_manufacturer","normalized_fsn","source_version"].map((field) => `${field}=VALUES(${field})`).join(",")},last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at),updated_at=CURRENT_TIMESTAMP(3)`);
+          `ON DUPLICATE KEY UPDATE ${[...fields,"normalized_generic","normalized_trade","normalized_manufacturer","normalized_fsn","source_version"].map((field) => `${field}=VALUES(${field})`).join(",")},last_seen_version=VALUES(last_seen_version),synced_at=VALUES(synced_at),updated_at=CURRENT_TIMESTAMP(3)`, datasetId);
       }
       const ids = chunk.map((row) => row.tpucode);
-      await connection.query(`UPDATE tmt_mastertmt SET last_seen_version=?,synced_at=? WHERE tpucode IN (${ids.map(() => "?").join(",")})`, [version,syncedAt,...ids]);
+      await connection.query(`UPDATE ${datasetId === undefined ? "tmt_mastertmt" : "tmt_dataset_mastertmt"} SET last_seen_version=?,synced_at=? WHERE ${datasetId === undefined ? "" : "dataset_id=? AND "}tpucode IN (${ids.map(() => "?").join(",")})`, [version,syncedAt,...(datasetId === undefined ? [] : [datasetId]),...ids]);
     }
     return { receivedRows: rows.length, uniqueRows: unique.rows.length, writtenRows, duplicateRows: unique.duplicates, warnings: unique.warnings };
   }
@@ -467,6 +493,7 @@ export class TmtSyncRepository {
     rows: NlemRecord[] | AtcRecord[] | RegnoRecord[],
     version: string,
     syncedAt: Date,
+    datasetId?: string,
   ): Promise<PersistWindowResult> {
     const valueColumn = endpoint;
     const table = `tmt_${endpoint}`;
@@ -489,14 +516,14 @@ export class TmtSyncRepository {
     for (const chunk of chunks(unique.rows)) {
       const tuplePlaceholders = chunk.map(() => "(?,?,?)").join(",");
       const [existing] = await connection.query<RowDataPacket[]>(
-        `SELECT tpuid,change_date,${valueColumn} AS value FROM ${table} WHERE (tpuid,change_date,${valueColumn}) IN (${tuplePlaceholders})`,
-        chunk.flatMap((row) => [row.tpuid, row.changeDate, row.value]),
+        `SELECT tpuid,change_date,${valueColumn} AS value FROM ${datasetId === undefined ? table : versionedTmtTable(table)} WHERE ${datasetId === undefined ? "" : "dataset_id=? AND "}(tpuid,change_date,${valueColumn}) IN (${tuplePlaceholders})`,
+        [...(datasetId === undefined ? [] : [datasetId]), ...chunk.flatMap((row) => [row.tpuid, row.changeDate, row.value])],
       );
       const existingKeys = new Set(existing.map((row) => `${row.tpuid}:${databaseDate(row.change_date)}:${row.value}`));
       writtenRows += chunk.filter((row) => !existingKeys.has(`${row.tpuid}:${row.changeDate}:${row.value}`)).length;
       const columns = ["tpuid","fsn",valueColumn,...(endpoint === "regno" ? ["normalized_regno"] : []),"change_date","source_version","synced_at"];
       const values = chunk.map((row) => [row.tpuid,row.fsn,row.value,...(endpoint === "regno" ? [normalizeRegistrationNumber(row.value) ?? ""] : []),row.changeDate,version,syncedAt]);
-      await executeInsert(connection, table, columns, values, "ON DUPLICATE KEY UPDATE tpuid=VALUES(tpuid)");
+      await executeInsert(connection, table, columns, values, "ON DUPLICATE KEY UPDATE tpuid=VALUES(tpuid)", datasetId);
     }
     return { receivedRows: normalizedRows.length, uniqueRows: unique.rows.length, writtenRows, duplicateRows: unique.duplicates, warnings: unique.warnings };
   }

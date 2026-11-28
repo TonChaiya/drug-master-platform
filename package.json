@@ -1,6 +1,6 @@
 {
   "name": "tmt-drug-master-platform",
-  "version": "0.8.20",
+  "version": "0.8.21",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "db:migrate:0018": "tsx scripts/migrate-0018-guarded.ts",
     "db:migrate:0019": "tsx scripts/migrate-0019-guarded.ts",
     "db:migrate:0020": "tsx scripts/migrate-0020-guarded.ts",
+    "tmt:candidate:ops": "tsx scripts/tmt-candidate-ops.ts",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "keys:generate": "node scripts/generate-keys.mjs",
     "phase7:maintenance": "tsx scripts/phase7-maintenance.ts",
@@ -31,6 +32,7 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.3.3",
+    "@vercel/queue": "^0.11.0",
     "drizzle-orm": "0.45.2",
     "mysql2": "3.24.3",
     "next": "16.3.4",

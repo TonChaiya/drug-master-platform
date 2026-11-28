@@ -18,7 +18,7 @@ import {
 } from "@/modules/mappings/v2-consumer";
 import { isExportCandidate, type ExportCandidateState, type ExportSelection } from "./delta";
 import type { ExportCandidate, ExportRow } from "./rows";
-import type { ActiveStandardRelease } from "@/modules/standards/active-release";
+import type { StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 import { requireTmtV2Ready } from "@/modules/tmt/readiness";
 
 type ExportQueryDb = Pick<typeof db, "select">;
@@ -80,7 +80,7 @@ export async function buildExportCandidatesV2(
   selection: ExportSelection,
   database: ExportQueryDb = db,
   lockRows = false,
-  release?: ActiveStandardRelease,
+  release?: StandardDatasetSelection,
 ): Promise<ExportCandidate[]> {
   const latestCatalog = alias(drugCatalogRows, "latest_export_catalog_v2");
   const catalogHistory = database

@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, dbPool } from "@/db/client";
+import { db } from "@/db/client";
 import {
   drugCatalogImports,
   drugCatalogRows,
@@ -11,9 +11,9 @@ import {
 } from "@/db/schema";
 import { classifyMappingLifecycle, type MappingLifecycleInput } from "./lifecycle";
 import { loadMappedStandardsV2, mappingV2IdentityKey, type MappingV2Identity } from "./v2-consumer";
-import { activeStandardReleaseEnabled, tmtV2CatalogEnabled } from "@/modules/tmt/feature";
-import { readTmtV2Readiness } from "@/modules/tmt/readiness";
-import { readActiveStandardRelease, type ActiveStandardRelease } from "@/modules/standards/active-release";
+import { tmtV2CatalogEnabled } from "@/modules/tmt/feature";
+import { readTmtV2Readiness, type TmtConsumerContext } from "@/modules/tmt/readiness";
+import { readStandardDatasetSelection, type StandardDatasetSelection } from "@/modules/standards/dataset-selection";
 
 export interface MappingLifecycleSummaryInput {
   facilityId: string;
@@ -98,10 +98,11 @@ export function summarizeMappingLifecycleInputs(
 export async function mappingLifecycleSummaries(
   facilityId?: string,
   database: MappingSummaryDb = db,
+  tmtContext?: TmtConsumerContext,
 ): Promise<Map<string, MappingLifecycleSummary>> {
   if (tmtV2CatalogEnabled()) {
-    const release = activeStandardReleaseEnabled() ? await readActiveStandardRelease(dbPool()) : undefined;
-    return mappingLifecycleSummariesV2(facilityId, database, release);
+    const release = tmtContext ? tmtContext.release : await readStandardDatasetSelection();
+    return mappingLifecycleSummariesV2(facilityId, database, release, tmtContext?.readiness.ready);
   }
   const importScope = facilityId
     ? eq(drugCatalogImports.facilityId, facilityId)
@@ -227,7 +228,8 @@ export async function mappingLifecycleSummaries(
 async function mappingLifecycleSummariesV2(
   facilityId: string | undefined,
   database: MappingSummaryDb,
-  release?: ActiveStandardRelease,
+  release?: StandardDatasetSelection,
+  tmtReady?: boolean,
 ): Promise<Map<string, MappingLifecycleSummary>> {
   const importScope = facilityId ? eq(drugCatalogImports.facilityId, facilityId) : eq(facilities.status, "active");
   const rankedImports = database
@@ -287,7 +289,7 @@ async function mappingLifecycleSummariesV2(
       ? [{ source: row.standardSource, code: row.standardCode ?? "", level: row.standardLevel, productCat: row.productCat ?? "" }]
       : [],
   );
-  const canUseTmt = Boolean(release) || !identities.some((identity) => identity.source === "TMT") || (await readTmtV2Readiness()).ready;
+  const canUseTmt = Boolean(release) || !identities.some((identity) => identity.source === "TMT") || (tmtReady ?? (await readTmtV2Readiness()).ready);
   const standards = await loadMappedStandardsV2(canUseTmt ? identities : identities.filter((identity) => identity.source === "TTMT"), database, release);
   const latestCatalogByDrug = new Map(latestCatalogRows.map((row) => [`${row.facilityId}\u0000${row.hospdrugcode}`, row]));
   return summarizeMappingLifecycleInputs(sourceRows.map((row) => {

@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { agentFacilitySummaries } from "@/modules/agent/queries";
 import { emptyMappingLifecycleSummary, mappingLifecycleSummaries } from "@/modules/mappings/summary";
-import { readTmtV2Readiness } from "@/modules/tmt/readiness";
+import { readTmtConsumerContext } from "@/modules/tmt/readiness";
 
 export interface ReadinessItem {
   key: "jhcis" | "catalog" | "standards";
@@ -53,8 +53,9 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
    * milliseconds, the trip to TiDB takes tens — hundreds if the function is not
    * in the same region as the database.
    */
+  const standards = readTmtConsumerContext();
   const [mappingSummaries, agentSummaries, lastSync, latestImport, tmtReadiness, latestTtmtImport, ttmtCountRows] = await Promise.all([
-    mappingLifecycleSummaries(facilityId),
+    standards.then((context) => mappingLifecycleSummaries(facilityId, db, context)),
     agentFacilitySummaries(facilityId),
     db
       .select({ finishedAt: agentSyncSessions.finishedAt })
@@ -70,7 +71,7 @@ export async function facilityOverview(facilityId: string): Promise<FacilityOver
       .orderBy(desc(drugCatalogImports.createdAt))
       .limit(1),
 
-    readTmtV2Readiness(),
+    standards.then((value) => value.readiness),
     db
       .select({ version: ttmtImports.version, rowCount: ttmtImports.rowCount })
       .from(ttmtImports)

@@ -28,6 +28,7 @@ try {
   const credentials = await resolveTmtCredentialsFromPool(pool);
   const source = credentials ? createCredentialTmtSyncSource(credentials) : null;
   const store = new TmtSyncRepository(pool);
+  if (execute) await store.assertLiveWriterAllowed();
   const validateInvariants = async (requireGpuAcceptance: boolean) => {
     const report = await buildTmtInvariantReport(pool);
     const blocking = [
