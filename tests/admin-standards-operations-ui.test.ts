@@ -67,19 +67,31 @@ test.each([
 });
 
 test("candidate dashboard shows guarded actions and the leased endpoint separately from historical monitoring", () => {
+  const activity = { updatedAt: "2026-11-28T00:00:00.000Z", attempts: 0, fence: 2, leaseUntil: null, leaseLive: false,
+    revalidating: false, revalidatable: false, manifestCompleted: 0, manifestTotal: 14, checkpointWarnings: [] };
+  const historical = { id: "history", tmtVersion: "unverified:history", mode: "full_unverified", status: "unverified",
+    receivedRows: 52, writtenRows: 52, warningsCount: 0, errorCode: null, startedAt: activity.updatedAt, finishedAt: activity.updatedAt };
   const html = renderToStaticMarkup(createElement(TmtOperationsPanel, { initial: {
-    readiness: { ready: false, assurance: null, reason: "RUN_MISSING", run: null }, latestRun: null, runs: [], checkpoints: [], progress: null,
+    readiness: { ready: false, assurance: null, reason: "RUN_MISSING", run: null }, latestRun: historical, runs: [historical], checkpoints: [], progress: null,
     candidateOperations: {
       controlsEnabled: true, pointer: { datasetId: "accepted", generation: 2, coverageThrough: "2026-11-28", assurance: "validated_unverified" },
       accepted: [{ id: "old", assurance: "validated_unverified", version: "20261127" }],
       jobs: [
-        { id: "a", status: "running", mode: "incremental", version: "v1", completed: 145, total: 200,
+        { ...activity, id: "seed", status: "running", mode: "incremental", version: "20261116", completed: 0, total: 15,
+          received: 0, written: 0, warnings: 0, errorCode: null, resumable: false, promotable: false, processing: null,
+          stage: "seed", nextStep: 0, seed: { copied: 250, total: 500, cursor: { table: "tmt_dataset_concepts", offset: 250 } } },
+        { ...activity, leaseLive: true, id: "a", status: "running", mode: "incremental", version: "v1", completed: 145, total: 200,
+          stage: "checkpoints", nextStep: 145, seed: null,
           received: 123, written: 120, warnings: 0, errorCode: null, resumable: false, promotable: false,
           processing: { endpoint: "tpu", window: { begindate: "2026-11-01", enddate: "2026-11-28" } } },
-        { id: "b", status: "validated", mode: "full", version: "v1", completed: 200, total: 200,
+        { ...activity, id: "b", status: "validated", mode: "full", version: "v1", completed: 200, total: 200,
+          stage: "validation", nextStep: 214, seed: null,
           received: 400, written: 400, warnings: 0, errorCode: null, resumable: false, promotable: true, processing: null },
-        { id: "c", status: "failed", mode: "incremental", version: "v1", completed: 20, total: 30,
-          received: 30, written: 10, warnings: 1, errorCode: "TMT_HTTP_503", resumable: true, promotable: false, processing: null },
+        { ...activity, id: "c", status: "failed", mode: "incremental", version: "v1", completed: 15, total: 15,
+          stage: "validation", nextStep: 29, seed: null, manifestCompleted: 14, revalidatable: true,
+          checkpointWarnings: [{ endpoint: "atc", window: { begindate: "2026-11-01", enddate: "2026-11-28" }, count: 1,
+            details: [{ endpoint: "atc", code: "SAME_DATE_MULTI_VALUE", key: "123:2026-11-01" }] }],
+          received: 30, written: 10, warnings: 1, errorCode: "TMT_CANDIDATE_INVARIANTS_FAILED", resumable: true, promotable: false, processing: null },
       ],
     },
   } }));
@@ -89,6 +101,16 @@ test("candidate dashboard shows guarded actions and the leased endpoint separate
   assert.match(html, /ย้อนกลับชุดนี้/);
   assert.match(html, /Checkpoint 145 \/ 200/);
   assert.match(html, /กำลังทำ tpu/);
+  assert.match(html, /คัดลอกแล้ว 250 \/ 500 แถว/);
+  assert.match(html, /ตารางถัดไป tmt_dataset_concepts/);
+  assert.match(html, /28\/11\/2026 07:00:00 ICT/);
+  assert.match(html, /Manifest 14 \/ 14 ตาราง · ผลตรวจขั้นสุดท้าย ไม่ผ่าน/);
+  assert.match(html, /SAME_DATE_MULTI_VALUE \(123:2026-11-01\)/);
+  assert.match(html, /อ่านผลตรวจ invariant/);
+  assert.match(html, /<time dateTime="2026-11-28T00:00:00.000Z"/i);
+  assert.match(html, /สิทธิ์ของตัวประมวลผลหมดอายุ/);
+  assert.doesNotMatch(html, /Checkpoint 0 \/ 15/);
+  assert.match(html, /<details class="[^"]*border-t[^"]*"><summary[^>]*>ประวัติการซิงก์ TMT ก่อนใช้ชุดข้อมูลแยก/);
   assert.match(html, /name="begin"/);
   assert.match(html, /name="end"/);
 });

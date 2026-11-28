@@ -3,7 +3,7 @@
 เอกสารนี้เป็น handoff/current-state กลาง ไม่ใช่ business specification หรือ runbook
 ข้อกำหนดถาวรอยู่ใน [SPEC.md](SPEC.md) และการปฏิบัติระบบอยู่ใน [OPERATIONS.md](OPERATIONS.md)
 
-## Current production baseline
+## Production baseline before the v0.8.24 hotfix
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
@@ -15,6 +15,14 @@
 - Production database: TiDB Cloud
 - Latest applied migration: `0021_tmt_candidate_operations.sql`
 - Windows Agent baseline: `1.3.0`
+
+## v0.8.24 hotfix release checkpoint
+
+- Admin distinguishes seeding, API checkpoints, manifest generation, final validation, and approval. The seed counters read committed rows against the accepted manifest. Candidate timestamps use Asia/Bangkok in server and browser rendering. Historical runs stay separate. New checkpoints retain bounded warning details and the Admin can request named invariant counts for a failed candidate.
+- Production SELECT-only verification: candidate `8fe7d0b8-f88b-4a0e-b53f-c5ace908267c` used accepted dataset `7dbe9e39-6c19-4b1b-bf7f-3d7e98884305`, generation 1, and upstream `20261116`. Seed completed, 15/15 API checkpoints and 14/14 manifests were present, and final validation failed. Both datasets passed all 30 structural checks and GPU 764169 (9 active TPU links). The 796 latest RegNo conflict groups matched on TPU, date and normalized value set, with zero added, removed or modified groups.
+- The 2026-10-12 to 2026-11-28 run received 2,355 rows and recorded 700 content writes. Counts use endpoint-specific rules. For example, ImageList received 86 and writes no dataset rows. Three warnings were recorded for ATC and one for ImageList. Legacy checkpoints retain counts without warning codes/keys.
+- The candidate meets the observed entry shape for guarded validation-only recovery. Fresh upstream version, exact original plan and manifest hashes still require verification before recovery. Recovery and promotion are separate operator actions.
+- Release gates passed on isolated MySQL 8.4.3 and a clean browser using synthetic data. MySQL covered inherited RegNo, manifest verification and validation-only recovery without API checkpoint fetches, while the accepted pointer remained unchanged. The browser hydrated the Admin panel with a UTC server and Asia/Bangkok client and verified time rollover, seed progress and a final-validation failure after 15/15 API checkpoints.
 
 ## Phase 6 verification and closure
 

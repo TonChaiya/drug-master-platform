@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolConnection, RowDataPacket, ResultSetHeader } from "mysql2/promise";
-import { aggregateManifest, inspectLiveTmtDataset, inspectTmtDataset, latestRegNoConflictCount, versionedGpu764169Passed, versionedTmtInvariantCount } from "@/modules/standards/dataset-release-mysql";
+import { aggregateManifest, inspectLiveTmtDataset, inspectTmtDataset, latestRegNoConflictCount, versionedGpu764169Passed, versionedRegNoConflictDelta, versionedTmtInvariantIssues } from "@/modules/standards/dataset-release-mysql";
 import type { DatasetManifest } from "@/modules/standards/dataset-release";
 import { TMT_TABLES } from "@/modules/standards/tmt-dataset-tables";
 import { readTmtPointer, type TmtAssurance } from "./candidate-pointer";
@@ -32,10 +32,27 @@ export async function auditCandidate(tx: PoolConnection, actor: string, datasetI
     [randomUUID(), actor, action, datasetId, JSON.stringify(evidence)]);
 }
 
-export async function checkCandidateInvariants(tx: PoolConnection, id: string) {
-  if (await versionedTmtInvariantCount(tx, id) !== 0 || !await versionedGpu764169Passed(tx, id) || await latestRegNoConflictCount(tx, id) !== 0) {
-    throw new Error("TMT_CANDIDATE_INVARIANTS_FAILED");
+export async function readCandidateInvariantReport(db: Pick<PoolConnection, "query" | "execute">, id: string, baseId?: string) {
+  const [structural, gpuPassed, regno] = await Promise.all([
+    versionedTmtInvariantIssues(db, id),
+    versionedGpu764169Passed(db, id),
+    baseId ? versionedRegNoConflictDelta(db, baseId, id) : latestRegNoConflictCount(db, id),
+  ]);
+  const failures = structural.filter((issue) => issue.count !== 0);
+  if (!gpuPassed) failures.push({ name: "gpu_764169_acceptance", count: 1 });
+  if (typeof regno === "number") {
+    if (regno) failures.push({ name: "latest_regno_conflicts", count: regno });
+  } else {
+    if (regno.added.length) failures.push({ name: "latest_regno_conflicts_added", count: regno.added.length });
+    if (regno.modified.length) failures.push({ name: "latest_regno_conflicts_modified", count: regno.modified.length });
   }
+  return { failures, regno };
+}
+
+export async function checkCandidateInvariants(tx: PoolConnection, id: string, baseId?: string) {
+  const report = await readCandidateInvariantReport(tx, id, baseId);
+  if (report.failures.length) throw new Error("TMT_CANDIDATE_INVARIANTS_FAILED");
+  return report;
 }
 
 async function verifyTmtManifest(tx: PoolConnection, id: string, expected: string, inspect: boolean) {

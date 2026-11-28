@@ -8,8 +8,15 @@ import { Table, TableMessage, TableScroll } from "@/components/ui/table";
 import { type TmtOperationsSnapshot } from "@/modules/tmt/operations";
 
 function stamp(value: string | null): string {
-  return value ? new Date(value).toLocaleString("th-TH") : "—";
+  if (!value) return "—";
+  const parts = Object.fromEntries(bangkokTimestamp.formatToParts(new Date(value)).map(({ type, value: part }) => [type, part]));
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}:${parts.second} ICT`;
 }
+
+const bangkokTimestamp = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+});
 
 function number(value: number): string {
   return value.toLocaleString("th-TH");
@@ -27,6 +34,46 @@ function failureGuidance(mode: string, errorCode: string | null) {
   if (errorCode === "TMT_HTTP_429") return "TMT API จำกัดจำนวนคำขอ ให้รอพ้นช่วงจำกัดและตรวจเวอร์ชันก่อนดำเนินการต่อ";
   if (errorCode === "TMT_TIMEOUT" || /^TMT_HTTP_5\d\d$/.test(errorCode ?? "")) return "ตรวจว่า TMT API กลับมาให้บริการและเวอร์ชันตรงกับ run ก่อนดำเนินการต่อ";
   return "ตรวจรหัสข้อผิดพลาดและ checkpoint ด้านล่างก่อนพิจารณาทำต่อผ่าน guarded CLI สำหรับ run ที่เข้าเงื่อนไข";
+}
+
+const candidateStageLabels = {
+  seed: "คัดลอกจากชุดข้อมูลฐาน",
+  checkpoints: "ซิงก์ข้อมูลจาก TMT API",
+  manifest: "ตรวจจำนวนแถวและลายนิ้วมือข้อมูล",
+  validation: "ตรวจสอบชุดข้อมูล",
+};
+
+type Diagnostics = Awaited<ReturnType<typeof import("@/modules/tmt/candidate-jobs").readFailedCandidateDiagnostics>>;
+
+function FailedCandidateDiagnostics({ id }: { id: string }) {
+  const [state, setState] = useState<{ report?: Diagnostics; busy?: boolean; failed?: boolean }>({});
+  async function load() {
+    setState({ busy: true });
+    try {
+      const response = await fetch(`/api/v1/admin/tmt-operations?candidateDiagnostics=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const body = await response.json() as { ok: boolean; report?: Diagnostics };
+      if (!response.ok || !body.ok || !body.report) throw new Error("diagnostics unavailable");
+      setState({ report: body.report });
+    } catch {
+      setState({ failed: true });
+    }
+  }
+  const report = state.report;
+  return (
+    <div className="space-y-1">
+      <Button size="sm" loading={state.busy} onClick={() => void load()}>อ่านผลตรวจ invariant</Button>
+      {state.failed ? <p>อ่านผลตรวจไม่ได้ กรุณารีเฟรชสถานะและลองใหม่</p> : null}
+      {report ? <>
+        {report.failures.length > 0 ? <ul>{report.failures.map(({ name, count }) => <li key={name}>{name}: {number(count)}</li>)}</ul>
+          : <p>กฎปัจจุบันไม่พบข้อผิดพลาดในข้อมูลที่อ่าน ผลนี้ยังไม่เปลี่ยนสถานะงาน</p>}
+        {typeof report.regno === "object" ? <p className="break-words">
+          RegNo เดิม {number(report.regno.unchanged)} · เพิ่ม {number(report.regno.added.length)} · เปลี่ยน {number(report.regno.modified.length)} · หมดข้อขัดแย้ง {number(report.regno.removed.length)}
+          {report.regno.added.length ? ` · TPU เพิ่ม: ${report.regno.added.slice(0, 10).join(", ")}` : ""}
+          {report.regno.modified.length ? ` · TPU เปลี่ยน: ${report.regno.modified.slice(0, 10).join(", ")}` : ""}
+        </p> : null}
+      </> : null}
+    </div>
+  );
 }
 
 function CandidateControls({ candidate, onChanged }: {
@@ -75,7 +122,8 @@ function CandidateControls({ candidate, onChanged }: {
   }
 
   return (
-    <section className="space-y-2" aria-label="ชุดข้อมูล TMT">
+    <section className="space-y-2" aria-label="งานเตรียมชุดข้อมูล TMT">
+      <h3 className="text-sm font-semibold">งานเตรียมชุดข้อมูล TMT</h3>
       <p className="type-help">ชุดที่ใช้งาน {candidate.pointer.datasetId ?? "รอรับรองชุดข้อมูลฐาน"}{candidate.pointer.assurance ? ` · ${candidate.pointer.assurance}` : ""}</p>
       {!enabled ? <Alert tone="info">การสั่งงาน TMT ผ่านเว็บยังไม่เปิดใช้งาน หรือยังไม่ได้รับรองชุดข้อมูลฐาน</Alert> : null}
       {enabled ? (
@@ -91,12 +139,44 @@ function CandidateControls({ candidate, onChanged }: {
         <div key={job.id} className="space-y-1 rounded border border-slate-200 p-2 text-xxs">
           <div className="flex flex-wrap items-center gap-2">
             <span>{job.mode} · {job.version}</span>
-            {job.status === "validated" ? <Badge tone="success">ผ่านการตรวจสอบ</Badge> : <RunStatus status={job.status} />}
+            {job.status === "validated" ? <Badge tone="success">ผ่านการตรวจสอบ{job.promotable ? " · รออนุมัติ" : ""}</Badge> : <RunStatus status={job.status} />}
             {enabled && job.resumable ? <Button size="sm" disabled={busy} onClick={() => void submit({ action: "resume", id: job.id }, "ส่งงานไปทำต่อแล้ว")}>ทำต่อจากจุดที่ค้าง</Button> : null}
             {enabled && job.promotable ? <Button size="sm" disabled={busy} onClick={() => switchDataset("promote", job.id)}>อนุมัติและเปิดใช้</Button> : null}
+            {enabled && job.revalidatable ? <Button size="sm" disabled={active || busy} onClick={() => {
+              if (window.confirm(`ตรวจเฉพาะ manifest และ invariant ของชุด ${job.id} อีกครั้ง?`)) {
+                void submit({ action: "revalidate", id: job.id, confirm: `REVALIDATE ${job.id}` }, "เข้าคิวตรวจสอบซ้ำแล้ว");
+              }
+            }}>ตรวจสอบซ้ำโดยไม่ซิงก์</Button> : null}
           </div>
-          <ProgressBar value={job.completed} max={job.total} label={`Checkpoint ${job.completed} / ${job.total}`} />
-          <p>รับ / บันทึก {number(job.received)} / {number(job.written)} · คำเตือน {number(job.warnings)}{job.errorCode ? ` · ${job.errorCode}` : ""}</p>
+          <p>ขั้นตอน: {candidateStageLabels[job.stage]} · อัปเดตล่าสุด <time dateTime={job.updatedAt}>{stamp(job.updatedAt)}</time></p>
+          {job.revalidating ? <p>ตรวจสอบซ้ำเฉพาะ manifest และ invariant</p> : null}
+          {job.stage === "seed" ? (
+            job.seed ? <ProgressBar value={job.seed.copied} max={job.seed.total} label={`คัดลอกแล้ว ${number(job.seed.copied)} / ${number(job.seed.total)} แถว`} />
+              : <p>ยังไม่มีตัวเลขการคัดลอกจากชุดข้อมูลฐาน</p>
+          ) : (
+            <ProgressBar value={job.completed} max={job.total} label={`Checkpoint ${job.completed} / ${job.total}`} />
+          )}
+          {job.stage === "manifest" || job.stage === "validation" ? <p>Manifest {number(job.manifestCompleted)} / {number(job.manifestTotal)} ตาราง · ผลตรวจขั้นสุดท้าย {job.status === "validated" ? "ผ่าน" : job.status === "failed" || job.status === "stale" ? "ไม่ผ่าน" : "ยังไม่เสร็จ"}</p> : null}
+          {job.status === "running" && !job.leaseLive ? <p className="type-caption">สิทธิ์ของตัวประมวลผลหมดอายุแล้ว · รอการทำงานต่อ</p> : null}
+          {job.stage !== "seed" ? <p>TMT API รับ / บันทึก {number(job.received)} / {number(job.written)}</p> : null}
+          <p>คำเตือน {number(job.warnings)}{job.errorCode ? ` · ${job.errorCode}` : ""}</p>
+          {job.errorCode === "TMT_CANDIDATE_INVARIANTS_FAILED" ? <FailedCandidateDiagnostics id={job.id} /> : null}
+          {job.checkpointWarnings?.length ? <details>
+            <summary className="cursor-pointer type-caption">รายละเอียดคำเตือนจาก TMT API</summary>
+            {job.checkpointWarnings.map(({ endpoint, window, count, details }) => (
+              <p key={`${endpoint}:${window.begindate}:${window.enddate}`} className="break-words">
+                {endpoint} · {window.begindate} – {window.enddate} · {number(count)} รายการ
+                {details.length ? ` · ${details.map(({ code, key }) => `${code} (${key})`).join(", ")}` : " · ประวัติเดิมบันทึกเฉพาะจำนวน"}
+                {details.length > 0 && count > details.length ? ` · แสดง ${details.length} รายการแรก` : ""}
+              </p>
+            ))}
+          </details> : null}
+          <details className="break-words">
+            <summary className="cursor-pointer type-caption">ข้อมูลตรวจสอบงาน</summary>
+            <p>งาน {job.id} · ขั้นถัดไป {job.nextStep} · ลองแล้ว {job.attempts} · Fence {job.fence}</p>
+            {job.leaseUntil ? <p>สิทธิ์ตัวประมวลผลถึง {stamp(job.leaseUntil)}</p> : null}
+            {job.seed?.cursor ? <p>ตารางถัดไป {job.seed.cursor.table} · คัดลอกแล้ว {number(job.seed.cursor.offset)} แถว</p> : null}
+          </details>
           {job.processing ? <p>กำลังทำ {job.processing.endpoint} · {job.processing.window.begindate} – {job.processing.window.enddate}</p> : null}
         </div>
       ))}
@@ -158,52 +238,54 @@ export function TmtOperationsPanel({ initial }: { initial: TmtOperationsSnapshot
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={assurance ? "success" : "danger"}>{assurance ?? (readiness.reason === "POINTER_UNAVAILABLE" ? "ชุดข้อมูล TMT ยังไม่พร้อม" : readiness.reason)}</Badge>
-        {latestRun ? <Badge>{latestRun.mode}</Badge> : null}
         <Button size="sm" className="ml-auto" loading={refreshing} onClick={() => void refresh()}>รีเฟรชสถานะ</Button>
       </div>
       {assurance === "validated_unverified" ? <Alert tone="warning" title="พร้อมใช้แบบ validated_unverified">ผ่านการตรวจสอบที่บันทึกไว้แล้ว และยังไม่มีหลักฐานยืนยันเวอร์ชันสำหรับชุดข้อมูลทั้งหมด</Alert> : null}
       {operations.candidateOperations ? <CandidateControls candidate={operations.candidateOperations} onChanged={refresh} /> : <Alert tone="info" title="เริ่มและทำต่อผ่านเว็บยังไม่เปิดใช้">
         Full และ Incremental ต้องมีพื้นที่เตรียมชุดข้อมูลแยกจากชุดที่ใช้งานอยู่และตัวรันที่ทำงานต่อได้เมื่อปิดหน้าเว็บ การซิงก์แบบ Full-unverified ทำต่อจากจุดที่ค้างไม่ได้
       </Alert>}
-      {latestRun?.status === "stale" ? (
-        <Alert tone="warning" title="เวอร์ชันต้นทางเปลี่ยนระหว่างซิงก์">ตรวจเวอร์ชันกับผู้ดูแล หยุดการทำต่อจาก checkpoint ของเวอร์ชันเดิม</Alert>
-      ) : latestRun?.status === "failed" ? (
-        <Alert tone="danger" title="ซิงก์ล้มเหลว">
-          {failureGuidance(latestRun.mode, latestRun.errorCode)}
-        </Alert>
-      ) : null}
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      <details open={!operations.candidateOperations} className="space-y-2 border-t border-slate-200 pt-2">
+        <summary className="cursor-pointer text-sm font-semibold">ประวัติการซิงก์ TMT ก่อนใช้ชุดข้อมูลแยก</summary>
+        {latestRun?.status === "stale" ? (
+          <Alert tone="warning" title="เวอร์ชันต้นทางเปลี่ยนระหว่างซิงก์">ตรวจเวอร์ชันกับผู้ดูแล หยุดการทำต่อจาก checkpoint ของเวอร์ชันเดิม</Alert>
+        ) : latestRun?.status === "failed" ? (
+          <Alert tone="danger" title="ซิงก์ล้มเหลว">
+            {failureGuidance(latestRun.mode, latestRun.errorCode)}
+          </Alert>
+        ) : null}
 
-      <dl className="grid gap-2 text-xxs sm:grid-cols-2 lg:grid-cols-4">
-        <div><dt className="type-caption">สถานะล่าสุด</dt><dd className="mt-0.5 font-medium">{latestRun ? <RunStatus status={latestRun.status} /> : "ยังไม่มี run"}</dd></div>
-        <div><dt className="type-caption">เริ่มเมื่อ</dt><dd className="mt-0.5">{stamp(latestRun?.startedAt ?? null)}</dd></div>
-        <div><dt className="type-caption">รับ / บันทึก</dt><dd className="mt-0.5 tabular-nums">{progress ? `${number(progress.receivedRows)} / ${number(progress.writtenRows)}` : "—"}</dd></div>
-        <div><dt className="type-caption">คำเตือน / ข้อผิดพลาด</dt><dd className="mt-0.5">{latestRun ? `${number(latestRun.warningsCount)}${latestRun.errorCode ? ` · ${latestRun.errorCode}` : ""}` : "—"}</dd></div>
-      </dl>
+        <dl className="grid gap-2 text-xxs sm:grid-cols-2 lg:grid-cols-4">
+          <div><dt className="type-caption">สถานะล่าสุด</dt><dd className="mt-0.5 font-medium">{latestRun ? <RunStatus status={latestRun.status} /> : "ยังไม่มี run"}</dd></div>
+          <div><dt className="type-caption">เริ่มเมื่อ</dt><dd className="mt-0.5">{stamp(latestRun?.startedAt ?? null)}</dd></div>
+          <div><dt className="type-caption">รับ / บันทึก</dt><dd className="mt-0.5 tabular-nums">{progress ? `${number(progress.receivedRows)} / ${number(progress.writtenRows)}` : "—"}</dd></div>
+          <div><dt className="type-caption">คำเตือน / ข้อผิดพลาด</dt><dd className="mt-0.5">{latestRun ? `${number(latestRun.warningsCount)}${latestRun.errorCode ? ` · ${latestRun.errorCode}` : ""}` : "—"}</dd></div>
+        </dl>
 
-      {progress ? (
-        <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-2 text-xxs" aria-live="polite">
-          <ProgressBar value={percent} tone={progress.failed ? "warning" : "info"} label={`รายงานผลแล้ว ${number(settled)} / ${number(progress.total)} checkpoint ที่ลงทะเบียน`} />
-          <p>สำเร็จ {number(progress.succeeded)} · ไม่สำเร็จ {number(progress.failed)} · ยังไม่มีผล {number(progress.total - settled)}</p>
-          <p>ช่วงข้อมูลที่ลงทะเบียน {progress.windowBegin} – {progress.windowEnd}</p>
-          {last ? <p className="break-words">Checkpoint ที่รายงานล่าสุด {last.endpoint} · {last.windowBegin} – {last.windowEnd} · <RunStatus status={last.status} /></p> : null}
-          {isRunning && settled === progress.total ? <p>ยังรอผลตรวจเวอร์ชันและสถานะสุดท้ายของ run</p> : null}
-          {isActive ? <p className="type-caption">รีเฟรชสถานะทุก 15 วินาที · ระบบรายงาน endpoint เมื่อ checkpoint มีผลแล้ว</p> : null}
-        </div>
-      ) : isActive ? <p className="type-caption">ยังไม่มี checkpoint ที่ลงทะเบียน · รีเฟรชสถานะทุก 15 วินาที</p> : null}
+        {progress ? (
+          <div className="space-y-1 rounded border border-slate-200 bg-slate-50 p-2 text-xxs" aria-live="polite">
+            <ProgressBar value={percent} tone={progress.failed ? "warning" : "info"} label={`รายงานผลแล้ว ${number(settled)} / ${number(progress.total)} checkpoint ที่ลงทะเบียน`} />
+            <p>สำเร็จ {number(progress.succeeded)} · ไม่สำเร็จ {number(progress.failed)} · ยังไม่มีผล {number(progress.total - settled)}</p>
+            <p>ช่วงข้อมูลที่ลงทะเบียน {progress.windowBegin} – {progress.windowEnd}</p>
+            {last ? <p className="break-words">Checkpoint ที่รายงานล่าสุด {last.endpoint} · {last.windowBegin} – {last.windowEnd} · <RunStatus status={last.status} /></p> : null}
+            {isRunning && settled === progress.total ? <p>ยังรอผลตรวจเวอร์ชันและสถานะสุดท้ายของ run</p> : null}
+            {isRunning || latestRun?.status === "queued" ? <p className="type-caption">รีเฟรชสถานะทุก 15 วินาที · ระบบรายงาน endpoint เมื่อ checkpoint มีผลแล้ว</p> : null}
+          </div>
+        ) : isRunning || latestRun?.status === "queued" ? <p className="type-caption">ยังไม่มี checkpoint ที่ลงทะเบียน · รีเฟรชสถานะทุก 15 วินาที</p> : null}
 
-      <TableScroll maxHeight="16rem"><Table><thead><tr><th>Run ล่าสุด</th><th>โหมด</th><th>สถานะ</th><th>รับ / บันทึก</th><th>เริ่ม</th><th>จบ</th></tr></thead><tbody>
-        {operations.runs.length === 0 ? <TableMessage colSpan={6}>ยังไม่มีประวัติ TMT sync</TableMessage> : operations.runs.map((run) => (
-          <tr key={run.id}><td className="cell-code" title={run.id}>{run.tmtVersion}</td><td>{run.mode}</td><td><RunStatus status={run.status} />{run.errorCode ? <div className="break-words text-xxs">{run.errorCode}</div> : null}{run.warningsCount > 0 ? <div className="text-xxs">คำเตือน {number(run.warningsCount)}</div> : null}</td><td className="cell-num">{number(run.receivedRows)} / {number(run.writtenRows)}</td><td>{stamp(run.startedAt)}</td><td>{stamp(run.finishedAt)}</td></tr>
-        ))}
-      </tbody></Table></TableScroll>
+        <TableScroll maxHeight="16rem"><Table><thead><tr><th>Run ล่าสุด</th><th>โหมด</th><th>สถานะ</th><th>รับ / บันทึก</th><th>เริ่ม</th><th>จบ</th></tr></thead><tbody>
+          {operations.runs.length === 0 ? <TableMessage colSpan={6}>ยังไม่มีประวัติ TMT sync</TableMessage> : operations.runs.map((run) => (
+            <tr key={run.id}><td className="cell-code" title={run.id}>{run.tmtVersion}</td><td>{run.mode}</td><td><RunStatus status={run.status} />{run.errorCode ? <div className="break-words text-xxs">{run.errorCode}</div> : null}{run.warningsCount > 0 ? <div className="text-xxs">คำเตือน {number(run.warningsCount)}</div> : null}</td><td className="cell-num">{number(run.receivedRows)} / {number(run.writtenRows)}</td><td>{stamp(run.startedAt)}</td><td>{stamp(run.finishedAt)}</td></tr>
+          ))}
+        </tbody></Table></TableScroll>
 
-      {progress && operations.checkpoints.length < progress.total ? <p className="type-caption">แสดง {number(operations.checkpoints.length)} จาก {number(progress.total)} checkpoint โดยเรียงผลล่าสุดก่อน</p> : null}
-      {latestRun ? <TableScroll maxHeight="14rem"><Table><thead><tr><th>Endpoint</th><th>ช่วงข้อมูล</th><th>สถานะ</th><th>ครั้ง</th><th>รับ / บันทึก</th><th>ข้อผิดพลาด</th></tr></thead><tbody>
-        {operations.checkpoints.length === 0 ? <TableMessage colSpan={6}>ยังไม่มี checkpoint สำหรับ run ล่าสุด</TableMessage> : operations.checkpoints.map((checkpoint) => (
-          <tr key={`${checkpoint.endpoint}:${checkpoint.windowBegin}:${checkpoint.windowEnd}`}><td className="cell-code">{checkpoint.endpoint}</td><td>{checkpoint.windowBegin} – {checkpoint.windowEnd}</td><td><StatusBadge status={checkpoint.status} /></td><td className="cell-num">{number(checkpoint.attemptCount)}</td><td className="cell-num">{number(checkpoint.receivedRows)} / {number(checkpoint.writtenRows)}</td><td className="cell-code">{checkpoint.errorCode ?? "—"}</td></tr>
-        ))}
-      </tbody></Table></TableScroll> : null}
+        {progress && operations.checkpoints.length < progress.total ? <p className="type-caption">แสดง {number(operations.checkpoints.length)} จาก {number(progress.total)} checkpoint โดยเรียงผลล่าสุดก่อน</p> : null}
+        {latestRun ? <TableScroll maxHeight="14rem"><Table><thead><tr><th>Endpoint</th><th>ช่วงข้อมูล</th><th>สถานะ</th><th>ครั้ง</th><th>รับ / บันทึก</th><th>ข้อผิดพลาด</th></tr></thead><tbody>
+          {operations.checkpoints.length === 0 ? <TableMessage colSpan={6}>ยังไม่มี checkpoint สำหรับ run ล่าสุด</TableMessage> : operations.checkpoints.map((checkpoint) => (
+            <tr key={`${checkpoint.endpoint}:${checkpoint.windowBegin}:${checkpoint.windowEnd}`}><td className="cell-code">{checkpoint.endpoint}</td><td>{checkpoint.windowBegin} – {checkpoint.windowEnd}</td><td><StatusBadge status={checkpoint.status} /></td><td className="cell-num">{number(checkpoint.attemptCount)}</td><td className="cell-num">{number(checkpoint.receivedRows)} / {number(checkpoint.writtenRows)}</td><td className="cell-code">{checkpoint.errorCode ?? "—"}</td></tr>
+          ))}
+        </tbody></Table></TableScroll> : null}
+      </details>
     </div>
   );
 }

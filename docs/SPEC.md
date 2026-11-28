@@ -255,6 +255,7 @@ MasterTTMT Excel เป็น authoritative source สำหรับแถว�
 - Drug Catalog `TMTID` เทียบกับ final mapped code โดยตรง ไม่ traverse graph เพื่อเปลี่ยน GPU เป็น TPU อัตโนมัติ ตัวอย่าง GPU `764169` ใช้เป็น mapping/export ไม่ได้ แต่เมื่อผู้ใช้เลือก TPU `565818` ค่า export ต้องเป็น `565818`
 - TMT export fields มาจาก MasterTMT; ISED มาจาก distinct latest-date NLEM เท่านั้น ถ้าค่า unknown หรือ latest-date conflict ให้ ISED ว่างพร้อม warning ห้ามเดา
 - latest-date RegNo หลายค่าต้องคงเป็น conflict และห้ามเลือก first/alphabetical ปัจจุบัน RegNo ไม่อยู่ใน DrugCat 22 ช่องจึงเป็น warning และไม่ block export
+- Independent TMT Incremental เปรียบเทียบกลุ่ม latest-date RegNo ที่มีหลายค่ากับ accepted baseline ที่ pin ไว้. ยอมรับเฉพาะกลุ่มเดิมที่ TPU, วันที่และชุดค่า normalized ตรงกัน และกลุ่มที่หมดข้อขัดแย้ง. กลุ่มใหม่หรือกลุ่มที่เปลี่ยนยัง block final validation. Full และ combined Dataset Release ใช้กฎเดิม. เก็บค่า RegNo ต้นทางและ assurance เดิมไว้.
 - ATC ไม่อยู่ใน DrugCat 22 ช่อง ดังนั้น ATC conflict ไม่ block export และ export adapter ไม่ต้อง query ATC
 - TTMT mapping resolve จาก `ttmt_products` ของ succeeded import เท่านั้น ใช้ status/fields ของ TTMT โดยตรง ห้าม query TMT graph, MasterTMT หรือ enrichment ของ TMT
 - mapping v2 export-ready เมื่อ lifecycle เป็น `mapped`, acknowledgement (ถ้าต้องใช้) ยัง current, source-specific standard valid และไม่มี conflict ที่ทำให้คอลัมน์ contract กำกวม

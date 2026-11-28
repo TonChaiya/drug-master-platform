@@ -179,31 +179,67 @@ async function invariantCount(executor: Executor, body: string, parameters: stri
 }
 
 export async function versionedTmtInvariantCount(executor: Executor, datasetId: string): Promise<number> {
-  const checks: Array<Promise<number>> = [];
+  return (await versionedTmtInvariantIssues(executor, datasetId)).reduce((total, issue) => total + issue.count, 0);
+}
+
+export async function versionedTmtInvariantIssues(executor: Executor, datasetId: string) {
+  const checks: Array<Promise<{ name: string; count: number }>> = [];
+  const add = (name: string, sql: string) => checks.push(invariantCount(executor, sql, [datasetId]).then((count) => ({ name, count })));
   for (const [level, table, id] of VERSIONED_LEVELS) {
-    checks.push(invariantCount(executor,
-      `SELECT c.tmtid FROM tmt_dataset_concepts c LEFT JOIN ${quote(table)} e ON e.dataset_id=c.dataset_id AND e.${quote(id)}=c.tmtid WHERE c.dataset_id=? AND LOWER(c.level_name)='${level}' AND e.${quote(id)} IS NULL`,
-      [datasetId]));
-    checks.push(invariantCount(executor,
-      `SELECT e.${quote(id)} FROM ${quote(table)} e LEFT JOIN tmt_dataset_concepts c ON c.dataset_id=e.dataset_id AND c.tmtid=e.${quote(id)} WHERE e.dataset_id=? AND c.tmtid IS NULL`,
-      [datasetId]));
-    checks.push(invariantCount(executor,
-      `SELECT e.${quote(id)} FROM ${quote(table)} e INNER JOIN tmt_dataset_concepts c ON c.dataset_id=e.dataset_id AND c.tmtid=e.${quote(id)} WHERE e.dataset_id=? AND LOWER(c.level_name)<>'${level}'`,
-      [datasetId]));
+    add(`concept_missing_${level}`,
+      `SELECT c.tmtid FROM tmt_dataset_concepts c LEFT JOIN ${quote(table)} e ON e.dataset_id=c.dataset_id AND e.${quote(id)}=c.tmtid WHERE c.dataset_id=? AND LOWER(c.level_name)='${level}' AND e.${quote(id)} IS NULL`);
+    add(`${level}_missing_concept`,
+      `SELECT e.${quote(id)} FROM ${quote(table)} e LEFT JOIN tmt_dataset_concepts c ON c.dataset_id=e.dataset_id AND c.tmtid=e.${quote(id)} WHERE e.dataset_id=? AND c.tmtid IS NULL`);
+    add(`${level}_concept_level_mismatch`,
+      `SELECT e.${quote(id)} FROM ${quote(table)} e INNER JOIN tmt_dataset_concepts c ON c.dataset_id=e.dataset_id AND c.tmtid=e.${quote(id)} WHERE e.dataset_id=? AND LOWER(c.level_name)<>'${level}'`);
   }
-  checks.push(invariantCount(executor,
-    "SELECT m.tpucode FROM tmt_dataset_mastertmt m LEFT JOIN tmt_dataset_tpu t ON t.dataset_id=m.dataset_id AND t.tpuid=m.tpucode WHERE m.dataset_id=? AND t.tpuid IS NULL", [datasetId]));
-  checks.push(invariantCount(executor,
-    "SELECT m.tpucode FROM tmt_dataset_mastertmt m LEFT JOIN tmt_dataset_concepts c ON c.dataset_id=m.dataset_id AND c.tmtid=m.tpucode WHERE m.dataset_id=? AND c.tmtid IS NULL", [datasetId]));
-  checks.push(invariantCount(executor,
-    "SELECT t.tpuid FROM tmt_dataset_tpu t LEFT JOIN tmt_dataset_mastertmt m ON m.dataset_id=t.dataset_id AND m.tpucode=t.tpuid WHERE t.dataset_id=? AND m.tpucode IS NULL", [datasetId]));
-  checks.push(invariantCount(executor,
-    "SELECT tmtid FROM tmt_dataset_concepts WHERE dataset_id=? AND LOWER(level_name) NOT IN ('subs','vtm','gp','gpu','gpp','tp','tpu','tpp')", [datasetId]));
-  checks.push(invariantCount(executor,
-    "SELECT concept1,concept2 FROM tmt_dataset_relationships WHERE dataset_id=? GROUP BY concept1,concept2 HAVING COUNT(*)>1", [datasetId]));
-  checks.push(invariantCount(executor,
-    "SELECT tpucode FROM tmt_dataset_mastertmt WHERE dataset_id=? AND status NOT IN (0,1)", [datasetId]));
-  return (await Promise.all(checks)).reduce((total, count) => total + count, 0);
+  add("mastertmt_missing_tpu", "SELECT m.tpucode FROM tmt_dataset_mastertmt m LEFT JOIN tmt_dataset_tpu t ON t.dataset_id=m.dataset_id AND t.tpuid=m.tpucode WHERE m.dataset_id=? AND t.tpuid IS NULL");
+  add("mastertmt_missing_concept", "SELECT m.tpucode FROM tmt_dataset_mastertmt m LEFT JOIN tmt_dataset_concepts c ON c.dataset_id=m.dataset_id AND c.tmtid=m.tpucode WHERE m.dataset_id=? AND c.tmtid IS NULL");
+  add("tpu_missing_mastertmt", "SELECT t.tpuid FROM tmt_dataset_tpu t LEFT JOIN tmt_dataset_mastertmt m ON m.dataset_id=t.dataset_id AND m.tpucode=t.tpuid WHERE t.dataset_id=? AND m.tpucode IS NULL");
+  add("invalid_concept_level", "SELECT tmtid FROM tmt_dataset_concepts WHERE dataset_id=? AND LOWER(level_name) NOT IN ('subs','vtm','gp','gpu','gpp','tp','tpu','tpp')");
+  add("duplicate_relationship", "SELECT concept1,concept2 FROM tmt_dataset_relationships WHERE dataset_id=? GROUP BY concept1,concept2 HAVING COUNT(*)>1");
+  add("invalid_mastertmt_status", "SELECT tpucode FROM tmt_dataset_mastertmt WHERE dataset_id=? AND status NOT IN (0,1)");
+  return Promise.all(checks);
+}
+
+export async function versionedRegNoConflictDelta(executor: Executor, baseId: string, candidateId: string) {
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `WITH latest AS (
+       SELECT dataset_id,tpuid,MAX(change_date) AS change_date FROM tmt_dataset_regno
+       WHERE dataset_id IN (?,?) GROUP BY dataset_id,tpuid
+     ), conflicts AS (
+       SELECT r.dataset_id,r.tpuid,r.change_date FROM latest l JOIN tmt_dataset_regno r
+       ON r.dataset_id=l.dataset_id AND r.tpuid=l.tpuid AND r.change_date=l.change_date
+       GROUP BY r.dataset_id,r.tpuid,r.change_date HAVING COUNT(DISTINCT r.regno)>1
+     )
+     SELECT r.dataset_id,CAST(r.tpuid AS CHAR) AS tpuid,DATE_FORMAT(r.change_date,'%Y-%m-%d') AS change_date,r.normalized_regno,r.regno
+     FROM conflicts c JOIN tmt_dataset_regno r ON r.dataset_id=c.dataset_id AND r.tpuid=c.tpuid AND r.change_date=c.change_date`,
+    [baseId, candidateId],
+  );
+  const groups = (id: string) => {
+    const byTpu = new Map<string, { date: string; values: Set<string> }>();
+    for (const row of rows) {
+      if (row.dataset_id !== id) continue;
+      const tpuid = String(row.tpuid);
+      const group = byTpu.get(tpuid) ?? { date: String(row.change_date), values: new Set<string>() };
+      group.values.add(row.normalized_regno ? String(row.normalized_regno) : "unparsed:" + String(row.regno));
+      byTpu.set(tpuid, group);
+    }
+    return byTpu;
+  };
+  const base = groups(baseId);
+  const candidate = groups(candidateId);
+  const added: string[] = [], modified: string[] = [];
+  let unchanged = 0;
+  for (const [code, group] of candidate) {
+    const prior = base.get(code);
+    if (!prior) added.push(code);
+    else if (prior.date !== group.date || prior.values.size !== group.values.size
+      || [...group.values].some((registration) => !prior.values.has(registration))) modified.push(code);
+    else unchanged += 1;
+  }
+  const removed = [...base.keys()].filter((code) => !candidate.has(code));
+  return { unchanged, added: added.sort(), modified: modified.sort(), removed: removed.sort() };
 }
 
 export async function versionedGpu764169Passed(executor: Executor, datasetId: string): Promise<boolean> {

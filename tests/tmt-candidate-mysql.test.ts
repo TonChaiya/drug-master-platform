@@ -6,9 +6,9 @@ import mysql, { type RowDataPacket } from "mysql2/promise";
 import { drizzle } from "drizzle-orm/mysql2";
 import { test, vi } from "vitest";
 import { splitMigrationStatements } from "@/db/migration-0018-guard";
-import { inspectTmtDataset, standardDatasetLifecycleStoresForPool } from "@/modules/standards/dataset-release-mysql";
+import { inspectTmtDataset, standardDatasetLifecycleStoresForPool, versionedRegNoConflictDelta } from "@/modules/standards/dataset-release-mysql";
 import { prepareBaselineDataset } from "@/modules/standards/dataset-release";
-import { acceptTmtCandidate, processTmtCandidateDelivery } from "@/modules/tmt/candidate-jobs";
+import { acceptTmtCandidate, processTmtCandidateDelivery, readCandidateOperations, revalidateTmtCandidate } from "@/modules/tmt/candidate-jobs";
 import { activateTmtDataset } from "@/modules/tmt/candidate-lifecycle";
 import { readTmtPointer } from "@/modules/tmt/candidate-pointer";
 import { TMT_UNVERIFIED_REQUIRED_ENDPOINTS, type TmtSyncSource } from "@/modules/tmt/sync";
@@ -78,6 +78,7 @@ test.skipIf(!datadir)("isolated MySQL: incremental candidate survives interrupte
     await sql.execute("INSERT INTO tmt_concept (tmtid,fsn,change_date,level_name,source_version,last_seen_version,synced_at) VALUES (764169,'gpu','2026-11-01','gpu',?,?,UTC_TIMESTAMP(3)),(9000001,'old tpu','2026-11-01','tpu',?,?,UTC_TIMESTAMP(3))", [marker, marker, marker, marker]);
     await sql.execute("INSERT INTO tmt_relationship (concept1,concept2,change_date,level_name1,level_name2,source_version,last_seen_version,synced_at) VALUES (764169,9000001,'2026-11-01','gpu','tpu',?,?,UTC_TIMESTAMP(3))", [marker, marker]);
     await sql.execute("INSERT INTO tmt_mastertmt (tpucode,fsn,status,source_version,last_seen_version,synced_at) VALUES (9000001,'old commercial product',0,?,?,UTC_TIMESTAMP(3))", [marker, marker]);
+    await sql.execute("INSERT INTO tmt_regno (tpuid,fsn,regno,normalized_regno,change_date,source_version,synced_at) VALUES (9000001,'fixture','1A 59/55','1a5955','2026-11-01',?,UTC_TIMESTAMP(3)),(9000001,'fixture','1A 60/55','1a6055','2026-11-01',?,UTC_TIMESTAMP(3))", [marker, marker]);
     const manifest = await prepareBaselineDataset({ datasetId: base, source: "TMT", sourceVersion: marker, tmtSyncRunId: historicalRun, batchSize: 1000 }, standardDatasetLifecycleStoresForPool(sql).baseline);
     const bootstrapped = await activateTmtDataset(sql, { actor, datasetId: base, generation: 0, action: "bootstrap" });
     assert.equal(bootstrapped.assurance, "validated_unverified");
@@ -92,8 +93,18 @@ test.skipIf(!datadir)("isolated MySQL: incremental candidate survives interrupte
     const queue = async (id: string) => { received.push(id); };
     await acceptTmtCandidate(sql, { id: candidate, actor, mode: "incremental" }, source, queue, new Date("2026-11-28T04:00:00Z"));
     assert.deepEqual(received, [candidate]);
+    const beforeSeed = (await readCandidateOperations(sql)).jobs.find((job) => job.id === candidate);
+    assert.equal(beforeSeed?.stage, "seed");
+    assert.equal(beforeSeed.seed?.copied, 0);
+    assert.ok(beforeSeed.seed && beforeSeed.seed.total > 0);
     const id = received.shift()!;
     await assert.rejects(processTmtCandidateDelivery(sql, id, source, async () => { throw new Error("queue handoff interruption"); }), /handoff interruption/);
+    const afterSeed = (await readCandidateOperations(sql)).jobs.find((job) => job.id === candidate);
+    assert.ok(afterSeed?.seed && afterSeed.seed.copied > 0);
+    assert.equal(afterSeed.seed.total, beforeSeed.seed.total);
+    assert.equal(afterSeed.completed, 0);
+    assert.equal(afterSeed.fence, 1);
+    assert.equal(afterSeed.leaseLive, false);
     assert.equal((await readTmtPointer(sql)).datasetId, base);
     received.push(id);
     for (let i = 0; received.length > 0 && i < 80; i += 1) {
@@ -110,6 +121,22 @@ test.skipIf(!datadir)("isolated MySQL: incremental candidate survives interrupte
     assert.equal((await inspectTmtDataset(sql, base)).contentHash, manifest.contentHash);
     const [[unchanged]] = await sql.execute<RowDataPacket[]>("SELECT fsn FROM tmt_dataset_mastertmt WHERE dataset_id=? AND tpucode=9000001", [candidate]);
     assert.equal(unchanged.fsn, "old commercial product");
+    assert.deepEqual(await versionedRegNoConflictDelta(sql, base, candidate), { unchanged: 1, added: [], removed: [], modified: [] });
+    const beforeRecovery = await inspectTmtDataset(sql, candidate);
+    // Recreate the legacy final-validation failure shape in this disposable fixture.
+    await sql.execute("UPDATE standard_datasets SET state='writing',content_hash=NULL,completed_at=NULL WHERE id=?", [candidate]);
+    await sql.execute("UPDATE tmt_candidate_jobs SET status='failed',error_code='TMT_CANDIDATE_INVARIANTS_FAILED' WHERE dataset_id=?", [candidate]);
+    const recoverySource = { ...source, fetch: vi.fn(async () => { throw new Error("Recovery must not fetch checkpoints"); }) };
+    await revalidateTmtCandidate(sql, candidate, actor, recoverySource, queue);
+    for (let i = 0; received.length > 0 && i < 20; i += 1) await processTmtCandidateDelivery(sql, received.shift()!, recoverySource, queue);
+    assert.deepEqual(received, []);
+    assert.equal(recoverySource.fetch.mock.calls.length, 0);
+    const [recovered] = (await readCandidateOperations(sql)).jobs;
+    assert.equal(recovered.id, candidate);
+    assert.equal(recovered.status, "validated");
+    assert.equal(recovered.promotable, true);
+    assert.equal((await readTmtPointer(sql)).datasetId, base);
+    assert.equal((await inspectTmtDataset(sql, candidate)).contentHash, beforeRecovery.contentHash);
     await assert.rejects(activateTmtDataset(sql, { actor, datasetId: candidate, generation: 0, action: "promote", observedVersion: version }), /ACTIVE_DATASET_CHANGED/);
     const promoted = await activateTmtDataset(sql, { actor, datasetId: candidate, generation: 1, action: "promote", observedVersion: version });
     assert.equal(promoted.assurance, "validated_unverified");
@@ -132,7 +159,7 @@ test.skipIf(!datadir)("isolated MySQL: incremental candidate survives interrupte
     assert.equal(rolledBack.generation, 3);
     assert.equal((await readTmtPointer(sql)).datasetId, base);
     const [audit] = await sql.query<RowDataPacket[]>("SELECT action FROM audit_logs");
-    assert.deepEqual(new Set(audit.map((row) => row.action)), new Set(["tmt.dataset_bootstrap", "tmt.candidate_queued", "tmt.candidate_validated", "tmt.dataset_promote", "tmt.dataset_rollback"]));
+    assert.deepEqual(new Set(audit.map((row) => row.action)), new Set(["tmt.dataset_bootstrap", "tmt.candidate_queued", "tmt.candidate_validated", "tmt.candidate_revalidation_queued", "tmt.dataset_promote", "tmt.dataset_rollback"]));
 
     const full = randomUUID();
     const fullSource = {

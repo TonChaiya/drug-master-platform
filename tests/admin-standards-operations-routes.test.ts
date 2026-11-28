@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   runtime: vi.fn(),
   accept: vi.fn(),
   resume: vi.fn(),
+  revalidate: vi.fn(),
   controlsEnabled: vi.fn(),
 }));
 
@@ -16,7 +17,7 @@ vi.mock("@/lib/authorization/require-context", () => ({ requireAdmin: mocks.admi
 vi.mock("@/modules/maintenance/route-guard", () => ({ maintenanceMutationResponse: mocks.maintenance }));
 vi.mock("@/modules/tmt/operations", () => ({ readTmtOperations: mocks.readTmtOperations }));
 vi.mock("@/modules/tmt/candidate-runtime", () => ({ candidateRuntime: mocks.runtime, dispatchTmtCandidate: vi.fn() }));
-vi.mock("@/modules/tmt/candidate-jobs", () => ({ acceptTmtCandidate: mocks.accept, resumeTmtCandidate: mocks.resume }));
+vi.mock("@/modules/tmt/candidate-jobs", () => ({ acceptTmtCandidate: mocks.accept, resumeTmtCandidate: mocks.resume, revalidateTmtCandidate: mocks.revalidate }));
 vi.mock("@/modules/tmt/feature", async (original) => ({
   ...await original<typeof import("@/modules/tmt/feature")>(), tmtCandidateControlsEnabled: mocks.controlsEnabled,
 }));
@@ -77,6 +78,18 @@ test("promotion and rollback refuse a confirmation for the wrong dataset or acti
     assert.equal((await response.json()).errorCode, "TMT_CONFIRMATION_REQUIRED");
   }
   assert.equal(mocks.runtime.mock.calls.length, 0);
+});
+
+test("validation-only recovery requires exact confirmation and does not invoke Start or Resume", async () => {
+  mocks.controlsEnabled.mockReturnValue(true);
+  const input = { action: "revalidate", id: candidateId };
+  const response = await postTmtOperations(command({ ...input, confirm: `RESUME ${candidateId}` }));
+  assert.equal(response.status, 400);
+  assert.equal(mocks.runtime.mock.calls.length, 0);
+  assert.equal((await postTmtOperations(command({ ...input, confirm: `REVALIDATE ${candidateId}` }))).status, 202);
+  assert.equal(mocks.revalidate.mock.calls[0]?.[1], candidateId);
+  assert.equal(mocks.accept.mock.calls.length, 0);
+  assert.equal(mocks.resume.mock.calls.length, 0);
 });
 
 test("candidate mutation rejects a cross-origin submission before resolving credentials", async () => {
