@@ -327,15 +327,15 @@ E2E สร้างและลบเฉพาะฐานทดสอบดั�
 - **Catalog Snapshot Comparison** หน้า Drug Catalog มี snapshot preview และประวัติ แต่ยังไม่มีตัวเปรียบเทียบข้ามเวอร์ชัน.
 - **Invalid Catalog file HTTP 500** ไฟล์ `.xls` ที่ลายเซ็นไม่ใช่ workbook ได้ HTTP 500. ตัวอ่านโยน `WorkbookError` ส่วน route จัดข้อความ validation เฉพาะ `CatalogParseError`.
 
-รายการเหล่านี้อยู่นอกขอบเขต release `0.8.23` และต้องตรวจ query, API หรือการจัดการข้อผิดพลาดของ backend แยก.
+เจ้าของโครงการเลื่อนรายการทั้งสี่ไว้หลัง Phase 6. รายการเหล่านี้ไม่บล็อกการปิดโครงการที่ release `0.8.23`. การแก้ต้องตรวจ query, API หรือการจัดการข้อผิดพลาดของ backend ในงานแยก.
 
 ## Deployment workflow
 
 1. commit ใน local หลัง targeted verification/final review
 2. push `main` ไป remote เดิม
 3. รอ Vercel Git integration auto-deploy; ไม่สร้าง deployment ซ้ำโดยไม่จำเป็น
-4. ถ้ามี migration ใหม่ ให้ยืนยัน production DB แล้วรัน migration runner เดิม
-5. smoke production เฉพาะ workflow ที่ได้รับผลกระทบ
+4. ถ้ามี migration ใหม่และได้รับอนุมัติแยก ให้ตรวจ target, journal/hash, recovery และ maintenance ก่อนใช้ guarded operation ตาม [OPERATIONS.md](OPERATIONS.md#migration). ห้ามใช้ generic migrate-all กับ Production.
+5. ตรวจ deployment SHA, footer, health และ read-only smoke ตาม workflow ที่ได้รับผลกระทบ. ใช้ fixture แยกสำหรับ action ที่เขียนข้อมูล รวม Export preview ที่ออก token.
 
 ## AI handoff rules
 

@@ -12,4 +12,5 @@
 
 `CLAUDE.md` เป็นเพียง compatibility entrypoint; ห้าม duplicate หรือ override กฎใน `AGENTS.md`
 เอกสาร roadmap/design ที่ระบุว่า historical ใช้อธิบายที่มาเท่านั้น; สถานะปัจจุบันต้องยึดชุด canonical ข้างต้น
+หลักฐานการปิดงานหกระยะและขอบเขตที่ยังไม่ได้ตรวจอยู่ใน [Phase 6 closure](docs/PROJECT_STATUS.md#phase-6-verification-and-closure)
 คง `.claude/launch.json` เป็น launch configuration ของโปรเจกต์

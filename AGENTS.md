@@ -15,6 +15,8 @@
 `docs/UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md` และ `docs/superpowers/**` เป็น roadmap/design/implementation history
 ให้ใช้อธิบายที่มา ไม่ใช่สถานะปัจจุบัน และห้ามลบหรือเปลี่ยนชื่อเอกสารประวัติโดยไม่มีอนุมัติชัดเจน
 
+ใช้ [Phase 6 verification and closure](docs/PROJECT_STATUS.md#phase-6-verification-and-closure) เป็นจุดเริ่ม handoff หลัง v0.8.23. อ้างผลเดิมได้เมื่อ scope และ baseline ยังตรงกัน และระบุให้ชัดว่าตรวจใหม่ส่วนใด.
+
 ---
 
 ## Ponytail: โหมด lazy senior dev
@@ -67,6 +69,7 @@ error handling ที่กันข้อมูลหาย · ความป�
   **ห้ามรับค่าจาก browser แล้วเชื่อโดยตรง**
 - ห้าม log password, TMT credential, session token, Agent secret หรือ JHCIS credential
 - ห้าม commit ความลับหรือข้อมูลจริงของสถานบริการ `.env.example` มีได้เฉพาะ placeholder
+- ห้ามใช้ port 3333 หรือ `jhcisdb` กับ dev/test/operational tooling ของแอป. Production operation ใช้ explicit external env และคำสั่ง guarded ตาม runbook เท่านั้น.
 - schema เปลี่ยนได้ผ่าน migration ใหม่เท่านั้น พร้อมโน้ต rollback ใน `docs/OPERATIONS.md`
   **ห้ามแก้ไฟล์ migration ที่ deploy ไปแล้วแม้แต่คอมเมนต์** (runner ตรวจ SHA-256)
 - การส่งออกต้องยืนยันหัวตาราง 22 ช่องก่อนเขียน และเปิดไฟล์ผลลัพธ์ด้วยโปรแกรมอ่าน Excel จริงทุกครั้งที่แตะโค้ด Excel

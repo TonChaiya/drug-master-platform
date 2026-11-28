@@ -8,6 +8,7 @@
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
 - Production application version: `0.8.23`
+- v0.8.23 application baseline (last application change): `f4c8ba48a2795007dd790eac4bbe7ed10f13dfe4`
 - Phase 2 application deployed before the TTMT cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
 - Hosting: Vercel Production ผ่าน Git integration
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
@@ -15,9 +16,28 @@
 - Latest applied migration: `0021_tmt_candidate_operations.sql`
 - Windows Agent baseline: `1.3.0`
 
+## Phase 6 verification and closure
+
+The owner approved closure of the six-phase improvement roadmap at application baseline v0.8.23. This is a documentation-only closeout.
+
+| Phase | Status and evidence |
+| --- | --- |
+| 1 — System audit and baseline | Closed with owner-accepted substitute evidence. The original Phase 1 audit report and standalone regression checklist were unavailable. The owner accepted the seven-page [inventory](DEVELOPMENT.md#phase-5-presentation-inventory) and Phase 4–5 functional verification as the closure baseline. |
+| 2 — Data reliability and safety | Complete. Guarded TiDB cutover through 0020, TTMT baseline of 9,654 unique codes, independent source readiness and preserved mapping/history evidence. TMT remains `validated_unverified`. |
+| 3 — Admin operations | Complete for the released workflow. Candidate isolation, lease fencing, and audited promotion/rollback were checked with isolated fixtures. Hosted diagnostics covered Queue delivery and continuation. Production journal and accepted snapshot were verified at 0021. Live upstream sync and promotion were outside the release verification. |
+| 4 — Unified system and parity | Complete for supported workflows. Reused 66 focused tests and one isolated MySQL integration result covering lifecycle, facility scope, export eligibility and checkpoints. `/mappings` remains the canonical workflow. |
+| 5 — Compact UX/UI | Complete for the released presentation scope. Reused 42 UI tests and responsive evidence for the seven pages at 390, 768, 1024, 1440, 1920 and 2560 px. Local browser checks used Admin and facility fixtures. |
+| 6 — Final verification and closure | Closed with the accepted limitations below. Direct Phase 6 Production checks confirmed Vercel Ready at the application SHA above and public health HTTP 200, DB healthy and TLS expected. Prior read-only browser smoke at that SHA confirmed the v0.8.23 footer, Admin, Standards and the Mapping facility guard. |
+
+The [page inventory](DEVELOPMENT.md#phase-5-presentation-inventory) covers Dashboard, JHCIS, Standards, Drug Catalog, Mapping, Export and Admin. JHCIS enrollment and lifecycle smoke are reused from the earlier Production checkpoint. Same-facility counts are supported by the Phase 4 fixture: active source count equals mapped + pending + needs_review, and export-ready equals eligible Full rows. Delta preview and stale-token tests cover checkpoint and generation boundaries.
+
+- Accepted limitations: facility-level Production totals and cross-facility permissions rely on existing fixture evidence. Journal 0001–0021, Maintenance OFF and Combined Dataset Release OFF are recorded cutover/release checkpoints; the public health check does not report these states. Closure did not exercise live synchronization, promotion, rollback, import or export writes.
+- Operational follow-up: rehearse restoring a post-0021 backup, define backup retention policy, and verify live TMT synchronization in a separately approved operation. The earlier TiDB Cloud export restored successfully on isolated MySQL. The pre-0021 logical backup and probe are recorded below. See [operational follow-up](OPERATIONS.md#operational-follow-up) and [recovery and rollback](OPERATIONS.md#recovery-and-rollback).
+- Owner-deferred backlog: Export History, Audit History, Catalog Snapshot Comparison and invalid Catalog file HTTP 500. These do not gate closure. Technical details are preserved in [DEVELOPMENT.md](DEVELOPMENT.md#phase-5-outstanding-items).
+
 ## Unified system improvement handoff
 
-- Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
+- Historical six-phase plan and original acceptance criteria: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
 - Status: Phase 2 Production cutover เสร็จแล้ววันที่ 2026-11-28. Phase 3 ใช้ independent TMT snapshot ที่รับรองจากข้อมูลเดิม ส่วน TTMT ยังใช้ live tables. Combined Dataset Release ยังปิดและยังไม่ publish.
 - Release `0.8.14` เพิ่ม migration 0019 และ source-fidelity preservation สำหรับ `TTMTType`, `Changedate`, `Drug_Group_Nhso` ใน live/versioned TTMT rows. Import ยังคง upsert เฉพาะรหัสที่มีใน workbook, cell ว่างล้างค่าเดิมเป็น `NULL`, ไม่ลบ/deactivate รหัสที่หาย และยังใช้ `Status` เป็น eligibility input โดยไม่ตีความ `TTMTType=CANCEL`.
 - Release `0.8.15` เตรียม guarded Migration 0019 executor สำหรับลำดับ `0018 → 0019` และ CLI one-time TTMT baseline replacement แบบ dry-run/fail-closed ซึ่งรักษา import/audit/mapping/history เดิมและไม่ลด duplicate version/hash protection. ยังไม่มี Production migration, reset หรือ baseline import ใน checkpoint นี้.
@@ -36,7 +56,7 @@
 - ตรวจด้วย MySQL 8.4.3 แยกและข้อมูลจำลอง รวม Full/Delta, checkpoint, stale-generation token, facility isolation และเบราว์เซอร์ที่ลงชื่อเข้าใช้ด้วยบัญชีจำลอง. Release นี้ใช้ migration เดิมถึง `0021` และ Combined Dataset Release ยังปิด.
 - Release `0.8.3` ทำให้ `/mappings` เป็น user-facing route หลักเพียงเส้นทางเดียว; `/mappings/v2` คงไว้เป็น compatibility redirect และ API/schema identifiers ภายในไม่เปลี่ยน.
 - Dashboard, navigation และ Drug Catalog ใช้ `/mappings` ทั้งหมด โดย feature flags เดิมยังเลือก current/compatibility implementation ภายในและค่า default ไม่เปลี่ยน.
-- Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน; เมื่อ flag ปิดยังใช้ live-table behavior เดิม.
+- Standards Hub resolve approved Active Release แบบ fail-closed เมื่อ `ACTIVE_STANDARD_RELEASE_ENABLED=1` และนับ TMT/TTMT จาก `tmt_dataset_mastertmt`/`ttmt_dataset_products` ด้วย dataset IDs ของ release เดียวกัน. Production ปิด combined release และอ่าน TMT จาก independent accepted pointer ส่วน TTMT อ่าน live products/imports ของตัวเอง.
 - ตัดคำเรียกระบบแบบ `legacy` ออกจากข้อความผู้ใช้ใน Standards Hub โดยยังเก็บ internal compatibility APIs/data และไม่ลบ route, table หรือ history ใด ๆ.
 
 ## Phase 3 Admin operations checkpoint
@@ -205,11 +225,13 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 - Manufacturer: องค์การเภสัชกรรม; Strength: 400 mg/20 mL; NLEM: ED; ATC: C01BB01, N01BB02
 - หน้าผล/detail ที่ตรวจไม่แสดง RegNo จึงห้าม infer หรือเดาเลขทะเบียนยา
 
-## Next implementation checkpoint
+## Future development and rollout boundary
 
-Phase 2D production rollout ยังต้องอนุมัติ runbook/backup/restore/storage และ Migration 0018 แยก. Phase 4 ให้ทำ feature-parity regression ต่อโดยคง `/mappings` เป็น route หลัก; ห้าม copy production data, publish release จริง หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` บน production โดยไม่มี approval และ maintenance plan แยก.
+แผนหกระยะปิดแล้ว. เริ่มงานใหม่เมื่อเจ้าของอนุมัติขอบเขต ใช้ checkpoint นี้และ canonical docs ตรวจผลกระทบ แล้วรันเฉพาะ checks ที่เกี่ยวข้อง.
 
-Mapping recovery/UX refinement เสร็จและตรวจ production แล้วที่ `0.8.13`. งาน audit ถัดไปให้ทำแยกขอบเขตตามลำดับ:
+Production ใช้ schema ถึง 0021 แล้ว. การ copy/publish แบบ combined หรือเปิด `ACTIVE_STANDARD_RELEASE_ENABLED` ยังต้องมี runbook, backup/recovery, storage, maintenance plan และอนุมัติแยก. คง `/mappings` เป็น route หลัก.
+
+Mapping recovery/UX refinement เสร็จและตรวจ production แล้วที่ `0.8.13`. รายการ audit เดิมด้านล่างเป็นประวัติการจัดลำดับงาน ใช้เฉพาะประเด็นที่ยังเปิดอยู่เมื่อได้รับอนุมัติใหม่:
 
 1. Standard Browser และมาตรฐาน TMT/TTMT
 2. Drug Catalog

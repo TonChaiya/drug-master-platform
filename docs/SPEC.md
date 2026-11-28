@@ -45,6 +45,8 @@
 ชนิดมาตรฐาน: `drugtype 01` ใช้ TMT · `drugtype 10` ใช้ TTMT
 TMT และ TTMT เป็นคนละ namespace/identity; candidate pool ห้ามรวมกันและห้ามบันทึกข้ามชนิด
 
+ยอดใน Dashboard, Admin และ Mapping ต้องใช้ facility และ active inventory scope เดียวกัน. สถานะ lifecycle แบ่ง active source rows ครบเป็น mapped, pending และ needs_review. ยอดพร้อมส่งออกใช้ validity เพิ่มเติมและต้องตรงกับชุดแถว Full export ใน scope เดียวกัน. Preview ไม่เลื่อน Delta checkpoint.
+
 **สถานะ Mapping จาก Drug Catalog snapshot ล่าสุด**
 
 - `mapped`: มี mapping ที่ valid/current และไม่ขัดกับ snapshot ล่าสุด
@@ -205,6 +207,8 @@ run ต้องผูก `/version` ก่อนและหลัง; version 
 
 **TTMT** — คู่มือ API ไม่ยืนยัน MasterTTMT endpoint ระบบจึงนำเข้า MasterTTMT จากไฟล์ที่อนุมัติ
 และแยก version/import history ของ TTMT ออกจาก TMT API **ห้ามถือว่าเป็นข้อมูลเดียวกัน**
+
+เมื่อใช้ independent TMT dataset, งาน sync เขียนเฉพาะ candidate และ consumer อ่าน accepted snapshot ด้วย generation เดียวตลอดงาน. การเปลี่ยน pointer ต้องผ่านการตรวจและอนุมัติ. TTMT ใช้ Status และหลักฐาน import ของตัวเองทั้งก่อนและหลังการเปลี่ยน TMT pointer.
 
 TTMT v2 importer ใช้ known MasterTTMT column aliases เดียวกับ legacy parser แต่ duplicate identity ในไฟล์ต้อง reject, import/version และ hash ต้อง unique และ import + product upsert + audit ต้อง commit ใน transaction เดียวกัน ข้อมูล v2 เขียนได้เฉพาะ `ttmt_imports`/`ttmt_products`; ห้าม fallback ไป `standard_products` หรือ TMT hierarchy. Dry-run parse/hash/summary เท่านั้นและต้องเขียน 0 แถว.
 

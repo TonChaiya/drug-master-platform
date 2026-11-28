@@ -4,6 +4,7 @@
 > สะท้อนเวลาที่จัดทำและต้องไม่ใช้เป็น current implementation status.
 > ดูสถานะปัจจุบันที่ [PROJECT_STATUS.md](PROJECT_STATUS.md) และกฎถาวรที่ [SPEC.md](SPEC.md).
 > เก็บเนื้อหาเดิมไว้เพื่ออธิบายที่มาและการตัดสินใจของแผนหกระยะ
+> ปิดแผนหกระยะที่ application baseline v0.8.23 แล้ว. ผลเทียบ acceptance criteria, หลักฐานทดแทน Phase 1 และข้อจำกัดที่เจ้าของยอมรับอยู่ใน [Phase 6 closure checkpoint](PROJECT_STATUS.md#phase-6-verification-and-closure).
 
 **Project:** `TonChaiya/drug-master-platform`
 **Baseline:** `49f97c7` · Application `0.5.0`

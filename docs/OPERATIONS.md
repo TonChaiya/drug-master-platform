@@ -27,6 +27,7 @@ Windows Tray Agent ที่สถานบริการ
 - ทุก query ที่เป็นข้อมูลสถานบริการต้องรับ facility scope ที่สร้างจาก session เท่านั้น (`lib/authorization/require-context.ts`)
 - admin เลือก facility เป็น explicit context พร้อม audit ไม่แก้ session owner
 - TMT API และ Excel parsing เป็น adapter แยกจาก business rules
+- TiDB เก็บข้อมูลสถานบริการ, migration journal, accepted TMT pointer และ job/checkpoint state. Vercel Queues ส่งงาน candidate แบบ bounded; worker ใช้ lease/fencing และตรวจ version/manifest ก่อนให้ Admin รับรอง. TTMT Excel import มี product/import history และ readiness แยก.
 
 ### ข้อจำกัดของโฮสต์
 
@@ -43,6 +44,7 @@ Windows Tray Agent ที่สถานบริการ
 - schema, migration, Dataset Release, publish/rollback และ feature-flag change ต้องผ่าน explicit review และ operator approval ตามคำสั่งนั้น
 - Dataset Release publish/activation ไม่เกิดจาก deploy, migration หรือ application startup โดยอัตโนมัติ
 - Developer/test tooling ห้ามเขียนหรือเปลี่ยน `jhcisdb`; การเข้าถึงที่รองรับมีเฉพาะ Windows Agent ซึ่งอ่านฐาน JHCIS แบบ read-only ตามขอบเขตด้านล่าง
+- ห้ามให้ dev/test/operational tooling เชื่อม port 3333 หรือเลือก `jhcisdb`. Production credentials ใช้จาก external operator env ตาม runbook และห้ามใช้ `.env.local` เป็น fallback.
 
 ### สิ่งที่ยังไม่ทำในระยะนี้
 
@@ -224,7 +226,7 @@ python -m venv .venv
 - TLS ทุก connection: browser, Agent, TiDB, TMT API
 - database user ใช้สิทธิ์เท่าที่จำเป็น ไม่ใช้ root
 - upload ตรวจ format จากลายเซ็นไฟล์, จำกัดขนาด/จำนวนแถว, เก็บ SHA-256
-- ต้องทดสอบ backup/restore จริง และระบุ retention ของ import, export, audit และ staging ก่อน production
+- ก่อน Production write ที่มีความเสี่ยง ต้องยืนยัน recovery point, backup/restore evidence และ retention ที่เกี่ยวข้องกับ import, export, audit และ staging ตาม [recovery checklist](#recovery-and-rollback).
 - cleanup ของ staging/expired token/nonce เป็น daily job ที่ idempotent
 
 ---
@@ -518,10 +520,10 @@ DB integration tests เป็น fail-closed operational invariant: ต้อ�
 
 **TiDB Cloud compatibility** — Migration 0021 บังคับให้มี pointer เพียงแถวเดียวด้วย stored generated column และ unique index แม้ TiDB ปิดการบังคับใช้ `CHECK`. งานอ่าน manifest และคัดลอก snapshot แบบ batch ใช้ mysql2 text protocol สำหรับ `LIMIT`/`OFFSET` เพราะ TiDB Serverless ปฏิเสธ bound parameters ตรงตำแหน่งนี้ด้วย `ER_WRONG_ARGUMENTS`. ตรวจ exact DDL, foreign keys, row locks, lease fencing และ rollback ผ่าน probe แยกใน Production วันที่ 2026-11-28 และล้างตาราง probe ครบ.
 
-**Durable executor** — โปรเจกต์ใช้ Vercel Hobby และเปิด Fluid Compute. [Vercel Queues](https://vercel.com/docs/queues/pricing) ให้โควตา 1,000,000 API operations บน Hobby. Queue callback ใช้ region `sin1`, project OIDC และหนึ่ง seed batch/checkpoint/manifest table ต่อ delivery. DB commit ของการรับงานเกิดหลัง Queue รับข้อความ ส่วน worker commit checkpoint พร้อม fencing ก่อนส่ง continuation และรอ Queue รับข้อความก่อน acknowledge. เมื่อเกิด retry ระบบอ่านตำแหน่งจาก DB; หมด lease แล้ว worker เดิมส่งผลไม่ได้. หลัง retry หมด หากต้นทางและชุดฐานยังตรงกัน ผู้ดูแลใช้ Resume ได้ในสถานะที่รองรับ. Full-unverified คงเป็น non-resumable. Hosted delivery/retention/OIDC และ TiDB ยังต้องผ่านการตรวจแยกก่อนเปิดใช้.
+**Durable executor** — โปรเจกต์ใช้ Vercel Hobby และเปิด Fluid Compute. [Vercel Queues](https://vercel.com/docs/queues/pricing) ให้โควตา 1,000,000 API operations บน Hobby. Queue callback ใช้ region `sin1`, project OIDC และหนึ่ง seed batch/checkpoint/manifest table ต่อ delivery. DB commit ของการรับงานเกิดหลัง Queue รับข้อความ ส่วน worker commit checkpoint พร้อม fencing ก่อนส่ง continuation และรอ Queue รับข้อความก่อน acknowledge. เมื่อเกิด retry ระบบอ่านตำแหน่งจาก DB; หมด lease แล้ว worker เดิมส่งผลไม่ได้. หลัง retry หมด หากต้นทางและชุดฐานยังตรงกัน ผู้ดูแลใช้ Resume ได้ในสถานะที่รองรับ. Full-unverified คงเป็น non-resumable. หลักฐาน hosted diagnostics และ TiDB ของ release เดิมอยู่ใน [Phase 3 checkpoint](PROJECT_STATUS.md#phase-3-admin-operations-checkpoint). ก่อนเปลี่ยน environment หรือ Queue limits ให้ตรวจ delivery/OIDC/retry และ TiDB อีกครั้งตามขอบเขตที่ได้รับอนุมัติ.
 
 **ลำดับเปิดใช้งานหลังได้รับอนุมัติ release** — ใช้ external env file และ `pnpm tmt:candidate:ops` แบบ dry-run ก่อน. `--operation migrate-0021` ต้องตรวจ journal 0001–0020, maintenance และปิด CLI รุ่นเดิมทั้งหมดก่อน execute; ใช้ `--production-intent --actor-user-id <uuid> --execute --confirm-db drug_master_platform --maintenance-approved --recovery-reference <reference> --confirm-action "APPLY 0021 <SHA-256>"`. หยุดและตรวจ schema/journal หาก DDL ล้มเหลว. Bootstrap snapshot ด้วย `--operation tmt-candidate --dataset-id <uuid>` และ confirmation `BOOTSTRAP <uuid>` พร้อมเงื่อนไขเดียวกัน. ตรวจ hash ของ snapshot เทียบ live และหลักฐาน TMT ก่อนรับรอง. เปิด `TMT_INDEPENDENT_DATASET_ENABLED=1` หลัง bootstrap; เปิด `TMT_CANDIDATE_OPERATIONS_ENABLED=1` หลัง hosted readiness ผ่าน และให้ `ACTIVE_STANDARD_RELEASE_ENABLED` ปิดต่อไป. Rollback ด้วย pointer เดิมผ่าน Admin และคง flags สำหรับการอ่านไว้; ห้าม drop ตารางหรือแก้ migration journal.
-- `/admin` แสดง readiness, recent runs และ checkpoint ของ current TMT v2 pipeline สำหรับผู้ดูแลระบบ; เมื่อ run ล่าสุดมีสถานะ `running` หน้าจอ refresh read-only ทุก 15 วินาทีและสรุป checkpoint ที่สำเร็จ. การเริ่ม/resume ยังต้องผ่าน CLI `pnpm tmt:v2:sync` พร้อม environment/database/mode guards เดิม; run ที่ failed/stale ต้องตรวจ error/checkpoint ก่อน resume ผ่าน CLI และห้ามเริ่มงานยาวจาก web request
+- ก่อน Phase 3 release การเริ่ม/resume ผ่าน CLI `pnpm tmt:v2:sync` เท่านั้น. ใน Production ปัจจุบัน Admin แสดง readiness, recent runs และ checkpoint progress และใช้ guarded candidate controls เมื่อ readiness ผ่าน. การอ่านสถานะรีเฟรชทุก 15 วินาทีขณะมีงาน และงานเขียนทำต่อใน Queue. ตรวจ error/checkpoint ก่อน resume เฉพาะงานที่รองรับ. ห้ามใช้ legacy live writer แทน candidate path หรือทำงานยาวใน web request.
 - `/api/v1/admin/ttmt-import` รับ MasterTTMT ผ่าน current TTMT v2 importer สำหรับ admin เท่านั้น, ใช้ `ttmt_imports`/`ttmt_products` และ audit เดิม; ไม่ใช้ legacy `standard_products` route หรือ pipeline
 - run ผูกกับ `/version` ก่อน/หลัง, ใช้ checkpoint ต่อ endpoint/window และ data write + checkpoint success อยู่ transaction เดียวกัน
 - initial windows เริ่ม `2013-01-01` สูงสุด 365 วัน; incremental ใช้ cursor แยก endpoint พร้อม overlap 30 วัน
@@ -569,6 +571,8 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 ### Verified
 
 - [x] Phase 2 Production ผ่าน guarded TiDB probe, migration journal ถึง `0020`, TTMT audited replacement และ post-cutover integrity วันที่ 2026-11-28. ปิด maintenance แล้วและ Dataset Release ยังปิดอยู่.
+- [x] Phase 3 Production ผ่าน hash/journal verification ถึง `0021`, TiDB probe และ cleanup. Accepted TMT bootstrap ตรวจ manifest เทียบ live ก่อนสลับ pointer และคง assurance `validated_unverified`.
+- [x] Phase 6 ตรวจ Vercel Production และ public health ที่ release `0.8.23`. Journal และ maintenance ใช้หลักฐาน cutover/release เพราะ public endpoint ไม่รายงานสองค่านี้. ดู [Phase 6 checkpoint](PROJECT_STATUS.md#phase-6-verification-and-closure).
 - [x] shared DB rate limit สำหรับ login/signup/enrollment ผ่าน controlled production verification
 - [x] daily expired rate-limit bucket cleanup และ `CRON_SECRET` เปิดใช้บน production; cron `30 19 * * *` UTC และ controlled invocation ผ่าน
 - [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification
@@ -590,5 +594,16 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 
 - [ ] เพิ่ม CI workflow และ monitoring/alert สำหรับ Agent, TMT sync, import/export และ auth anomaly
 - [ ] เพิ่ม automatic cleanup สำหรับ staging, expired token/nonce และ preview records
-- [ ] ทำ backup/restore drill และกำหนด retention policy ของ import, export, audit และ staging
+- [ ] ซ้อม restore จาก backup หลัง migration 0021 ในฐานแยกที่อนุมัติ แล้วตรวจ journal/schema และข้อมูลสำคัญ
+- [ ] กำหนดนโยบาย backup retention และระยะเก็บ import, export, audit และ staging
+- [ ] ยืนยัน live TMT synchronization ในงานที่ได้รับอนุมัติแยก ตรวจ candidate isolation, version/manifest และความพร้อมของ accepted dataset ตลอดงาน. Promotion ต้องได้รับอนุมัติแยก.
 - [ ] reconcile production checklist/UAT กับ owner เป็นระยะโดยไม่ตีความ deployment ว่าเท่ากับผ่านทุก gate
+
+### Recovery and rollback
+
+เก็บหลักฐาน deployment SHA, version และ health แยกจาก DB state. เมื่อจำเป็นต้องยืนยัน journal/maintenance สด ใช้ guarded `pnpm production:preflight` ด้วย external operator env/readiness และ `--production-intent --operation preflight`. Preflight รายงาน migration ล่าสุดและ maintenance แบบอ่านอย่างเดียว. การตรวจ hash ทั้ง chain ใช้ผล journal verification จาก guarded migration tooling หรือการเปรียบเทียบ journal แบบ SELECT-only ที่ได้รับอนุมัติ. ไม่ใช้คำสั่ง enable/disable เพียงเพื่อทดสอบสถานะ.
+
+1. **Application regression.** ตรวจ SHA ของ deployment ก่อนหน้าและความเข้ากันกับ journal/pointer/flags ปัจจุบัน. สำหรับ regression จาก v0.8.23 ให้ประเมิน v0.8.22 (`685ec6d3fde47cea5b3693e768e5e972e74242f6`) ซึ่งใช้ schema 0021 เหมือนกัน. สลับ deployment เฉพาะหลังอนุมัติและตรวจ health, footer, Admin, Standards และ Mapping. คง schema และ Combined Dataset Release OFF.
+2. **TMT dataset regression.** ใช้ guarded Admin rollback ไปยัง snapshot ที่เคยรับรองหลังอนุมัติ. ตรวจ accepted generation, assurance, audit และผลอ่านของ consumer. การเปลี่ยน generation ต้องปฏิเสธ Export preview token เดิม. ห้ามล้าง snapshot หรือย้อน migration journal.
+3. **Schema/data incident.** หยุด write และเก็บหลักฐานที่ redact แล้ว. ตรวจ provider export/backup checksum, เวลา, journal และความครบของข้อมูลก่อนเลือก recovery point. ใช้สำเนา restore ในฐานแยกที่ได้รับอนุมัติและเทียบ counts, constraints กับข้อมูลสำคัญก่อนตัดสินใจเรื่อง Production. ห้าม auto-retry partial TiDB DDL หรือ restore ทับ production โดยอัตโนมัติ.
+4. **Evidence and limits.** TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` เคย restore บน isolated MySQL และมี logical backup ก่อน 0021 บันทึกใน [PROJECT_STATUS.md](PROJECT_STATUS.md#phase-3-admin-operations-checkpoint). หลักฐานนี้รองรับ recovery procedure. การยืนยัน backup ล่าสุด, restore drill หลัง 0021 และ retention ยังเป็นงานปฏิบัติการก่อนใช้ recovery point ครั้งถัดไป.

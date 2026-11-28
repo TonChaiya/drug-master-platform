@@ -35,6 +35,8 @@ JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  
 
 ## เริ่มใช้งาน
 
+คำสั่งด้านล่างสำหรับ local development เท่านั้น. ตรวจว่า environment ชี้ฐานทดสอบที่แยกจาก Production, ไม่ใช่ port 3333 และไม่ใช่ `jhcisdb`.
+
 ```bash
 pnpm install
 cp .env.example .env.local
@@ -66,7 +68,9 @@ references/templates/ แม่แบบ DrugCat เปล่าที่อน�
 
 ## สถานะ
 
-Production deploy แล้วและ core workflow ใช้งานได้: ดึงยาจาก JHCIS → ซิงก์มาตรฐาน → นำเข้า Drug Catalog → จับคู่ → ส่งออก `.xls`
+เส้นทางหลักคือ Dashboard → เชื่อมต่อ JHCIS → Standards → Drug Catalog → [จับคู่รายการยา](docs/SPEC.md#3-ลำดับเตรียมข้อมูลและ-map) (`/mappings`) → ส่งออก DrugCat `.xls`. ผู้ดูแลจัดการสถานบริการ บัญชี Agent และงานมาตรฐานใน Admin.
+
+Production บน Vercel/TiDB Cloud ใช้ independent accepted dataset สำหรับ TMT และ Excel import แยกสำหรับ TTMT. Combined Dataset Release ต้องได้รับอนุมัติแยกก่อนเปิดใช้.
 
 รายการ hardening และงานที่ยังต้องติดตามไม่ได้ถือว่าผ่านทั้งหมด ดูสถานะที่ตรวจล่าสุดใน
-[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) และ runbook/checklist ใน [docs/OPERATIONS.md](docs/OPERATIONS.md)
+[Phase 6 closure checkpoint](docs/PROJECT_STATUS.md#phase-6-verification-and-closure) และ runbook/checklist ใน [docs/OPERATIONS.md](docs/OPERATIONS.md)
