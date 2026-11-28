@@ -5,6 +5,8 @@
 > ดูสถานะปัจจุบันที่ [PROJECT_STATUS.md](PROJECT_STATUS.md) และกฎถาวรที่ [SPEC.md](SPEC.md).
 > เก็บเนื้อหาเดิมไว้เพื่ออธิบายที่มาและการตัดสินใจของแผนหกระยะ
 > ปิดแผนหกระยะที่ application baseline v0.8.23 แล้ว. ผลเทียบ acceptance criteria, หลักฐานทดแทน Phase 1 และข้อจำกัดที่เจ้าของยอมรับอยู่ใน [Phase 6 closure checkpoint](PROJECT_STATUS.md#phase-6-verification-and-closure).
+>
+> **2026-11-28:** งานแทนที่สถาปัตยกรรม TMT ใช้ [TMT Architecture Replacement Plan](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) ซึ่งเป็น roadmap แยกและยังไม่เริ่ม implementation. แผนหกระยะและข้อจำกัดที่บันทึกไว้ยังคงปิดแล้ว ข้อความ approval และลำดับงานเดิมด้านล่างใช้เป็นประวัติ.
 
 **Project:** `TonChaiya/drug-master-platform`
 **Baseline:** `49f97c7` · Application `0.5.0`

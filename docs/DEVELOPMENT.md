@@ -339,8 +339,10 @@ E2E สร้างและลบเฉพาะฐานทดสอบดั�
 
 ## AI handoff rules
 
-- อ่าน [PROJECT_STATUS.md](PROJECT_STATUS.md) ก่อนเริ่ม และตรวจ Git HEAD/status จริง
+- ใช้ [ลำดับการอ่านกลางใน AGENTS.md](../AGENTS.md#required-reading-order) และตรวจ Git HEAD/status จริงก่อนเริ่ม
 - ให้ repository/deployment evidence เหนือกว่า chat memory
 - อัปเดต `PROJECT_STATUS.md` หลัง milestone สำคัญ
 - ถ้า business requirement เปลี่ยนให้อัปเดต `SPEC.md`; ถ้า architecture/runtime/security/migration เปลี่ยนให้อัปเดต `OPERATIONS.md`
 - อย่าเก็บ transient debug notes หรือ current status ยาว ๆ ใน `AGENTS.md`/`CLAUDE.md`
+
+**2026-11-28 — TMT Architecture Replacement.** งาน TMT ถัดไปใช้ [canonical roadmap](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) และ คู่มือ API 26 หน้า (`tmtapi_manual.pdf` ใน root ของโปรเจกต์). แผนและ test guidance เดิมยังใช้อ้างอิงระบบ v0.8.24 และประวัติได้. ใช้ isolated branch และ disposable DB ที่อนุมัติ เลือก storage design จากการวัด TiDB และเปรียบเทียบผลลัพธ์กับ baseline ก่อน cutover. ใช้ manual-shaped fixtures และ focused regression/browser coverage ตาม stage. ห้ามเริ่ม production module ซ้ำ, เพิ่ม silent fallback หรือเปลี่ยน contracts เพื่อให้ test ผ่าน. Applied migrations และ historical docs ต้องคงเดิม.

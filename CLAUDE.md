@@ -9,6 +9,7 @@
 3. [docs/SPEC.md](docs/SPEC.md) — business/system requirements ของ domain ที่จะแก้
 4. [docs/OPERATIONS.md](docs/OPERATIONS.md) — architecture, runtime, security และ migrations
 5. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — local environment, build, test และ deploy workflow
+6. สำหรับงาน TMT ให้อ่าน [docs/TMT_ARCHITECTURE_REPLACEMENT_PLAN.md](docs/TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) และคู่มือ `tmtapi_manual.pdf` (ไฟล์อ้างอิงในเครื่อง) จาก root ของโปรเจกต์
 
 `CLAUDE.md` เป็นเพียง compatibility entrypoint; ห้าม duplicate หรือ override กฎใน `AGENTS.md`
 เอกสาร roadmap/design ที่ระบุว่า historical ใช้อธิบายที่มาเท่านั้น; สถานะปัจจุบันต้องยึดชุด canonical ข้างต้น

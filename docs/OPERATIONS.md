@@ -5,6 +5,8 @@
 
 ---
 
+**2026-11-28 — TMT replacement boundary.** Runbook นี้ใช้กับ Production v0.8.24 ถึง migration 0021. [แผนแทนที่ TMT](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) ระบุงานอนาคตและยังไม่เปลี่ยนคำสั่ง deploy, flags, sync หรือ recovery ปัจจุบัน. ขั้นตอน rollout/rollback เดิมใช้กับระบบเดิมตามเงื่อนไขของแต่ละขั้น.
+
 ## 1. สถาปัตยกรรม
 
 ```text
@@ -568,6 +570,8 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 ---
 
 ## 5. Production verification checklist
+
+**Replacement gate (2026-11-28).** ใช้ fresh backup และ isolated restore rehearsal ที่ตรงกับ Production ก่อน cutover ตรวจ TiDB headroom, transaction limits และ RU จากหลักฐานจริง. เตรียมและ validate fresh Full Sync โดย active dataset เดิมยังให้บริการ ตรวจผู้ใช้ทุกเส้นทางก่อนเจ้าของอนุมัติการสลับพร้อมกัน และยืนยัน rollback ได้. การลบข้อมูลเดิมมี dependency, archive, restore และ rollback gates รวมถึงอนุมัติแยก. คง Combined Dataset Release OFF. ดู [Stages 06–07](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md#delivery-stages-and-gates). การอนุมัติ roadmap ไม่ใช่การอนุมัติรัน Production.
 
 ระบบ deploy production แล้ว ส่วนนี้แยกหลักฐานที่ตรวจแล้วออกจาก hardening ที่ยังค้าง
 เพื่อไม่ให้ deployment status ถูกตีความว่า checklist ทุกข้อผ่าน ดู checkpoint ล่าสุดที่ [PROJECT_STATUS.md](PROJECT_STATUS.md)

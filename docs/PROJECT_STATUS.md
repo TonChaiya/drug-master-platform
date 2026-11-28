@@ -3,6 +3,14 @@
 เอกสารนี้เป็น handoff/current-state กลาง ไม่ใช่ business specification หรือ runbook
 ข้อกำหนดถาวรอยู่ใน [SPEC.md](SPEC.md) และการปฏิบัติระบบอยู่ใน [OPERATIONS.md](OPERATIONS.md)
 
+## TMT Architecture Replacement checkpoint
+
+- 2026-11-28: owner approved the [TMT Architecture Replacement Plan](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md). Documentation and the prior API compliance audit are complete. Stages 00–07 have not started. The earlier six-phase roadmap remains closed with its recorded limitations and deferred backlog.
+- Last confirmed application release: Production `0.8.24`, application SHA `86b8cfeac53a0370a1108e54ceaf809f146b52ee`, Vercel deployment `dpl_Agsa6wGPo7iexsUdMz4tPGSbtHmE` Ready, health HTTP 200, database healthy and TLS enabled. Migration `0021` and Combined Dataset Release OFF are recorded checkpoints. This documentation task performed no live checks.
+- Last verified active TMT dataset `7dbe9e39-6c19-4b1b-bf7f-3d7e98884305`, generation `1`, `validated_unverified`. The 517,862-row baseline remained accepted. Candidate `8fe7d0b8-f88b-4a0e-b53f-c5ace908267c` recorded 700 content writes after the full seed and failed final validation. No recovery or promotion was performed at the recorded checkpoint.
+- v0.8.24 allows unchanged or resolved inherited RegNo groups for Incremental and rejects newly introduced or changed ambiguous groups. Full and combined validation remain unchanged. See the [hotfix checkpoint](#v0824-hotfix-release-checkpoint) and [API contract and audit findings](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md#official-api-and-prior-audit).
+- Next: Stage 00 after owner authorization. Keep the running implementation and operating safeguards while the isolated replacement is built and verified. Storage design, upstream semantics, retention budgets and rollback details remain open.
+
 ## Production baseline before the v0.8.24 hotfix
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
@@ -234,6 +242,8 @@ backend ใช้ authoritative TMT v2 data เท่านั้น: รอง�
 - หน้าผล/detail ที่ตรวจไม่แสดง RegNo จึงห้าม infer หรือเดาเลขทะเบียนยา
 
 ## Future development and rollout boundary
+
+**2026-11-28 — New TMT scope.** Use the [replacement roadmap](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) for future TMT architecture and dependency decisions. The earlier priorities below remain historical evidence. Current operations continue under [OPERATIONS.md](OPERATIONS.md).
 
 แผนหกระยะปิดแล้ว. เริ่มงานใหม่เมื่อเจ้าของอนุมัติขอบเขต ใช้ checkpoint นี้และ canonical docs ตรวจผลกระทบ แล้วรันเฉพาะ checks ที่เกี่ยวข้อง.
 

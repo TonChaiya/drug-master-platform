@@ -18,9 +18,12 @@ JHCIS (LAN, read-only)  →  Windows Agent  →[HTTPS + HMAC]→  Next.js  →  
 | [AGENTS.md](AGENTS.md) | กฎร่วมสำหรับ Codex, Claude Code และ coding agent อื่น |
 | [CLAUDE.md](CLAUDE.md) | entrypoint สั้นสำหรับ Claude Code ไปยังเอกสารกลาง |
 | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | สถานะ production, checkpoint และ backlog ล่าสุด |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | environment, คำสั่ง build/test และ workflow พัฒนา |
 | [docs/SPEC.md](docs/SPEC.md) | ระบบต้องทำอะไร: กฎธุรกิจ, แบบจำลองข้อมูล, TMT API, สัญญาไฟล์ DrugCat |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | ระบบทำงานอย่างไร: สถาปัตยกรรม, Agent protocol, ความปลอดภัย, การขึ้นระบบ |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | environment, คำสั่ง build/test และ workflow พัฒนา |
+| [TMT Architecture Replacement Plan](docs/TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) และ คู่มือ TMT API (`tmtapi_manual.pdf` ในเครื่อง) | ข้อกำหนดงาน TMT ในอนาคตและสัญญา upstream |
+
+Codex, Claude Code และ agent อื่นใช้ [ลำดับการอ่านเดียวกัน](AGENTS.md#required-reading-order)
 
 ## Roadmap และประวัติการออกแบบ
 
@@ -71,6 +74,8 @@ references/templates/ แม่แบบ DrugCat เปล่าที่อน�
 เส้นทางหลักคือ Dashboard → เชื่อมต่อ JHCIS → Standards → Drug Catalog → [จับคู่รายการยา](docs/SPEC.md#3-ลำดับเตรียมข้อมูลและ-map) (`/mappings`) → ส่งออก DrugCat `.xls`. ผู้ดูแลจัดการสถานบริการ บัญชี Agent และงานมาตรฐานใน Admin.
 
 Production บน Vercel/TiDB Cloud ใช้ independent accepted dataset สำหรับ TMT และ Excel import แยกสำหรับ TTMT. Combined Dataset Release ต้องได้รับอนุมัติแยกก่อนเปิดใช้.
+
+Production checkpoint ล่าสุดคือ v0.8.24 และ migration `0021`. แผนหกระยะปิดแล้วตามข้อจำกัดที่บันทึกไว้ เจ้าของอนุมัติทิศทาง TMT Architecture Replacement เมื่อ 2026-11-28 และยังไม่ได้เริ่ม Stage 00–07. ดู [สถานะและหลักฐานล่าสุด](docs/PROJECT_STATUS.md#tmt-architecture-replacement-checkpoint).
 
 รายการ hardening และงานที่ยังต้องติดตามไม่ได้ถือว่าผ่านทั้งหมด ดูสถานะที่ตรวจล่าสุดใน
 [Phase 6 closure checkpoint](docs/PROJECT_STATUS.md#phase-6-verification-and-closure) และ runbook/checklist ใน [docs/OPERATIONS.md](docs/OPERATIONS.md)

@@ -10,12 +10,15 @@
 3. [docs/SPEC.md](docs/SPEC.md) เฉพาะ domain ที่จะแก้
 4. [docs/OPERATIONS.md](docs/OPERATIONS.md) เฉพาะ runtime, deploy หรือ security ที่เกี่ยวข้อง
 5. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) เมื่อทำงาน local, build, test หรือ deploy
+6. สำหรับงาน TMT ให้อ่าน [docs/TMT_ARCHITECTURE_REPLACEMENT_PLAN.md](docs/TMT_ARCHITECTURE_REPLACEMENT_PLAN.md) และคู่มือ `tmtapi_manual.pdf` (ไฟล์อ้างอิงในเครื่อง) จาก root ของโปรเจกต์
 
-เอกสารตามลำดับข้างต้นเป็น current canonical truth ส่วน
+เอกสารตามลำดับข้างต้นเป็น canonical truth ตามขอบเขตของแต่ละไฟล์ แผน TMT ระบุข้อกำหนดงานในอนาคต ให้ตรวจสถานะที่ PROJECT_STATUS.md ก่อนเริ่มงาน ส่วน
 `docs/UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md` และ `docs/superpowers/**` เป็น roadmap/design/implementation history
 ให้ใช้อธิบายที่มา ไม่ใช่สถานะปัจจุบัน และห้ามลบหรือเปลี่ยนชื่อเอกสารประวัติโดยไม่มีอนุมัติชัดเจน
 
 ใช้ [Phase 6 verification and closure](docs/PROJECT_STATUS.md#phase-6-verification-and-closure) เป็นจุดเริ่ม handoff หลัง v0.8.23. อ้างผลเดิมได้เมื่อ scope และ baseline ยังตรงกัน และระบุให้ชัดว่าตรวจใหม่ส่วนใด.
+
+ตั้งแต่ 2026-11-28 งานแทนที่สถาปัตยกรรม TMT ใช้ roadmap เดียวข้างต้น แยกจากแผนหกระยะที่ปิดแล้ว ต้องคง TMT/TTMT อิสระ ใช้ authoritative TMT read path เดียว และแยกอนุมัติ Production cutover จากการลบข้อมูลเดิม ห้ามเข้าถึง port `3333` หรือ `jhcisdb` และห้ามตรวจ แก้ ลบ เปิดเผย หรือ commit ไฟล์ secrets/credentials ระหว่างงาน roadmap นี้
 
 ---
 

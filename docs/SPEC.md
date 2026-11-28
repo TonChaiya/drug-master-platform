@@ -162,6 +162,8 @@ Implementation status อยู่ใน `PROJECT_STATUS.md`; ประวัต
 
 ## 8. TMT API
 
+**2026-11-28 — Official contract and scope.** The local `tmtapi_manual.pdf` is authoritative where explicit, covering 18 JSON POST endpoints and 15 date-window endpoints. The four endpoints highlighted below supply the fields used for mapping and export. For the complete contract, confirmed implementation gaps and unresolved upstream semantics, see the [endpoint audit](TMT_ARCHITECTURE_REPLACEMENT_PLAN.md#official-api-and-prior-audit). The replacement and its storage design are future work. The production rules below continue to apply to their documented modes.
+
 **Authentication** — `POST {base}/token` body `{username, password}` ตอบ `{create, expire, token}`
 endpoint อื่นใช้ `Authorization: Bearer <token>` โดยไม่ encode token · TLS verification ต้องเปิดใน production
 Credential เป็น server-only secret และค่าที่เคยเผยแพร่ต้อง rotate ก่อนใช้งานจริง
@@ -209,6 +211,8 @@ run ต้องผูก `/version` ก่อนและหลัง; version 
 และแยก version/import history ของ TTMT ออกจาก TMT API **ห้ามถือว่าเป็นข้อมูลเดียวกัน**
 
 เมื่อใช้ independent TMT dataset, งาน sync เขียนเฉพาะ candidate และ consumer อ่าน accepted snapshot ด้วย generation เดียวตลอดงาน. การเปลี่ยน pointer ต้องผ่านการตรวจและอนุมัติ. TTMT ใช้ Status และหลักฐาน import ของตัวเองทั้งก่อนและหลังการเปลี่ยน TMT pointer.
+
+ตั้งแต่ v0.8.24 การตรวจ RegNo สำหรับ Incremental เทียบกลุ่มค่าล่าสุดกับ accepted baseline ด้วย TPU, วันที่ และชุด normalized values: กลุ่มกำกวมเดิมที่ไม่เปลี่ยนหรือคลี่คลายแล้วผ่านได้ ส่วนกลุ่มกำกวมใหม่หรือที่เปลี่ยนต้อง fail closed. คงค่าต้นฉบับ, provenance และ assurance `validated_unverified`. Full และ Combined Dataset Release ใช้กฎเดิม. ห้ามสรุปว่าการไม่พบแถวใน API คือการลบ หรือกำหนดลำดับความสำคัญเองเมื่อคู่มือยังไม่ระบุ.
 
 TTMT v2 importer ใช้ known MasterTTMT column aliases เดียวกับ legacy parser แต่ duplicate identity ในไฟล์ต้อง reject, import/version และ hash ต้อง unique และ import + product upsert + audit ต้อง commit ใน transaction เดียวกัน ข้อมูล v2 เขียนได้เฉพาะ `ttmt_imports`/`ttmt_products`; ห้าม fallback ไป `standard_products` หรือ TMT hierarchy. Dry-run parse/hash/summary เท่านั้นและต้องเขียน 0 แถว.
 
