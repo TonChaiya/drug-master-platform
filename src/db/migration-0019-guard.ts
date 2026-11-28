@@ -140,14 +140,34 @@ function assertPreSchema(snapshot: Migration0019Snapshot): void {
   if (snapshot.columns.length !== 0) refuse("PARTIAL_SCHEMA", "Migration 0019 columns already exist without a journal entry");
 }
 
+function splitTidbColumnAdds(statements: readonly string[]): string[] {
+  // TiDB resolves AFTER against the pre-statement schema. Expand only the
+  // reviewed 0019 statements and keep the original file and journal hash.
+  return statements.flatMap((statement, index) => {
+    const match = /^ALTER TABLE (ttmt_products|ttmt_dataset_products)\s+([\s\S]+)$/.exec(statement);
+    if (!match || match[1] !== TABLES[index]) refuse("MIGRATION_SQL_INVALID", "Unexpected TiDB Migration 0019 statement");
+    const clauses = match[2].split(",").map((clause) => clause.trim());
+    const reviewedClauses = [
+      "ADD COLUMN ttmt_type VARCHAR(64) NULL AFTER status",
+      "ADD COLUMN change_date VARCHAR(64) NULL AFTER ttmt_type",
+      "ADD COLUMN drug_group_nhso VARCHAR(120) NULL AFTER change_date",
+    ];
+    if (clauses.length !== reviewedClauses.length || clauses.some((clause, i) => clause !== reviewedClauses[i])) {
+      refuse("MIGRATION_SQL_INVALID", "Unexpected TiDB Migration 0019 column sequence");
+    }
+    return clauses.map((clause) => `ALTER TABLE ${match[1]} ${clause}`);
+  });
+}
+
 export async function executeGuardedMigration0019(request: Migration0019Request, dependencies: Migration0019Dependencies) {
   if (dependencies.migrationHash.toLowerCase() !== EXPECTED_MIGRATION_0019_SHA256) refuse("MIGRATION_HASH_INVALID", "Migration 0019 hash differs from reviewed release");
-  const statements = splitMigrationStatements(dependencies.migrationSql);
-  if (statements.length !== 2) refuse("MIGRATION_SQL_INVALID", "Migration 0019 must contain exactly two statements");
+  const originalStatements = splitMigrationStatements(dependencies.migrationSql);
+  if (originalStatements.length !== 2) refuse("MIGRATION_SQL_INVALID", "Migration 0019 must contain exactly two statements");
   const target = await dependencies.inspectTarget();
   assertTarget(request, target);
   assertJournal(target.journal, dependencies.expectedPriorJournal);
   assertPreSchema(target);
+  const statements = target.provider === "tidb-cloud" ? splitTidbColumnAdds(originalStatements) : originalStatements;
   if (!UUID.test(request.actorUserId)) refuse("ACTOR_REQUIRED", "A valid actor UUID is required");
   if (!request.reason.trim()) refuse("REASON_REQUIRED", "A reason is required");
   if (!request.execute) return {

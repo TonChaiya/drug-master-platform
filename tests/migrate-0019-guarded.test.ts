@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { describe, expect, test, vi } from "vitest";
 import {
@@ -18,6 +19,7 @@ const prior = [
   ...Array.from({ length: 17 }, (_, index) => ({ filename: `${String(index + 1).padStart(4, "0")}_migration.sql`, contentHash: String(index + 1).padStart(64, "0") })),
   { filename: MIGRATION_0018_FILENAME, contentHash: EXPECTED_MIGRATION_0018_SHA256 },
 ];
+const reviewedMigration = readFileSync(new URL("../src/db/migrations/0019_ttmt_source_fidelity.sql", import.meta.url), "utf8");
 const request = (overrides: Partial<Migration0019Request> = {}): Migration0019Request => ({
   environment: "production", envFile: "C:\\secure\\production.env", execute: false,
   maintenanceApproved: false, rehearsalIntent: false,
@@ -33,7 +35,7 @@ const snapshot = (overrides: Partial<Migration0019Snapshot> = {}): Migration0019
 function deps(overrides: Partial<Migration0019Dependencies> = {}): Migration0019Dependencies {
   return {
     expectedPriorJournal: prior,
-    migrationSql: "ALTER TABLE ttmt_products ADD COLUMN ttmt_type VARCHAR(64) NULL; ALTER TABLE ttmt_dataset_products ADD COLUMN ttmt_type VARCHAR(64) NULL;",
+    migrationSql: reviewedMigration,
     migrationHash: EXPECTED_MIGRATION_0019_SHA256, inspectTarget: vi.fn(async () => snapshot()),
     executeStatement: vi.fn(async () => undefined), verifySchema: vi.fn(async () => true), recordJournal: vi.fn(async () => undefined), ...overrides,
   };
@@ -75,10 +77,10 @@ describe("guarded Migration 0019", () => {
     expect(dependencies.executeStatement).not.toHaveBeenCalled();
   });
 
-  test("executes exactly two statements and journals after verification", async () => {
+  test("TiDB executes ordered single-column DDL and journals the original hash after verification", async () => {
     const events: string[] = [];
     const dependencies = deps({
-      executeStatement: vi.fn(async (_sql, index) => { events.push(`sql:${index}`); }),
+      executeStatement: vi.fn(async (sql, index) => { events.push(`sql:${index}`); assert.doesNotMatch(sql, /,/); }),
       verifySchema: vi.fn(async () => { events.push("verify"); return true; }),
       recordJournal: vi.fn(async () => { events.push("journal"); }),
     });
@@ -87,7 +89,20 @@ describe("guarded Migration 0019", () => {
       confirmHash: EXPECTED_MIGRATION_0019_SHA256, maintenanceApproved: true,
     }), dependencies);
     assert.equal(result.mode, "executed");
-    assert.deepEqual(events, ["sql:1", "sql:2", "verify", "journal"]);
+    assert.deepEqual(events, ["sql:1", "sql:2", "sql:3", "sql:4", "sql:5", "sql:6", "verify", "journal"]);
+    expect(dependencies.executeStatement).toHaveBeenNthCalledWith(2, "ALTER TABLE ttmt_products ADD COLUMN change_date VARCHAR(64) NULL AFTER ttmt_type", 2);
+    expect(dependencies.executeStatement).toHaveBeenNthCalledWith(6, "ALTER TABLE ttmt_dataset_products ADD COLUMN drug_group_nhso VARCHAR(120) NULL AFTER change_date", 6);
+    expect(dependencies.recordJournal).toHaveBeenCalledWith(MIGRATION_0019_FILENAME, EXPECTED_MIGRATION_0019_SHA256);
+  });
+
+  test("isolated MySQL rehearsal keeps the two original statements", async () => {
+    const dependencies = deps({ inspectTarget: vi.fn(async () => snapshot({
+      host: "127.0.0.1", port: 3306, serverVersion: "8.4.3", provider: "local-mysql", tlsVerified: false,
+    })) });
+    const result = await executeGuardedMigration0019(request({
+      environment: "local", productionIntent: false, rehearsalIntent: true, guardedOperation: undefined,
+    }), dependencies);
+    assert.equal(result.statementCount, 2);
   });
 
   test("partial DDL failure stops without journal write", async () => {

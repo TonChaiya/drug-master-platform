@@ -7,28 +7,28 @@
 
 - Repository: [TonChaiya/drug-master-platform](https://github.com/TonChaiya/drug-master-platform)
 - Branch: `main`
-- Production SHA before this release: `38e0b208b1a5324f1b2b6a7117d89b9017ed35a1`
-- Current production application version before this release: `0.8.19`
-- Release candidate: `0.8.20`
-- Hosting: Vercel production deployed through Git integration; deployment ของ SHA ข้างต้นตรวจแล้วเป็น `READY`
+- Production application version: `0.8.20`
+- Compatible application deployed before the cutover: `47390b156e29d53871d9bc1ebd326d2df68190ee`
+- Hosting: Vercel Production ผ่าน Git integration
 - Health: `/api/v1/health` ตอบ HTTP `200`, database healthy และ TLS enabled ที่ checkpoint นี้
 - Production database: TiDB Cloud
-- Latest applied migration: `0017_tmt_run_validations.sql`
+- Latest applied migration: `0020_tmt_independent_validation.sql`
 - Windows Agent baseline: `1.3.0`
 
 ## Unified system improvement handoff
 
 - Canonical controlled-improvement plan: [UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md](UNIFIED_SYSTEM_IMPROVEMENT_PLAN.md)
-- Status: Phase 2D local implementation และ isolated MySQL verification เสร็จแล้ว; release `0.8.2` เพิ่ม guarded Migration 0018 executor ต่อจาก guarded Dataset Release CLI และ migration explicit final schema ของ `0.8.1`. Production ยังคงใช้ legacy live dataset path เพราะ feature flag ปิดอยู่ และ production migration/baseline/publish ยังไม่ได้รับอนุมัติ.
+- Status: Phase 2 Production cutover เสร็จแล้ววันที่ 2026-11-28. Production ใช้ live TMT/TTMT tables โดย Dataset Release ยังปิดอยู่ และยังไม่ได้ copy/publish Dataset Release.
 - Release `0.8.14` เพิ่ม migration 0019 และ source-fidelity preservation สำหรับ `TTMTType`, `Changedate`, `Drug_Group_Nhso` ใน live/versioned TTMT rows. Import ยังคง upsert เฉพาะรหัสที่มีใน workbook, cell ว่างล้างค่าเดิมเป็น `NULL`, ไม่ลบ/deactivate รหัสที่หาย และยังใช้ `Status` เป็น eligibility input โดยไม่ตีความ `TTMTType=CANCEL`.
 - Release `0.8.15` เตรียม guarded Migration 0019 executor สำหรับลำดับ `0018 → 0019` และ CLI one-time TTMT baseline replacement แบบ dry-run/fail-closed ซึ่งรักษา import/audit/mapping/history เดิมและไม่ลด duplicate version/hash protection. ยังไม่มี Production migration, reset หรือ baseline import ใน checkpoint นี้.
 - Release `0.8.16` ประสาน canonical TTMT validation/replacement evidence ไปยัง MasterTTMT `20261001` hash `88618ebf566ed5680f7ad49c00e55ad920e6699c1324b707ea5375a440dca057` หลัง re-audit โครงสร้างและสถิติสำคัญผ่านครบ. Artifact นี้ได้รับอนุมัติใหม่หลัง binary identity เปลี่ยน โดยไม่ได้อ้างว่า binary-equivalent กับ workbook เดิม; migration, baseline replacement และ Dataset Release ยังไม่ได้ execute.
 - Release `0.8.17` รวม guard เป้าหมายเป็น `LOCAL_CLONE_REHEARSAL`, `TEST`, `PRODUCTION` โดย local clone ต้องใช้ `--rehearsal` และยังปฏิเสธ port 3333/`jhcisdb`/remote target. Local Production clone บน Laragon ผ่าน 0017→0018→0019 และ controlled TTMT replacement ครบ: 9,654 unique codes, `RECIPE/SINGLE/CANCEL` 6,790/2,847/17, mappings/history เดิมคงอยู่ และ maintenance ถูกปิดหลัง rehearsal. Production database ยังไม่ถูก migrate หรือ rebuild.
 - Release `0.8.18` เพิ่ม Production readiness contract แบบ external non-secret evidence, บังคับ explicit intent/operation/TiDB Cloud/mysql2/TLS ใน shared target guard และเพิ่ม ownership-guarded TiDB probe สำหรับ FK/collation/nullable ALTER/transaction rollback/row lock/partial DDL. TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` ผ่าน restore rehearsal บน isolated MySQL 8.4.3 แล้ว; probe จริง, Migration 0018/0019 และ TTMT replacement บน Production ยัง **ไม่ execute**.
 - Release `0.8.19` ให้ readiness guard รับคำยืนยันเรื่องพื้นที่ที่ระบุเวลาและ operation จาก operator โดยตัวเลขพื้นที่เป็น optional. Production probe, Migration 0018/0019 และ TTMT replacement ยังไม่ดำเนินการใน release นี้.
-- Approved TTMT cutover workbook `20261001` ฉบับที่ operator ระบุว่าดาวน์โหลดใหม่จากหน้าเว็บมาตรฐาน ใช้ SHA-256 `071cb3d3708865f8d1428e23f25216ba65e6acb21e436070587d98a59dbce5c3`. ตรวจด้วย parser ของโปรเจกต์ผ่าน: worksheet `l_ttmt_master_ed`, 15 columns, 9,654 unique codes, Status Active 9,654, RECIPE/SINGLE/CANCEL 6,790/2,847/17 และ ED/NED 5,539/4,115. สถิติหลักตรงกับหลักฐานเดิม แต่ binary hash ต่างกัน และยังไม่ดำเนินการ cutover.
+- Approved TTMT cutover workbook `20261001` ฉบับที่ operator ดาวน์โหลดใหม่จากหน้าเว็บมาตรฐานใช้ SHA-256 `071cb3d3708865f8d1428e23f25216ba65e6acb21e436070587d98a59dbce5c3`. Parser ตรวจ worksheet `l_ttmt_master_ed` และ 15 columns ผ่าน. หลัง replacement ตรวจได้ 9,654 unique codes, Status Active 9,654, RECIPE/SINGLE/CANCEL 6,790/2,847/17 และ ED/NED 5,539/4,115. สถิติหลักตรงกับหลักฐานเดิมและ binary hash ต่างกัน.
 - The plan preserves the current acceptance constraints: one user-facing system, compact responsive UI, application version only in the shared footer, and no production/schema/migration/deploy changes without separate approval.
-- Phase 2 cutover checkpoint: independent TMT evidence and guarded migration 0020 are prepared. The candidate reader returned `validated_unverified` against the existing Production run without querying current TTMT products. A fresh 28 Nov Production backup used snapshot TSO `470767359029149910` and passed the 44-table, completion-marker and SHA-256 checks. The verified 20 Nov export remains the restore rehearsal evidence. Production schema and TTMT cutover are pending.
+- Phase 2 Production: TiDB probe และ cleanup ผ่าน, journal และ schema `0018 → 0019 → 0020` ผ่าน, guarded TTMT replacement ผ่าน, และปิด maintenance หลังตรวจข้อมูล. TMT ยังคง `validated_unverified` ด้วย evidence เดิมโดยไม่ต้อง sync หรือ revalidate. TMT readiness ตรวจหลักฐาน TMT ส่วน TTMT ตรวจ Status และ provenance จาก import ที่สำเร็จของแต่ละแถว. Dataset Release ตรวจและผูกหลักฐานทั้งสองแหล่งก่อน publish ตามขั้นตอนอนุมัติของตัวเอง.
+- Recovery evidence: logical backup วันที่ 2026-11-28 ใช้ consistent snapshot TSO `470767359029149910`, ตรวจครบ 44 tables และ SHA-256 `999676e2928c2cdb326d89d3ff0ee10a547c501db5570b6edd11dd491347b5cf`. TiDB Cloud export `exp-5cdjkve5g5cklkxyb4ucfciplm` เป็นหลักฐาน restore rehearsal.
 
 ## Phase 4 consolidation checkpoint
 
@@ -69,9 +69,9 @@
 - Isolated Laragon MySQL verification วันที่ 2026-11-14 ผ่าน 9/9 ด้วย synthetic fixtures และ dedicated account: fresh/0017→0018 journal transition, schema keys/FKs, dataset isolation, bounded resume/source mutation, deterministic manifests, evidence/RegNo gates, explicit approval, concurrent publish, shared pointer lock, atomic publish, pointer-only rollback, immutability และ audit evidence. Cleanup ยืนยันฐานเป้าหมายหาย, lock ว่าง, ไม่มี test-user connection และ database inventory เดิมไม่เปลี่ยน.
 - Full non-DB verification ปิด DB opt-in ผ่าน 308 tests / 60 guarded skips; typecheck, lint และ diff-check ผ่าน. ไม่มี production access, production migration, baseline copy, publish/rollback หรือ feature-flag activation.
 - Guarded CLI `dataset:release` รองรับ `preflight/status/baseline/resume/validate/approve/publish/rollback/verify`, โหลดเฉพาะ env file ที่ระบุ และ mutation ต้องมี exact database/action confirmation, actor และ reason. CLI ยังไม่เคย execute กับ Production.
-- Migration 0018 ที่ยังไม่เคย apply Production ใช้ hash ปัจจุบัน `321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41`: ต่อจาก explicit shadow schema hash `95d21cae…` โดยกำหนด collation ของสาม external FK ให้ตรง source tables (`utf8mb4_unicode_ci`) เพื่อให้ MySQL 8.4 สร้าง FK ได้โดยไม่เปลี่ยน logical contract. Environment ที่มี journal hash เก่าต้องหยุดและใช้ reconciliation แยก ห้ามแก้ journal.
+- Migration 0018 ที่ apply บน Production ใช้ hash `321d760bc2a89efd69248bdce6a57a5562e108edd31a50524c2870a3ee94ec41`: ต่อจาก explicit shadow schema hash `95d21cae…` โดยกำหนด collation ของสาม external FK ให้ตรง source tables (`utf8mb4_unicode_ci`) เพื่อให้ MySQL 8.4 สร้าง FK ได้โดยไม่เปลี่ยน logical contract. Environment ที่มี journal hash เก่าต้องหยุดและใช้ reconciliation แยก ห้ามแก้ journal.
 - Guarded Migration 0018 executor เป็น dry-run โดย default, รับเฉพาะ env file นอก repository, ตรวจ exact database/TLS/hash/journal 0001–0017/maintenance/partial schema และเขียน journal เดิมหลัง DDL กับ post-schema verification สำเร็จครบเท่านั้น. TiDB DDL ไม่ transactional; partial DDL ต้องหยุด manual reconciliation และห้าม retry อัตโนมัติ.
-- TiDB 8.5.3 write compatibility ยัง **NOT VERIFIED** จนกว่า ownership-guarded probe จะผ่านบน Production instance เดิมและ cleanup ยืนยัน ownership ครบ. Local migration/replacement และ TiDB Cloud export restore ผ่านแล้ว; Production ยังต้องมี external readiness evidence สำหรับ storage headroom, active maintenance approval, exact backup/export และ probe PASS ก่อน apply 0018/0019.
+- TiDB 8.5.3 ownership-guarded probe ผ่านบน Production instance เดิมและตรวจ cleanup ผ่านแล้ว. Production ผ่าน guarded migration 0018/0019/0020 และ TTMT replacement. Dataset Release copy/publish ยังเป็นงานแยกเมื่อได้รับอนุมัติ.
 
 ## Major completed areas
 
@@ -100,7 +100,7 @@ Migration สำคัญล่าสุด:
 
 ## Verified production state
 
-- production migrations `0010`–`0017` applied แล้ว
+- Production migration journal ตรวจตรงตามไฟล์ตั้งแต่ `0001` ถึง `0020`
 - login/signup/Agent enrollment rate limiter ผ่าน controlled production verification และไม่พบ fail-open/error
 - expired rate-limit bucket cleanup เปิดใช้บน production ผ่าน Vercel Cron เวลา `30 19 * * *` UTC และ controlled invocation ผ่านโดยไม่แตะ business tables
 - Agent 1.3.0 fresh enrollment production ผ่านสำหรับ facility `05957`
@@ -118,7 +118,7 @@ Migration สำคัญล่าสุด:
 - TMT production dataset ปัจจุบันพร้อมใช้งานภายใต้ assurance `validated_unverified`; **ห้ามเรียกว่า verified**
 - successful TMT full-unverified run: `ae95225a-4d58-47f9-a170-a5ccc6cac7b9`
 - persisted validation policy: `validated-unverified-v1`
-- successful TTMT import: `46ac7956-4a52-43da-8f0a-c54fa392a70c`
+- TTMT production baseline มาจาก audited replacement ของ workbook ที่อนุมัติข้างต้น. Import เดิม `46ac7956-4a52-43da-8f0a-c54fa392a70c` ถูกเก็บเป็นประวัติ.
 - เวอร์ชันข้อมูล TTMT: `20261001`
 - legacy `standard_*`/`standard_products` API และข้อมูลยังคงอยู่เพื่อ compatibility แต่ไม่ใช่แหล่งมาตรฐานหลักของ production workflow
 

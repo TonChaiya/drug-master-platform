@@ -55,6 +55,10 @@ async function main() {
 
 try { await main(); } catch (error) {
   const code = error instanceof Migration0019GuardError ? error.code : "MIGRATION_0019_FAILED";
-  console.error(JSON.stringify({ code, message: "Guarded Migration 0019 failed; inspect operator logs without exposing credentials" }));
+  const statementIndex = error instanceof Migration0019GuardError ? error.statementIndex : undefined;
+  const cause = error instanceof Migration0019GuardError ? error.cause as { code?: string; sqlState?: string } | undefined : undefined;
+  const publicCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]+$/.test(value) ? value : undefined;
+  console.error(JSON.stringify({ code, statementIndex, mysqlCode: publicCode(cause?.code), sqlState: publicCode(cause?.sqlState),
+    message: "Guarded Migration 0019 failed; inspect schema and journal before continuing" }));
   process.exitCode = 1;
 }

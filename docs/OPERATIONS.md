@@ -410,6 +410,8 @@ pnpm db:migrate:0018 -- --environment production --env-file C:\secure\drug-maste
 
 Migration 0019 ต้องรัน **หลัง 0018 เท่านั้น** เพราะเพิ่มคอลัมน์ในทั้ง `ttmt_products` และ `ttmt_dataset_products`. ใช้ `pnpm db:migrate:0019` แยกจาก generic runner; dry-run เป็นค่าเริ่มต้นและ executor ตรวจ exact hash `4c9772d57c1786fe5476b7e309b0ebdce41e709914f94697165ae2fae020a04f`, journal 0001–0018, dependency tables, partial columns, maintenance และ post-schema ก่อนบันทึก journal. การมี schema 0018 ไม่สร้าง pointer/release และไม่เปิด `ACTIVE_STANDARD_RELEASE_ENABLED`.
 
+บน TiDB executor แยก reviewed 0019 เป็นหก single-column ALTER ตามลำดับ เพราะ `AFTER` ต้องอ้างคอลัมน์ที่มีอยู่ก่อน statement นั้น. ไฟล์ 0019 และ SHA-256 ใน journal ใช้ค่าเดิม. หากพบคอลัมน์บางส่วนโดยไม่มี journal ให้หยุดและตรวจ schema ก่อนดำเนินการต่อ.
+
 ```powershell
 pnpm db:migrate:0019 -- --environment production --env-file C:\secure\drug-master-production.env --readiness-file C:\secure\drug-master-readiness.json --production-intent --operation migrate-0019 --execute --confirm-db drug_master_platform --confirm-migration 0019 --confirm-hash 4c9772d57c1786fe5476b7e309b0ebdce41e709914f94697165ae2fae020a04f --maintenance-approved --actor-user-id <operator-uuid> --reason "approved TTMT fidelity migration"
 
@@ -498,7 +500,7 @@ DELETE FROM schema_migrations WHERE filename = '0018_versioned_standard_dataset_
 - `pnpm tmt:v2:sync` reuse Phase 3 full/incremental/resume engine และ full เริ่ม `2013-01-01`; `pnpm ttmt:v2:import` เขียนเฉพาะ `ttmt_imports`/`ttmt_products`
 - TMT runner fail run เมื่อ invariant โครงสร้างผิด (counterpart/level/MasterTMT/unknown/duplicate edge); FSN, dangling/self edge และ enrichment conflicts เป็น reviewable warnings ตาม source behavior ที่ยืนยันแล้ว
 - `pnpm phase7:preflight` เป็น SELECT-only และคืน non-zero เมื่อ migration/maintenance/credential/table/MasterTTMT/flag gate ไม่พร้อม; `validated_unverified` ผ่าน readiness แต่รายงาน warning `TMT_V2_VALIDATED_UNVERIFIED`
-- `pnpm tmt:v2:validate -- --environment <local|production> --env-file <explicit> --run-id <uuid> --dry-run` ตรวจ terminal full-unverified run, required checkpoints, imagelist-only failures, blocking invariants, GPU `764169` และ approved TTMT identity. การ persist ต้องใช้ `--execute --confirm-db <exact database>`, maintenance ON และ migration 0017; transaction fail ทั้งก้อนเมื่อ validation ใดไม่ผ่าน
+- `pnpm tmt:v2:validate -- --environment <local|production> --env-file <explicit> --run-id <uuid> --dry-run` ตรวจ TMT terminal full-unverified run, checkpoints, optional ImageList failures, blocking invariants และ GPU `764169`. ใช้ migration 0020 เพื่อ persist evidence แบบ TMT-only; TTMT import ไม่เปลี่ยน TMT assurance เดิม. Production cutover ครั้งนี้ใช้ evidence เดิมโดยไม่ revalidate.
 - `pnpm phase7:reset` default dry-run และต้องระบุ `--mode full|tmt-v2-only`; โหมด `tmt-v2-only` ใช้ exact 17-table DELETE allowlist ใน transaction และตรวจ counts ของ KEEP/business/TTMT/legacy tables ว่าไม่เปลี่ยน ต้องมี backup reference และ execute ต้องเพิ่ม `--execute --confirm-db <exact database>`
 - production execution ของ runner/import/reset/validation ต้องยืนยัน TiDB Cloud host, port 4000, database `drug_master_platform`, migrations ตามที่ command ต้องใช้ (validation ต้องถึง 0017), maintenance ON และ env file explicit; ห้ามพิมพ์ credential
 
@@ -556,7 +558,7 @@ Phase 7I เพิ่มเฉพาะ capability นี้และ **ไม�
 
 ### Verified
 
-- [x] migrations production ผ่านถึง `0017_tmt_run_validations.sql`; Migration 0018 ยังไม่ apply และต้องผ่าน guarded approval แยก
+- [x] Phase 2 Production ผ่าน guarded TiDB probe, migration journal ถึง `0020`, TTMT audited replacement และ post-cutover integrity วันที่ 2026-11-28. ปิด maintenance แล้วและ Dataset Release ยังปิดอยู่.
 - [x] shared DB rate limit สำหรับ login/signup/enrollment ผ่าน controlled production verification
 - [x] daily expired rate-limit bucket cleanup และ `CRON_SECRET` เปิดใช้บน production; cron `30 19 * * *` UTC และ controlled invocation ผ่าน
 - [x] Agent 1.3.0 fresh enrollment/re-enrollment, credential rotation และ duplicate protection ผ่าน controlled verification
